@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Cricket ball -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M54,42m-16,0a16,16 0 1,0 32,0a16,16 0 1,0 -32,0" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:pathData="M42,32 Q54,42 42,52" />
+    <!-- Gavel / Bat handle -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M48,60 L60,60 L60,82 L48,82 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,56 L68,56 L68,62 L40,62 Z" />
+</vector>
