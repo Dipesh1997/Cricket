@@ -1,0 +1,35 @@
+{
+  "project_info": {
+    "project_number": "150081230722",
+    "firebase_url": "https://cricket-auction-app-24750-default-rtdb.firebaseio.com",
+    "project_id": "cricket-auction-app-24750",
+    "storage_bucket": "cricket-auction-app-24750.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:150081230722:android:5c697843d3b762ef",
+        "android_client_info": {
+          "package_name": "cricket.player.auction"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "150081230722-8fctbo5vh0rp6ruvg43mm8vdgbs7d21e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_CricketAuctionFirebaseApiKey"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

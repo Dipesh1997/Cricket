@@ -1,6 +1,7 @@
 package cricket.player.auction.data.local
 
 import android.content.Context
+import cricket.player.auction.data.remote.FirebaseCricketRepository
 import cricket.player.auction.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +14,7 @@ import java.util.UUID
 class LocalCricketRepository(context: Context) {
 
     private val dbManager = LocalDatabaseManager(context)
+    private val firebaseRepo = FirebaseCricketRepository(dbManager)
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val _tournaments = MutableStateFlow<List<Tournament>>(emptyList())
@@ -80,6 +82,7 @@ class LocalCricketRepository(context: Context) {
                 activeMatchId = _activeMatchId.value
             )
             dbManager.saveDatabase(schema)
+            firebaseRepo.syncDatabaseToFirebase(schema)
         }
     }
 

@@ -8,6 +8,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import cricket.player.auction.model.UserProfile
 import cricket.player.auction.model.UserRole
 import kotlinx.coroutines.CoroutineScope
@@ -172,6 +174,15 @@ class GoogleAuthManager(private val context: Context) {
         val photo = account.photoUrl?.toString() ?: "https://lh3.googleusercontent.com/d/avatar_${email.hashCode()}"
 
         _idToken.value = account.idToken
+        val idTokenStr = account.idToken
+        if (idTokenStr != null) {
+            try {
+                val credential = GoogleAuthProvider.getCredential(idTokenStr, null)
+                FirebaseAuth.getInstance().signInWithCredential(credential)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
 
         _isDrivePermissionGranted.value = true
         _isSheetsPermissionGranted.value = true
