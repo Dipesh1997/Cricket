@@ -1,5 +1,6 @@
 package cricket.player.auction.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,17 +10,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -558,6 +564,8 @@ fun TeamPurseCard(
     onDeleteClick: () -> Unit
 ) {
     val teamColor = parseColorHex(team.primaryColorHex)
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     Card(
         colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
@@ -595,12 +603,33 @@ fun TeamPurseCard(
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
-                        if (team.captainEmail != null) {
-                            Text(
-                                text = "Captain: ${team.captainEmail}",
-                                color = Color.Gray,
-                                fontSize = 11.sp
-                            )
+                        if (team.inviteCode.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Surface(
+                                color = IplGold.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.4f)),
+                                modifier = Modifier.clickable {
+                                    clipboardManager.setText(AnnotatedString(team.inviteCode))
+                                    Toast.makeText(context, "🔑 Code ${team.inviteCode} copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "INVITE: ${team.inviteCode}",
+                                        color = IplGold,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                }
+                            }
                         }
                     }
                 }
