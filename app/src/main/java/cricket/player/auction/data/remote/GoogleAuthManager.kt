@@ -84,20 +84,15 @@ class GoogleAuthManager(private val context: Context) {
     /**
      * Creates GoogleSignInOptions configured for seamless Google Account sign in with Drive & Sheets access
      */
-    fun getGoogleSignInOptions(webClientId: String = ""): GoogleSignInOptions {
+    fun getGoogleSignInOptions(webClientId: String = defaultWebClientId): GoogleSignInOptions {
+        val targetClientId = if (webClientId.isNotBlank()) webClientId else defaultWebClientId
         val builder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestProfile()
-            .requestScopes(
-                Scope("https://www.googleapis.com/auth/drive.file"),
-                Scope("https://www.googleapis.com/auth/spreadsheets")
-            )
-        if (webClientId.isNotBlank()) {
-            try {
-                builder.requestIdToken(webClientId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        try {
+            builder.requestIdToken(targetClientId)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         return builder.build()
     }
