@@ -125,6 +125,7 @@ class LocalCricketRepository(context: Context) {
 
         scope.launch {
             dbManager.clearDatabase()
+            firebaseRepo.clearUserDatabase()
             _tournaments.value = emptyList()
             _teams.value = emptyList()
             _players.value = emptyList()

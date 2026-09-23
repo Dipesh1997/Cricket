@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,6 +52,14 @@ fun TournamentScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var editingTournament by remember { mutableStateOf<Tournament?>(null) }
     var deletingTournament by remember { mutableStateOf<Tournament?>(null) }
+
+    val currentUser by viewModel.currentUser.collectAsState()
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        viewModel.authManager.handleSignInResult(result.data)
+    }
 
     // Export Backup File Launcher
     val exportLauncher = rememberLauncherForActivityResult(
@@ -145,6 +154,69 @@ fun TournamentScreen(
                         color = if (isDarkTheme) Color.Gray else LightPitchText.copy(alpha = 0.7f),
                         fontSize = 12.sp
                     )
+                }
+            }
+
+            // --- Google Sign-In & User Isolation Banner ---
+            Card(
+                colors = CardDefaults.cardColors(containerColor = if (isDarkTheme) StadiumCardDark else LightPitchSurface),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = if (isDarkTheme) StadiumSurface else LightPitchContainer,
+                            shape = CircleShape,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = themeAccent,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Column {
+                            Text(
+                                text = currentUser?.displayName ?: "Google Account",
+                                color = if (isDarkTheme) Color.White else LightPitchText,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "Firebase Synced (${currentUser?.email ?: "Offline"})",
+                                color = if (isDarkTheme) Color.Gray else LightPitchSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val intent = viewModel.authManager.getGoogleSignInIntent(context)
+                            googleSignInLauncher.launch(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("SIGN IN 🔐", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                    }
                 }
             }
 
