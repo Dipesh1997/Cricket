@@ -243,6 +243,9 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                     onTournamentClick = {
                         navController.navigate(Screen.Dashboard.route)
                     },
+                    onNavigateToAuction = {
+                        navController.navigate(Screen.Auction.route)
+                    },
                     exportTrigger = exportTrigger,
                     importTrigger = importTrigger
                 )

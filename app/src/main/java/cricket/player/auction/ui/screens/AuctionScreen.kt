@@ -329,14 +329,23 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             fontWeight = FontWeight.Bold
                         )
 
-                        // Selector Button for Admin or Team Switcher
-                        TextButton(onClick = { showTeamSelectorDialog = true }) {
+                        val isTeamLocked = currentUser?.assignedTeamId != null
+                        TextButton(
+                            onClick = {
+                                if (!isTeamLocked) {
+                                    showTeamSelectorDialog = true
+                                }
+                            },
+                            enabled = !isTeamLocked
+                        ) {
                             Text(
-                                text = currentBiddingTeam?.name ?: "Select Team",
+                                text = if (isTeamLocked) "🔒 ${currentBiddingTeam?.name ?: "My Team"}" else (currentBiddingTeam?.name ?: "Select Team"),
                                 color = IplGold,
                                 fontWeight = FontWeight.Bold
                             )
-                            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = IplGold)
+                            if (!isTeamLocked) {
+                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = IplGold)
+                            }
                         }
                     }
 

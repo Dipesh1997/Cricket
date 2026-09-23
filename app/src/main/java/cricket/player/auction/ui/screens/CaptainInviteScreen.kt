@@ -122,11 +122,10 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
 
                 Button(
                     onClick = {
-                        val success = viewModel.claimCaptainInvite(inviteCodeInput.trim())
-                        if (success) {
-                            claimMessage = "Successfully claimed team! You now have captain bidding access."
+                        val claimedTeam = viewModel.claimCaptainInvite(inviteCodeInput.trim())
+                        if (claimedTeam != null) {
+                            claimMessage = "Successfully claimed ${claimedTeam.name}! You now have captain bidding access."
                         } else {
-                            // Try default team invite code check
                             val teamByDefaultCode = teams.find { it.inviteCode.equals(inviteCodeInput.trim(), ignoreCase = true) }
                             if (teamByDefaultCode != null) {
                                 viewModel.switchUserRole(UserRole.TEAM_CAPTAIN, teamByDefaultCode.id)

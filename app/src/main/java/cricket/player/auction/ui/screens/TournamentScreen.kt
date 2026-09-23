@@ -40,6 +40,7 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 fun TournamentScreen(
     viewModel: AuctionViewModel,
     onTournamentClick: (Tournament) -> Unit,
+    onNavigateToAuction: () -> Unit = {},
     exportTrigger: Int = 0,
     importTrigger: Int = 0
 ) {
@@ -50,6 +51,7 @@ fun TournamentScreen(
     val players by viewModel.players.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showInviteCodeDialog by remember { mutableStateOf(false) }
     var editingTournament by remember { mutableStateOf<Tournament?>(null) }
     var deletingTournament by remember { mutableStateOf<Tournament?>(null) }
 
@@ -216,6 +218,66 @@ fun TournamentScreen(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text("SIGN IN 🔐", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+            }
+
+            // --- Team Captain / Owner 6-Digit Invite Code Card ---
+            Card(
+                colors = CardDefaults.cardColors(containerColor = if (isDarkTheme) StadiumCardDark else LightPitchSurface),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.6f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = IplGold.copy(alpha = 0.2f),
+                            shape = CircleShape,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = IplGold,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Column {
+                            Text(
+                                text = "TEAM BIDDING INVITE CODE",
+                                color = if (isDarkTheme) Color.White else LightPitchText,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "Got 6-digit code? Claim team & bid live instantly",
+                                color = if (isDarkTheme) Color.Gray else LightPitchSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = { showInviteCodeDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("ENTER CODE 🔑", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
@@ -562,4 +624,54 @@ fun TournamentScreen(
             containerColor = StadiumCardDark
         )
     }
+
+    // --- 6-Digit Team Bidding Invite Code Dialog ---
+    if (showInviteCodeDialog) {
+        var inviteCodeInput by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showInviteCodeDialog = false },
+            title = { Text("Enter 6-Digit Team Invite Code", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Enter the 6-digit code provided by your Auctioneer/Admin to claim your team and enter the live bidding arena.",
+                        color = Color.LightGray,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = inviteCodeInput,
+                        onValueChange = { if (it.length <= 6) inviteCodeInput = it.uppercase() },
+                        label = { Text("6-Digit Code (e.g. A1B2C3)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val claimedTeam = viewModel.claimCaptainInvite(inviteCodeInput)
+                        if (claimedTeam != null) {
+                            showInviteCodeDialog = false
+                            Toast.makeText(context, "🎉 Welcome ${claimedTeam.name}! Entering Auction Arena...", Toast.LENGTH_LONG).show()
+                            onNavigateToAuction()
+                        } else {
+                            Toast.makeText(context, "❌ Invalid 6-digit invite code. Please check with your Auctioneer.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    enabled = inviteCodeInput.trim().length >= 4
+                ) {
+                    Text("CLAIM TEAM & BID LIVE 🚀", fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showInviteCodeDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            },
+            containerColor = StadiumCardDark
+        )
+    }
 }
+

@@ -258,14 +258,13 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         return localRepository.generateCaptainInvite(teamId)
     }
 
-    fun claimCaptainInvite(code: String): Boolean {
+    fun claimCaptainInvite(code: String): Team? {
         val email = currentUser.value?.email ?: "captain@tournament.com"
         val team = localRepository.claimCaptainInvite(code, email)
         if (team != null) {
             authManager.assignTeam(team.id)
-            return true
         }
-        return false
+        return team
     }
 
     fun switchUserRole(role: UserRole, teamId: String? = null) {

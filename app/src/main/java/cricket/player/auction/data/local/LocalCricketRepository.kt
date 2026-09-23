@@ -185,6 +185,7 @@ class LocalCricketRepository(context: Context) {
         captainEmail: String? = null,
         logoUrl: String = ""
     ): Team {
+        val inviteCode = UUID.randomUUID().toString().take(6).uppercase()
         val newTeam = Team(
             id = "team_${System.currentTimeMillis()}",
             tournamentId = _activeTournamentId.value,
@@ -194,7 +195,8 @@ class LocalCricketRepository(context: Context) {
             logoUrl = logoUrl,
             totalPurse = totalPurse,
             spentPurse = 0.0,
-            captainEmail = captainEmail
+            captainEmail = captainEmail,
+            inviteCode = inviteCode
         )
         _teams.value = _teams.value + newTeam
         persistAsync()
@@ -370,7 +372,18 @@ class LocalCricketRepository(context: Context) {
     }
 
     fun claimCaptainInvite(code: String, email: String): Team? {
-        val invite = _captainInvites.value.find { it.code.equals(code, ignoreCase = true) && !it.isClaimed }
+        val cleanCode = code.trim().uppercase()
+        val targetTeam = _teams.value.find { it.inviteCode.equals(cleanCode, ignoreCase = true) }
+        if (targetTeam != null) {
+            _teams.value = _teams.value.map {
+                if (it.id == targetTeam.id) it.copy(captainEmail = email) else it
+            }
+            _activeTournamentId.value = targetTeam.tournamentId
+            persistAsync()
+            return targetTeam
+        }
+
+        val invite = _captainInvites.value.find { it.code.equals(cleanCode, ignoreCase = true) && !it.isClaimed }
             ?: return null
 
         _captainInvites.value = _captainInvites.value.map {
@@ -381,8 +394,13 @@ class LocalCricketRepository(context: Context) {
             if (it.id == invite.teamId) it.copy(captainEmail = email) else it
         }
 
+        val team = _teams.value.find { it.id == invite.teamId }
+        if (team != null) {
+            _activeTournamentId.value = team.tournamentId
+        }
+
         persistAsync()
-        return _teams.value.find { it.id == invite.teamId }
+        return team
     }
 
     // --- Match & Live Scorer Management ---
