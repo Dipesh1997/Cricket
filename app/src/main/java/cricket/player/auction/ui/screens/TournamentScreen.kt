@@ -35,16 +35,23 @@ import cricket.player.auction.ui.components.StatChip
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TournamentScreen(
     viewModel: AuctionViewModel,
     onTournamentClick: (Tournament) -> Unit,
     onNavigateToAuction: () -> Unit = {},
+    onNavigateToScorer: () -> Unit = {},
     exportTrigger: Int = 0,
     importTrigger: Int = 0
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val tournaments by viewModel.tournaments.collectAsState()
     val activeTournamentId by viewModel.activeTournamentId.collectAsState()
     val teams by viewModel.teams.collectAsState()
@@ -441,6 +448,35 @@ fun TournamentScreen(
                                     StatChip(text = "Teams: ${teams.count { it.tournamentId == tourney.id }}", backgroundColor = StadiumSurface, textColor = NeonBlue)
                                     StatChip(text = "Players: ${players.count { it.tournamentId == tourney.id }}", backgroundColor = StadiumSurface, textColor = IplGold)
                                 }
+
+                                if (tourney.scorerInviteCode.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Surface(
+                                        color = NeonBlue.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f)),
+                                        modifier = Modifier.clickable {
+                                            clipboardManager.setText(AnnotatedString(tourney.scorerInviteCode))
+                                            Toast.makeText(context, "🔑 Scorer Code ${tourney.scorerInviteCode} copied!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "SCORER INVITE CODE: ${tourney.scorerInviteCode}",
+                                                color = NeonBlue,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -625,23 +661,23 @@ fun TournamentScreen(
         )
     }
 
-    // --- 6-Digit Team Bidding Invite Code Dialog ---
+    // --- 6-Digit Team or Scorer Invite Code Dialog ---
     if (showInviteCodeDialog) {
         var inviteCodeInput by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showInviteCodeDialog = false },
-            title = { Text("Enter 6-Digit Team Invite Code", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Enter 6-Digit Team or Scorer Code", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Enter the 6-digit code provided by your Auctioneer/Admin to claim your team and enter the live bidding arena.",
+                        text = "Enter the 6-digit code provided by your Admin to claim your Team (Captain Bidding) or Scorer access.",
                         color = Color.LightGray,
                         fontSize = 12.sp
                     )
                     OutlinedTextField(
                         value = inviteCodeInput,
                         onValueChange = { if (it.length <= 6) inviteCodeInput = it.uppercase() },
-                        label = { Text("6-Digit Code (e.g. A1B2C3)") },
+                        label = { Text("6-Digit Code (e.g. A1B2C3 or SC1234)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -650,19 +686,27 @@ fun TournamentScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val claimedTeam = viewModel.claimCaptainInvite(inviteCodeInput)
+                        val input = inviteCodeInput.trim()
+                        val claimedTeam = viewModel.claimCaptainInvite(input)
                         if (claimedTeam != null) {
                             showInviteCodeDialog = false
                             Toast.makeText(context, "🎉 Welcome ${claimedTeam.name}! Entering Auction Arena...", Toast.LENGTH_LONG).show()
                             onNavigateToAuction()
                         } else {
-                            Toast.makeText(context, "❌ Invalid 6-digit invite code. Please check with your Auctioneer.", Toast.LENGTH_SHORT).show()
+                            val claimedScorerTourney = viewModel.claimScorerInvite(input)
+                            if (claimedScorerTourney != null) {
+                                showInviteCodeDialog = false
+                                Toast.makeText(context, "🏆 Scorer Access Granted for ${claimedScorerTourney.name}! Entering Scorer Screen...", Toast.LENGTH_LONG).show()
+                                onNavigateToScorer()
+                            } else {
+                                Toast.makeText(context, "❌ Invalid 6-digit invite code. Check with your Tournament Admin.", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
                     enabled = inviteCodeInput.trim().length >= 4
                 ) {
-                    Text("CLAIM TEAM & BID LIVE 🚀", fontWeight = FontWeight.ExtraBold)
+                    Text("CLAIM ACCESS 🚀", fontWeight = FontWeight.ExtraBold)
                 }
             },
             dismissButton = {

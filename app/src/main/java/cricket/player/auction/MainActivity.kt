@@ -246,6 +246,9 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                     onNavigateToAuction = {
                         navController.navigate(Screen.Auction.route)
                     },
+                    onNavigateToScorer = {
+                        navController.navigate(Screen.Scorer.route)
+                    },
                     exportTrigger = exportTrigger,
                     importTrigger = importTrigger
                 )

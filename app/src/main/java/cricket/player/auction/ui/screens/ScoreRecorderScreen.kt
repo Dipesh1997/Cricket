@@ -30,9 +30,13 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
+    val context = LocalContext.current
     val teams by viewModel.teams.collectAsState()
     val players by viewModel.players.collectAsState()
     val activeMatchState by viewModel.activeMatch.collectAsState()
@@ -46,6 +50,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var showTargetModal by remember { mutableStateOf(false) }
     var showEndInningsConfirmModal by remember { mutableStateOf(false) }
     var showChangeBowlerModal by remember { mutableStateOf(false) }
+    var showDirectEndMatchModal by remember { mutableStateOf(false) }
 
     // Match Setup Inputs
     var selectedTeamAId by remember { mutableStateOf("") }
@@ -160,6 +165,17 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
                         val mStatus = activeMatch?.status
                         if (mStatus != null && mStatus != MatchStatus.COMPLETED) {
+                            Button(
+                                onClick = { showDirectEndMatchModal = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("End Match", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
                             Button(
                                 onClick = { showEndInningsConfirmModal = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
@@ -305,8 +321,15 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         val winnerName = teams.find { it.id == match.winnerTeamId }?.name ?: "TIE"
+                                        val summaryStr = if (match.resultSummary.isNotBlank()) {
+                                            "🏆 ${match.resultSummary}"
+                                        } else if (winnerName == "TIE") {
+                                            "MATCH TIED!"
+                                        } else {
+                                            "🏆 WINNER: $winnerName"
+                                        }
                                         Text(
-                                            text = if (winnerName == "TIE") "MATCH TIED!" else "🏆 WINNER: $winnerName",
+                                            text = summaryStr,
                                             color = BidGreen,
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 15.sp,
@@ -619,6 +642,50 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             }
                         }
                     }
+
+                    // --- Direct End Match / Declare Result Option ---
+                    if (match.status != MatchStatus.COMPLETED) {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                                shape = RoundedCornerShape(16.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "DIRECT END MATCH / DECLARE RESULT",
+                                            color = IplGold,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                        Text(
+                                            text = "Declare winner directly & update NRR without completing full overs",
+                                            color = Color.Gray,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = { showDirectEndMatchModal = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("DECLARE WINNER", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -651,6 +718,186 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showEndInningsConfirmModal = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            },
+            containerColor = StadiumCardDark
+        )
+    }
+
+    // --- Direct End Match / Declare Result Dialog ---
+    if (showDirectEndMatchModal && activeMatch != null) {
+        val match = activeMatch!!
+        val teamA = teams.find { it.id == match.teamAId }
+        val teamB = teams.find { it.id == match.teamBId }
+
+        var selectedWinnerId by remember { mutableStateOf(match.teamAId) }
+        var marginType by remember { mutableStateOf("RUNS") } // RUNS, WICKETS, BALLS
+        var marginInput by remember { mutableStateOf("10") }
+
+        var teamARunsInput by remember { mutableStateOf(match.teamARuns.toString()) }
+        var teamAOversInput by remember { mutableStateOf(match.teamAOversBatted.toString()) }
+        var teamBRunsInput by remember { mutableStateOf(match.teamBRuns.toString()) }
+        var teamBOversInput by remember { mutableStateOf(match.teamBOversBatted.toString()) }
+
+        AlertDialog(
+            onDismissRequest = { showDirectEndMatchModal = false },
+            title = { Text("Declare Match Winner & NRR", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        Text("SELECT WINNING TEAM", color = IplGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedWinnerId == match.teamAId,
+                                onClick = { selectedWinnerId = match.teamAId },
+                                label = { Text(teamA?.shortCode ?: "Team A", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = IplGold, selectedLabelColor = Color.Black)
+                            )
+                            FilterChip(
+                                selected = selectedWinnerId == match.teamBId,
+                                onClick = { selectedWinnerId = match.teamBId },
+                                label = { Text(teamB?.shortCode ?: "Team B", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = IplGold, selectedLabelColor = Color.Black)
+                            )
+                            FilterChip(
+                                selected = selectedWinnerId == "TIE",
+                                onClick = { selectedWinnerId = "TIE" },
+                                label = { Text("TIE / DRAW", fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = NeonBlue, selectedLabelColor = Color.Black)
+                            )
+                        }
+                    }
+
+                    if (selectedWinnerId != "TIE") {
+                        item {
+                            Text("VICTORY MARGIN TYPE", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = marginType == "RUNS",
+                                    onClick = { marginType = "RUNS" },
+                                    label = { Text("By Runs", fontSize = 10.sp) }
+                                )
+                                FilterChip(
+                                    selected = marginType == "WICKETS",
+                                    onClick = { marginType = "WICKETS" },
+                                    label = { Text("By Wickets", fontSize = 10.sp) }
+                                )
+                                FilterChip(
+                                    selected = marginType == "BALLS",
+                                    onClick = { marginType = "BALLS" },
+                                    label = { Text("By Balls Left", fontSize = 10.sp) }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            OutlinedTextField(
+                                value = marginInput,
+                                onValueChange = { marginInput = it },
+                                label = { Text(when (marginType) { "RUNS" -> "Winning Margin (Runs)"; "WICKETS" -> "Wickets Left"; else -> "Balls Remaining" }) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    item {
+                        Divider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 4.dp))
+                        Text("FINAL SCORE & OVERS FOR NRR CALCULATION", color = NeonBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    item {
+                        Text("${teamA?.name ?: "Team A"} Final Runs & Overs:", color = Color.LightGray, fontSize = 11.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = teamARunsInput,
+                                onValueChange = { teamARunsInput = it },
+                                label = { Text("Runs") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = teamAOversInput,
+                                onValueChange = { teamAOversInput = it },
+                                label = { Text("Overs (e.g. 20.0)") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    item {
+                        Text("${teamB?.name ?: "Team B"} Final Runs & Overs:", color = Color.LightGray, fontSize = 11.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = teamBRunsInput,
+                                onValueChange = { teamBRunsInput = it },
+                                label = { Text("Runs") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = teamBOversInput,
+                                onValueChange = { teamBOversInput = it },
+                                label = { Text("Overs (e.g. 18.2)") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val winnerTeam = teams.find { it.id == selectedWinnerId }
+                        val winnerName = winnerTeam?.name ?: if (selectedWinnerId == "TIE") "Match Tied" else "Team"
+                        val valInt = marginInput.toIntOrNull() ?: 0
+
+                        val summaryText = if (selectedWinnerId == "TIE") {
+                            "Match Tied!"
+                        } else {
+                            when (marginType) {
+                                "RUNS" -> "$winnerName won by $valInt runs"
+                                "WICKETS" -> "$winnerName won by $valInt wickets"
+                                else -> "$winnerName won by $valInt balls remaining"
+                            }
+                        }
+
+                        val tARuns = teamARunsInput.toIntOrNull() ?: match.teamARuns
+                        val tAOvers = teamAOversInput.toDoubleOrNull() ?: match.teamAOversBatted
+                        val tBRuns = teamBRunsInput.toIntOrNull() ?: match.teamBRuns
+                        val tBOvers = teamBOversInput.toDoubleOrNull() ?: match.teamBOversBatted
+
+                        viewModel.endMatchDirectly(
+                            matchId = match.id,
+                            winnerTeamId = selectedWinnerId,
+                            resultSummary = summaryText,
+                            teamARuns = tARuns,
+                            teamAOvers = tAOvers,
+                            teamBRuns = tBRuns,
+                            teamBOvers = tBOvers
+                        )
+                        showDirectEndMatchModal = false
+                        Toast.makeText(context, "🏆 Match Completed: $summaryText", Toast.LENGTH_LONG).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.Black)
+                ) {
+                    Text("DECLARE WINNER & UPDATE NRR 🏆", fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDirectEndMatchModal = false }) {
                     Text("Cancel", color = Color.Gray)
                 }
             },

@@ -17,6 +17,7 @@ enum class PlayerStatus {
 enum class UserRole(val label: String) {
     ADMIN_AUCTIONEER("Auctioneer / Admin"),
     TEAM_CAPTAIN("Team Captain / Owner"),
+    SCORER("Live Scorer"),
     SPECTATOR("Spectator / Fan")
 }
 
@@ -52,6 +53,7 @@ data class Tournament(
     val maxSlots: Int = 25,
     val maxOverseas: Int = 8,
     val driveFileUrl: String = "",
+    val scorerInviteCode: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -139,7 +141,8 @@ data class Match(
     val currentStrikerId: String? = null,
     val currentNonStrikerId: String? = null,
     val currentBowlerId: String? = null,
-    val matchDate: Long = System.currentTimeMillis()
+    val matchDate: Long = System.currentTimeMillis(),
+    val resultSummary: String = ""
 )
 
 data class BallRecord(

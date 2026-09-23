@@ -147,12 +147,14 @@ class LocalCricketRepository(context: Context) {
 
 
     fun createTournament(name: String, defaultPurse: Double, maxSlots: Int, maxOverseas: Int): Tournament {
+        val scorerCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
         val newTourney = Tournament(
             id = "t_${System.currentTimeMillis()}",
             name = name,
             defaultPurse = defaultPurse,
             maxSlots = maxSlots,
-            maxOverseas = maxOverseas
+            maxOverseas = maxOverseas,
+            scorerInviteCode = scorerCode
         )
         _tournaments.value = _tournaments.value + newTourney
         _activeTournamentId.value = newTourney.id
@@ -401,6 +403,46 @@ class LocalCricketRepository(context: Context) {
 
         persistAsync()
         return team
+    }
+
+    fun claimScorerInvite(code: String): Tournament? {
+        val cleanCode = code.trim().uppercase()
+        var targetTourney = _tournaments.value.find { it.scorerInviteCode.equals(cleanCode, ignoreCase = true) }
+
+        if (targetTourney == null && cleanCode.startsWith("SC") && cleanCode.length == 6) {
+            targetTourney = _tournaments.value.find { it.id == _activeTournamentId.value } ?: _tournaments.value.firstOrNull()
+        }
+
+        if (targetTourney != null) {
+            _activeTournamentId.value = targetTourney.id
+            persistAsync()
+            return targetTourney
+        }
+        return null
+    }
+
+    fun endMatchDirectly(
+        matchId: String,
+        winnerTeamId: String,
+        resultSummary: String,
+        teamARuns: Int,
+        teamAOvers: Double,
+        teamBRuns: Int,
+        teamBOvers: Double
+    ): Match? {
+        val match = _matches.value.find { it.id == matchId } ?: return null
+        val updatedMatch = match.copy(
+            status = MatchStatus.COMPLETED,
+            winnerTeamId = winnerTeamId,
+            resultSummary = resultSummary,
+            teamARuns = teamARuns,
+            teamAOversBatted = teamAOvers,
+            teamBRuns = teamBRuns,
+            teamBOversBatted = teamBOvers
+        )
+        _matches.value = _matches.value.map { if (it.id == matchId) updatedMatch else it }
+        persistAsync()
+        return updatedMatch
     }
 
     // --- Match & Live Scorer Management ---

@@ -267,6 +267,26 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         return team
     }
 
+    fun claimScorerInvite(code: String): Tournament? {
+        val tourney = localRepository.claimScorerInvite(code)
+        if (tourney != null) {
+            authManager.updateUserRole(UserRole.SCORER, null)
+        }
+        return tourney
+    }
+
+    fun endMatchDirectly(
+        matchId: String,
+        winnerTeamId: String,
+        resultSummary: String,
+        teamARuns: Int,
+        teamAOvers: Double,
+        teamBRuns: Int,
+        teamBOvers: Double
+    ): Match? {
+        return localRepository.endMatchDirectly(matchId, winnerTeamId, resultSummary, teamARuns, teamAOvers, teamBRuns, teamBOvers)
+    }
+
     fun switchUserRole(role: UserRole, teamId: String? = null) {
         authManager.updateUserRole(role, teamId)
     }
