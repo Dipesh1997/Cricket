@@ -293,3 +293,79 @@ fun Double.formatIplCurrency(): String {
         "₹$lakhs Lakh"
     }
 }
+
+// Data Model Sanitization Extensions (Guarantees safety after Gson deserialization)
+fun Tournament.sanitized(): Tournament {
+    return this.copy(
+        id = id ?: "t_${System.currentTimeMillis()}",
+        name = name ?: "Tournament",
+        defaultPurse = if (defaultPurse <= 0) 100.0 else defaultPurse,
+        maxSlots = if (maxSlots <= 0) 25 else maxSlots,
+        maxOverseas = if (maxOverseas < 0) 8 else maxOverseas,
+        driveFileUrl = driveFileUrl ?: ""
+    )
+}
+
+fun Player.sanitized(): Player {
+    return this.copy(
+        id = id ?: "p_${System.currentTimeMillis()}",
+        tournamentId = tournamentId ?: "t1",
+        name = name ?: "Player",
+        role = role ?: PlayerRole.BATSMAN,
+        country = country ?: "India",
+        status = status ?: PlayerStatus.UP_NEXT,
+        imageUrl = imageUrl ?: "",
+        stats = stats ?: "",
+        setName = setName ?: "Set 1"
+    )
+}
+
+fun Team.sanitized(): Team {
+    return this.copy(
+        id = id ?: "team_${System.currentTimeMillis()}",
+        tournamentId = tournamentId ?: "t1",
+        name = name ?: "Team",
+        shortCode = shortCode ?: "TM",
+        primaryColorHex = primaryColorHex ?: "#1976D2",
+        logoUrl = logoUrl ?: "",
+        inviteCode = inviteCode ?: ""
+    )
+}
+
+fun Bid.sanitized(): Bid {
+    return this.copy(
+        id = id ?: "bid_${System.currentTimeMillis()}",
+        playerId = playerId ?: "",
+        teamId = teamId ?: "",
+        teamName = teamName ?: ""
+    )
+}
+
+fun CaptainInvite.sanitized(): CaptainInvite {
+    return this.copy(
+        code = code ?: "",
+        teamId = teamId ?: ""
+    )
+}
+
+fun Match.sanitized(): Match {
+    return this.copy(
+        id = id ?: "m_${System.currentTimeMillis()}",
+        tournamentId = tournamentId ?: "t1",
+        teamAId = teamAId ?: "",
+        teamBId = teamBId ?: "",
+        status = status ?: MatchStatus.SCHEDULED
+    )
+}
+
+fun BallRecord.sanitized(): BallRecord {
+    return this.copy(
+        id = id ?: "b_${System.currentTimeMillis()}",
+        matchId = matchId ?: "",
+        strikerId = strikerId ?: "",
+        bowlerId = bowlerId ?: "",
+        extraType = extraType ?: ExtraType.NONE,
+        commentary = commentary ?: ""
+    )
+}
+

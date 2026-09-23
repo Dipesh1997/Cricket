@@ -60,9 +60,8 @@ fun TournamentDashboardScreen(
             .padding(16.dp)
     ) {
         // --- Tournament Stats Summary Banner ---
-        if (activeTournament != null) {
-            val tourney = activeTournament!!
-
+        val tourney = activeTournament
+        if (tourney != null) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
                 shape = RoundedCornerShape(16.dp),
@@ -96,7 +95,28 @@ fun TournamentDashboardScreen(
                     }
                 }
             }
+        } else {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "No Active Tournament Selected", color = Color.White, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onBackToHome,
+                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black)
+                    ) {
+                        Text("Select Tournament From Home", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
+
 
         Spacer(modifier = Modifier.height(16.dp))
 

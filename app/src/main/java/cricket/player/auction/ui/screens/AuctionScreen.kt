@@ -136,9 +136,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
         // --- Main Player Stage Card ---
         item {
-            if (activePlayer != null) {
-                val player = activePlayer!!
-
+            val player = activePlayer
+            if (player != null) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
                     shape = RoundedCornerShape(20.dp),
@@ -271,8 +270,9 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             Spacer(modifier = Modifier.height(8.dp))
 
                             // Highest Bidder Team Display
-                            if (highestBidderTeam != null) {
-                                TeamBadge(team = highestBidderTeam!!, showPurse = true)
+                            val bidderTeam = highestBidderTeam
+                            if (bidderTeam != null) {
+                                TeamBadge(team = bidderTeam, showPurse = true)
                             } else {
                                 Surface(
                                     color = StadiumSurface,
@@ -290,6 +290,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                     }
                 }
             } else {
+
                 // No active player state
                 Card(
                     colors = CardDefaults.cardColors(containerColor = StadiumCardDark),

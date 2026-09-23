@@ -50,7 +50,7 @@ class LocalCricketRepository(context: Context) {
 
     init {
         scope.launch {
-            val schema = dbManager.loadDatabase()
+            val schema = dbManager.loadDatabase().sanitized()
             _tournaments.value = schema.tournaments
             _teams.value = schema.teams
             _players.value = schema.players
@@ -58,11 +58,12 @@ class LocalCricketRepository(context: Context) {
             _captainInvites.value = schema.captainInvites
             _matches.value = schema.matches
             _ballRecords.value = schema.ballRecords
-            _activeTournamentId.value = schema.activeTournamentId
-            _activePlayerId.value = schema.activePlayerId
-            _activeMatchId.value = schema.activeMatchId
+            _activeTournamentId.value = schema.activeTournamentId.ifEmpty { schema.tournaments.firstOrNull()?.id ?: "" }
+            _activePlayerId.value = schema.activePlayerId ?: schema.players.firstOrNull()?.id
+            _activeMatchId.value = schema.activeMatchId ?: schema.matches.firstOrNull()?.id
         }
     }
+
 
     private fun persistAsync() {
         scope.launch {

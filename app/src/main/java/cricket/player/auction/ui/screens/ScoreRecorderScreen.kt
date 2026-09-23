@@ -35,7 +35,8 @@ import kotlinx.coroutines.launch
 fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val teams by viewModel.teams.collectAsState()
     val players by viewModel.players.collectAsState()
-    val activeMatch by viewModel.activeMatch.collectAsState()
+    val activeMatchState by viewModel.activeMatch.collectAsState()
+    val activeMatch = activeMatchState
     val ballRecords by viewModel.ballRecords.collectAsState()
 
     var showCreateMatchModal by remember { mutableStateOf(false) }
@@ -65,13 +66,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val currentInnings = activeMatch?.currentInnings ?: 1
     val currentInningsBalls = matchBalls.filter { it.innings == currentInnings }
 
-    val battingTeamId = if (activeMatch != null) {
-        if (currentInnings == 1) activeMatch!!.teamAId else activeMatch!!.teamBId
-    } else ""
+    val battingTeamId = activeMatch?.let {
+        if (currentInnings == 1) it.teamAId else it.teamBId
+    } ?: ""
 
-    val bowlingTeamId = if (activeMatch != null) {
-        if (currentInnings == 1) activeMatch!!.teamBId else activeMatch!!.teamAId
-    } else ""
+    val bowlingTeamId = activeMatch?.let {
+        if (currentInnings == 1) it.teamBId else it.teamAId
+    } ?: ""
 
     val battingTeam = teams.find { it.id == battingTeamId }
     val bowlingTeam = teams.find { it.id == bowlingTeamId }
@@ -157,7 +158,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             Text("Scorecard", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        if (activeMatch!!.status != MatchStatus.COMPLETED) {
+                        val mStatus = activeMatch?.status
+                        if (mStatus != null && mStatus != MatchStatus.COMPLETED) {
                             Button(
                                 onClick = { showEndInningsConfirmModal = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
@@ -197,8 +199,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold)
                     }
                 }
-            } else {
-                val match = activeMatch!!
+            } else if (activeMatch != null) {
+                val match = activeMatch
                 val tossWinnerTeam = teams.find { it.id == match.tossWinnerTeamId }
 
                 LazyColumn(
@@ -506,9 +508,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                         innings = currentInnings,
                                                         overNumber = overNum,
                                                         ballNumber = ballNum,
-                                                        strikerId = strikerId!!,
+                                                        strikerId = strikerId ?: "",
                                                         nonStrikerId = nonStrikerId,
-                                                        bowlerId = bowlerId!!,
+                                                        bowlerId = bowlerId ?: "",
                                                         runsScored = run,
                                                         extraType = selectedExtraType,
                                                         extraRuns = extraRuns,
@@ -689,8 +691,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     }
 
     // --- Target & Required Run Rate (RRR) Popup Modal ---
-    if (showTargetModal && activeMatch != null) {
-        val match = activeMatch!!
+    val targetMatch = activeMatch
+    if (showTargetModal && targetMatch != null) {
+        val match = targetMatch
         val target = match.teamARuns + 1
         val rrr = String.format("%.2f", target.toDouble() / match.totalOvers)
 
@@ -922,9 +925,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 innings = currentInnings,
                                 overNumber = legalBallsBefore / 6,
                                 ballNumber = (legalBallsBefore % 6) + 1,
-                                strikerId = strikerId!!,
+                                strikerId = strikerId ?: "",
                                 nonStrikerId = nonStrikerId,
-                                bowlerId = bowlerId!!,
+                                bowlerId = bowlerId ?: "",
                                 runsScored = 0,
                                 isWicket = true,
                                 dismissalType = dismissalType,
@@ -1106,7 +1109,7 @@ fun CoinTossModal(
                         .background(StadiumSurface),
                     contentAlignment = Alignment.Center
                 ) {
-                    val currentDisplay = if (flipResult != null) flipResult!! else callSelection
+                    val currentDisplay = flipResult ?: callSelection
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = if (currentDisplay == "HEADS") "👑" else "🦁", fontSize = 28.sp)
                         Text(
@@ -1129,7 +1132,7 @@ fun CoinTossModal(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "🎉 ${tossWinner!!.name} WON THE TOSS!",
+                                text = "🎉 ${tossWinner?.name ?: ""} WON THE TOSS!",
                                 color = BidGreen,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 15.sp,
@@ -1196,8 +1199,10 @@ fun CoinTossModal(
             } else {
                 Button(
                     onClick = {
-                        if (tossWinner != null && captainDecision != null) {
-                            onTossCompleted(tossWinner!!, captainDecision!!)
+                        val w = tossWinner
+                        val d = captainDecision
+                        if (w != null && d != null) {
+                            onTossCompleted(w, d)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.Black),
