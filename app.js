@@ -39,17 +39,24 @@ document.addEventListener("DOMContentLoaded", () => {
   startBidTimer();
 });
 
+function ensureArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'object') return Object.values(val);
+  return [];
+}
+
 function listenToFirebase() {
   const dbRef = db.ref("users/default_user/database_schema");
   dbRef.on("value", (snapshot) => {
     const data = snapshot.val();
     if (data) {
-      state.tournaments = data.tournaments || [];
-      state.teams = data.teams || [];
-      state.players = data.players || [];
-      state.bids = data.bids || [];
-      state.matches = data.matches || [];
-      state.ballRecords = data.ballRecords || [];
+      state.tournaments = ensureArray(data.tournaments);
+      state.teams = ensureArray(data.teams);
+      state.players = ensureArray(data.players);
+      state.bids = ensureArray(data.bids);
+      state.matches = ensureArray(data.matches);
+      state.ballRecords = ensureArray(data.ballRecords);
       state.activeTournamentId = data.activeTournamentId || (state.tournaments[0] ? state.tournaments[0].id : "t1");
       state.activePlayerId = data.activePlayerId || (state.players[0] ? state.players[0].id : null);
       state.activeMatchId = data.activeMatchId || (state.matches[0] ? state.matches[0].id : null);

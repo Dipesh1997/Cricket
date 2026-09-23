@@ -227,8 +227,8 @@
   </main>
 
   <!-- MODAL: CLAIM 6-DIGIT CODE -->
-  <div class="modal-backdrop" id="claimCodeModal">
-    <div class="modal-content">
+  <div class="modal-backdrop" id="claimCodeModal" onclick="closeModal('claimCodeModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 class="modal-title">Enter 6-Digit Team / Scorer Code</h3>
         <button class="close-btn" onclick="closeModal('claimCodeModal')">&times;</button>
@@ -236,53 +236,53 @@
       <p style="color: var(--color-text-sub); font-size: 0.85rem; margin-bottom: 12px;">Redeem your 6-digit invite code provided by your Admin to claim Team Owner Bidding access or Scorer access.</p>
       <div class="form-group">
         <label>6-Digit Code (e.g. A1B2C3 or SC1234)</label>
-        <input type="text" id="claimCodeInput" class="form-control" placeholder="A1B2C3" maxlength="6" style="text-transform: uppercase;">
+        <input type="text" id="claimCodeInput" class="form-control" placeholder="A1B2C3" maxlength="6" style="text-transform: uppercase;" onkeyup="if(event.key==='Enter') submitClaimCode()">
       </div>
       <button class="btn" style="width: 100%; margin-top: 10px;" onclick="submitClaimCode()">CLAIM ACCESS NOW 🚀</button>
     </div>
   </div>
 
   <!-- MODAL: CREATE TOURNAMENT -->
-  <div class="modal-backdrop" id="createTourneyModal">
-    <div class="modal-content">
+  <div class="modal-backdrop" id="createTourneyModal" onclick="closeModal('createTourneyModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 class="modal-title">🏆 Create New Tournament</h3>
         <button class="close-btn" onclick="closeModal('createTourneyModal')">&times;</button>
       </div>
       <div class="form-group">
         <label>Tournament Name</label>
-        <input type="text" id="newTourneyName" class="form-control" placeholder="e.g. IPL 2026 Mega Auction">
+        <input type="text" id="newTourneyName" class="form-control" placeholder="e.g. IPL 2026 Mega Auction" onkeyup="if(event.key==='Enter') submitCreateTourney()">
       </div>
       <div class="form-group">
         <label>Default Team Purse (Cr)</label>
-        <input type="number" id="newTourneyPurse" class="form-control" value="100.0" step="0.5">
+        <input type="number" id="newTourneyPurse" class="form-control" value="100.0" step="0.5" onkeyup="if(event.key==='Enter') submitCreateTourney()">
       </div>
       <div class="form-group">
         <label>Max Squad Slots</label>
-        <input type="number" id="newTourneyMaxSlots" class="form-control" value="25">
+        <input type="number" id="newTourneyMaxSlots" class="form-control" value="25" onkeyup="if(event.key==='Enter') submitCreateTourney()">
       </div>
       <div class="form-group">
         <label>Max Overseas Players</label>
-        <input type="number" id="newTourneyMaxOverseas" class="form-control" value="8">
+        <input type="number" id="newTourneyMaxOverseas" class="form-control" value="8" onkeyup="if(event.key==='Enter') submitCreateTourney()">
       </div>
       <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="submitCreateTourney()">CREATE TOURNAMENT 🏆</button>
     </div>
   </div>
 
   <!-- MODAL: CREATE TEAM -->
-  <div class="modal-backdrop" id="createTeamModal">
-    <div class="modal-content">
+  <div class="modal-backdrop" id="createTeamModal" onclick="closeModal('createTeamModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 class="modal-title">🛡️ Create Custom Team</h3>
         <button class="close-btn" onclick="closeModal('createTeamModal')">&times;</button>
       </div>
       <div class="form-group">
         <label>Team Full Name</label>
-        <input type="text" id="newTeamName" class="form-control" placeholder="e.g. Kolkata Knight Riders">
+        <input type="text" id="newTeamName" class="form-control" placeholder="e.g. Kolkata Knight Riders" onkeyup="if(event.key==='Enter') submitCreateTeam()">
       </div>
       <div class="form-group">
         <label>Short Code (3-4 letters)</label>
-        <input type="text" id="newTeamShortCode" class="form-control" placeholder="KKR" maxlength="4" style="text-transform: uppercase;">
+        <input type="text" id="newTeamShortCode" class="form-control" placeholder="KKR" maxlength="4" style="text-transform: uppercase;" onkeyup="if(event.key==='Enter') submitCreateTeam()">
       </div>
       <div class="form-group">
         <label>Primary Theme Color (Hex)</label>
@@ -290,22 +290,22 @@
       </div>
       <div class="form-group">
         <label>Total Purse (Cr)</label>
-        <input type="number" id="newTeamPurse" class="form-control" value="100.0" step="0.5">
+        <input type="number" id="newTeamPurse" class="form-control" value="100.0" step="0.5" onkeyup="if(event.key==='Enter') submitCreateTeam()">
       </div>
       <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="submitCreateTeam()">CREATE TEAM 🛡️</button>
     </div>
   </div>
 
   <!-- MODAL: CREATE PLAYER -->
-  <div class="modal-backdrop" id="createPlayerModal">
-    <div class="modal-content">
+  <div class="modal-backdrop" id="createPlayerModal" onclick="closeModal('createPlayerModal')">
+    <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 class="modal-title">👤 Add New Player</h3>
         <button class="close-btn" onclick="closeModal('createPlayerModal')">&times;</button>
       </div>
       <div class="form-group">
         <label>Player Name</label>
-        <input type="text" id="newPlayerName" class="form-control" placeholder="e.g. Jasprit Bumrah">
+        <input type="text" id="newPlayerName" class="form-control" placeholder="e.g. Jasprit Bumrah" onkeyup="if(event.key==='Enter') submitCreatePlayer()">
       </div>
       <div class="form-group">
         <label>Role</label>
