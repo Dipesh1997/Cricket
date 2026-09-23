@@ -242,6 +242,153 @@
     </div>
   </div>
 
+  <!-- MODAL: CREATE TOURNAMENT -->
+  <div class="modal-backdrop" id="createTourneyModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">🏆 Create New Tournament</h3>
+        <button class="close-btn" onclick="closeModal('createTourneyModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Tournament Name</label>
+        <input type="text" id="newTourneyName" class="form-control" placeholder="e.g. IPL 2026 Mega Auction">
+      </div>
+      <div class="form-group">
+        <label>Default Team Purse (Cr)</label>
+        <input type="number" id="newTourneyPurse" class="form-control" value="100.0" step="0.5">
+      </div>
+      <div class="form-group">
+        <label>Max Squad Slots</label>
+        <input type="number" id="newTourneyMaxSlots" class="form-control" value="25">
+      </div>
+      <div class="form-group">
+        <label>Max Overseas Players</label>
+        <input type="number" id="newTourneyMaxOverseas" class="form-control" value="8">
+      </div>
+      <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="submitCreateTourney()">CREATE TOURNAMENT 🏆</button>
+    </div>
+  </div>
+
+  <!-- MODAL: CREATE TEAM -->
+  <div class="modal-backdrop" id="createTeamModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">🛡️ Create Custom Team</h3>
+        <button class="close-btn" onclick="closeModal('createTeamModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Team Full Name</label>
+        <input type="text" id="newTeamName" class="form-control" placeholder="e.g. Kolkata Knight Riders">
+      </div>
+      <div class="form-group">
+        <label>Short Code (3-4 letters)</label>
+        <input type="text" id="newTeamShortCode" class="form-control" placeholder="KKR" maxlength="4" style="text-transform: uppercase;">
+      </div>
+      <div class="form-group">
+        <label>Primary Theme Color (Hex)</label>
+        <input type="color" id="newTeamColor" class="form-control" value="#FFD700" style="height: 40px; padding: 2px;">
+      </div>
+      <div class="form-group">
+        <label>Total Purse (Cr)</label>
+        <input type="number" id="newTeamPurse" class="form-control" value="100.0" step="0.5">
+      </div>
+      <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="submitCreateTeam()">CREATE TEAM 🛡️</button>
+    </div>
+  </div>
+
+  <!-- MODAL: CREATE PLAYER -->
+  <div class="modal-backdrop" id="createPlayerModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">👤 Add New Player</h3>
+        <button class="close-btn" onclick="closeModal('createPlayerModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Player Name</label>
+        <input type="text" id="newPlayerName" class="form-control" placeholder="e.g. Jasprit Bumrah">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="newPlayerRole" class="form-control">
+          <option value="BATSMAN">BATSMAN</option>
+          <option value="BOWLER">BOWLER</option>
+          <option value="ALL_ROUNDER">ALL_ROUNDER</option>
+          <option value="WICKET_KEEPER">WICKET_KEEPER</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Country</label>
+        <input type="text" id="newPlayerCountry" class="form-control" value="India">
+      </div>
+      <div class="form-group">
+        <label>Base Price (Cr)</label>
+        <input type="number" id="newPlayerBasePrice" class="form-control" value="2.0" step="0.1">
+      </div>
+      <div class="form-group">
+        <label>Photo URL (Google Drive or direct link)</label>
+        <input type="text" id="newPlayerImageUrl" class="form-control" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label>Set Name</label>
+        <input type="text" id="newPlayerSetName" class="form-control" value="Set 1">
+      </div>
+      <div class="form-group">
+        <label>Career Stats</label>
+        <input type="text" id="newPlayerStats" class="form-control" placeholder="IPL Matches: 120 | Wickets: 145">
+      </div>
+      <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="submitCreatePlayer()">ADD PLAYER 👤</button>
+    </div>
+  </div>
+
+  <!-- MODAL: CREATE MATCH -->
+  <div class="modal-backdrop" id="createMatchModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">🏏 Start Live Match</h3>
+        <button class="close-btn" onclick="closeModal('createMatchModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Team A (Batting 1st)</label>
+        <select id="newMatchTeamA" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label>Team B (Bowling 1st)</label>
+        <select id="newMatchTeamB" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label>Total Overs per Innings</label>
+        <input type="number" id="newMatchOvers" class="form-control" value="20">
+      </div>
+      <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="submitCreateMatch()">START MATCH 🏏</button>
+    </div>
+  </div>
+
+  <!-- MODAL: SPIN WHEEL -->
+  <div class="modal-backdrop" id="spinWheelModal">
+    <div class="modal-content" style="text-align: center;">
+      <div class="modal-header">
+        <h3 class="modal-title">🎰 Spin Wheel - Pick Next Player</h3>
+        <button class="close-btn" onclick="closeModal('spinWheelModal')">&times;</button>
+      </div>
+      <p style="color: var(--color-text-sub); font-size: 0.85rem; margin-bottom: 16px;">Randomly select an available player for live auctioning!</p>
+      <div id="spinWheelDisplay" style="font-size: 1.8rem; font-weight: 900; color: var(--color-gold); padding: 30px; border: 2px dashed var(--color-gold); border-radius: 12px; margin-bottom: 16px; background: var(--bg-surface);">
+        ???
+      </div>
+      <button class="btn btn-gold" style="width: 100%;" onclick="doSpinWheel()">SPIN THE WHEEL NOW 🎰</button>
+    </div>
+  </div>
+
+  <!-- MODAL: SCORECARD -->
+  <div class="modal-backdrop" id="scorecardModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">📊 Match Scorecard</h3>
+        <button class="close-btn" onclick="closeModal('scorecardModal')">&times;</button>
+      </div>
+      <div id="scorecardContent"></div>
+    </div>
+  </div>
+
   <!-- MODAL: DIRECT END MATCH / DECLARE RESULT -->
   <div class="modal-backdrop" id="directEndMatchModal">
     <div class="modal-content">

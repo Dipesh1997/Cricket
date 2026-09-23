@@ -506,6 +506,218 @@ function submitClaimCode() {
   showToast("❌ Invalid 6-digit code!");
 }
 
+// --- TOURNAMENTS ENGINE & MODAL HANDLERS ---
+function renderTournaments() {
+  const listEl = document.getElementById("tournamentsList");
+  if (!listEl) return;
+
+  const active = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+  if (active) {
+    const titleEl = document.getElementById("activeTourneyTitle");
+    if (titleEl) titleEl.innerText = active.name;
+    const codeEl = document.getElementById("tourneyScorerCode");
+    if (codeEl) codeEl.innerText = active.scorerInviteCode || "SC8K2M";
+  }
+
+  if (state.tournaments.length === 0) {
+    listEl.innerHTML = `<p style="color: var(--color-text-sub);">No tournaments registered yet.</p>`;
+    return;
+  }
+
+  listEl.innerHTML = state.tournaments.map(t => `
+    <div class="card" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface);">
+      <div>
+        <h4 style="color: var(--color-gold); font-size: 1.1rem; margin-bottom: 4px;">${t.name} ${t.id === state.activeTournamentId ? '⭐ (Active)' : ''}</h4>
+        <p style="color: var(--color-text-sub); font-size: 0.8rem;">Purse: ₹${t.defaultPurse} Cr | Max Slots: ${t.maxSlots} | Max Overseas: ${t.maxOverseas} | Scorer Code: <strong>${t.scorerInviteCode || 'SC8K2M'}</strong></p>
+      </div>
+      <div>
+        ${t.id !== state.activeTournamentId ? `<button class="btn btn-sm btn-secondary" onclick="switchActiveTournament('${t.id}')">Select</button>` : ''}
+      </div>
+    </div>
+  `).join("");
+}
+
+function switchActiveTournament(tourneyId) {
+  state.activeTournamentId = tourneyId;
+  saveToFirebase();
+  renderAll();
+  showToast("Active tournament switched!");
+}
+
+function submitCreateTourney() {
+  const name = document.getElementById("newTourneyName").value.trim();
+  if (!name) { showToast("Please enter a tournament name"); return; }
+  const purse = parseFloat(document.getElementById("newTourneyPurse").value) || 100.0;
+  const maxSlots = parseInt(document.getElementById("newTourneyMaxSlots").value) || 25;
+  const maxOverseas = parseInt(document.getElementById("newTourneyMaxOverseas").value) || 8;
+  const scorerInviteCode = "SC" + Math.floor(100000 + Math.random() * 900000).toString().substring(0, 4);
+
+  const newId = "t_" + Date.now();
+  const tourney = {
+    id: newId,
+    name: name,
+    defaultPurse: purse,
+    maxSlots: maxSlots,
+    maxOverseas: maxOverseas,
+    scorerInviteCode: scorerInviteCode
+  };
+
+  state.tournaments.push(tourney);
+  state.activeTournamentId = newId;
+  saveToFirebase();
+  closeModal("createTourneyModal");
+  document.getElementById("newTourneyName").value = "";
+  renderAll();
+  showToast(`🏆 Created Tournament "${name}"!`);
+}
+
+function submitCreateTeam() {
+  const name = document.getElementById("newTeamName").value.trim();
+  const shortCode = document.getElementById("newTeamShortCode").value.trim().toUpperCase();
+  if (!name || !shortCode) { showToast("Please enter team name and short code"); return; }
+  const color = document.getElementById("newTeamColor").value || "#FFD700";
+  const purse = parseFloat(document.getElementById("newTeamPurse").value) || 100.0;
+  const inviteCode = shortCode + Math.floor(1000 + Math.random() * 9000);
+
+  const team = {
+    id: "team_" + Date.now(),
+    tournamentId: state.activeTournamentId,
+    name: name,
+    shortCode: shortCode,
+    primaryColorHex: color,
+    totalPurse: purse,
+    spentPurse: 0.0,
+    inviteCode: inviteCode
+  };
+
+  state.teams.push(team);
+  saveToFirebase();
+  closeModal("createTeamModal");
+  document.getElementById("newTeamName").value = "";
+  document.getElementById("newTeamShortCode").value = "";
+  renderAll();
+  showToast(`🛡️ Team ${name} created! Invite Code: ${inviteCode}`);
+}
+
+function submitCreatePlayer() {
+  const name = document.getElementById("newPlayerName").value.trim();
+  if (!name) { showToast("Please enter player name"); return; }
+  const role = document.getElementById("newPlayerRole").value;
+  const country = document.getElementById("newPlayerCountry").value.trim() || "India";
+  const isOverseas = country.toLowerCase() !== "india";
+  const basePrice = parseFloat(document.getElementById("newPlayerBasePrice").value) || 2.0;
+  const imageUrl = document.getElementById("newPlayerImageUrl").value.trim() || "https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=500&auto=format&fit=crop&q=60";
+  const setName = document.getElementById("newPlayerSetName").value.trim() || "Set 1";
+  const stats = document.getElementById("newPlayerStats").value.trim() || "";
+
+  const player = {
+    id: "p_" + Date.now(),
+    tournamentId: state.activeTournamentId,
+    name: name,
+    role: role,
+    country: country,
+    isOverseas: isOverseas,
+    basePrice: basePrice,
+    currentBid: basePrice,
+    highestBidderTeamId: null,
+    status: "UP_NEXT",
+    imageUrl: imageUrl,
+    stats: stats,
+    setName: setName,
+    isFixedSet: false
+  };
+
+  state.players.push(player);
+  if (!state.activePlayerId) state.activePlayerId = player.id;
+  saveToFirebase();
+  closeModal("createPlayerModal");
+  document.getElementById("newPlayerName").value = "";
+  renderAll();
+  showToast(`👤 Player ${name} added!`);
+}
+
+function populateMatchModalOptions() {
+  const teamASelect = document.getElementById("newMatchTeamA");
+  const teamBSelect = document.getElementById("newMatchTeamB");
+  if (!teamASelect || !teamBSelect) return;
+  const options = state.teams.map(t => `<option value="${t.id}">${t.name} (${t.shortCode})</option>`).join("");
+  teamASelect.innerHTML = options;
+  teamBSelect.innerHTML = options;
+}
+
+function submitCreateMatch() {
+  const teamAId = document.getElementById("newMatchTeamA").value;
+  const teamBId = document.getElementById("newMatchTeamB").value;
+  if (!teamAId || !teamBId) { showToast("Create teams first!"); return; }
+  if (teamAId === teamBId) { showToast("Select two different teams"); return; }
+  const overs = parseInt(document.getElementById("newMatchOvers").value) || 20;
+
+  const match = {
+    id: "m_" + Date.now(),
+    tournamentId: state.activeTournamentId,
+    teamAId: teamAId,
+    teamBId: teamBId,
+    totalOvers: overs,
+    status: "LIVE",
+    teamARuns: 0,
+    teamAWickets: 0,
+    teamAOversBatted: 0.0,
+    teamBRuns: 0,
+    teamBWickets: 0,
+    teamBOversBatted: 0.0
+  };
+
+  state.matches.push(match);
+  state.activeMatchId = match.id;
+  saveToFirebase();
+  closeModal("createMatchModal");
+  renderAll();
+  showToast("🏏 Live Match started!");
+}
+
+function doSpinWheel() {
+  const availablePlayers = state.players.filter(p => p.status === "UP_NEXT" || p.status === "UNSOLD");
+  const displayEl = document.getElementById("spinWheelDisplay");
+  if (availablePlayers.length === 0) {
+    if (displayEl) displayEl.innerText = "No Available Players!";
+    return;
+  }
+  let count = 0;
+  const interval = setInterval(() => {
+    const randomP = availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
+    if (displayEl) displayEl.innerText = randomP.name;
+    count++;
+    if (count > 15) {
+      clearInterval(interval);
+      state.activePlayerId = randomP.id;
+      state.timerSeconds = 15;
+      saveToFirebase();
+      showToast(`🎰 Wheel selected: ${randomP.name}!`);
+      setTimeout(() => closeModal("spinWheelModal"), 1000);
+    }
+  }, 100);
+}
+
+function renderScorecardModal() {
+  const container = document.getElementById("scorecardContent");
+  if (!container) return;
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) {
+    container.innerHTML = "<p style='color: var(--color-text-sub);'>No live match records found.</p>";
+    return;
+  }
+  const teamA = state.teams.find(t => t.id === match.teamAId);
+  const teamB = state.teams.find(t => t.id === match.teamBId);
+  container.innerHTML = `
+    <div style="background: var(--bg-surface); padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+      <h4 style="color: var(--color-gold); font-size: 1.1rem; margin-bottom: 8px;">${teamA ? teamA.name : 'Team A'} vs ${teamB ? teamB.name : 'Team B'}</h4>
+      <p style="font-size: 0.9rem; color: #FFF; font-weight: 700;">Innings 1: ${match.teamARuns || 0}/${match.teamAWickets || 0} (${match.teamAOversBatted || 0}/${match.totalOvers || 20} ov)</p>
+      <p style="font-size: 0.9rem; color: #FFF; font-weight: 700;">Innings 2: ${match.teamBRuns || 0}/${match.teamBWickets || 0} (${match.teamBOversBatted || 0}/${match.totalOvers || 20} ov)</p>
+      <p style="color: var(--color-green); font-weight: 800; margin-top: 8px;">Status: ${match.resultSummary || match.status || 'LIVE'}</p>
+    </div>
+  `;
+}
+
 // --- HELPER UTILITIES ---
 function getDirectDriveUrl(url) {
   if (!url) return "https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=500&auto=format&fit=crop&q=60";
@@ -517,11 +729,19 @@ function getDirectDriveUrl(url) {
 }
 
 function openModal(modalId) {
-  document.getElementById(modalId).classList.add("active");
+  if (modalId === "createMatchModal") populateMatchModalOptions();
+  if (modalId === "scorecardModal") renderScorecardModal();
+  const el = document.getElementById(modalId);
+  if (el) {
+    el.classList.add("active");
+  } else {
+    console.error("Modal not found:", modalId);
+  }
 }
 
 function closeModal(modalId) {
-  document.getElementById(modalId).classList.remove("active");
+  const el = document.getElementById(modalId);
+  if (el) el.classList.remove("active");
 }
 
 function copyText(text, label) {
@@ -532,6 +752,7 @@ function copyText(text, label) {
 
 function showToast(msg) {
   const container = document.getElementById("toastContainer");
+  if (!container) return;
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.innerText = msg;
