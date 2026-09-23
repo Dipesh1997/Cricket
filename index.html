@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPL Cricket Hub & Live Auction Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Outfit:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- HEADER NAVIGATION -->
+  <header class="navbar">
+    <div class="brand">
+      <span class="brand-icon">🏏</span>
+      <span>CRICKET HUB</span>
+    </div>
+
+    <nav class="nav-tabs">
+      <button class="nav-btn active" data-tab="tab-home">🏠 Home</button>
+      <button class="nav-btn" data-tab="tab-auction">🔨 Auction Arena</button>
+      <button class="nav-btn" data-tab="tab-teams">🛡️ Teams & Squads</button>
+      <button class="nav-btn" data-tab="tab-players">👤 Player Roster</button>
+      <button class="nav-btn" data-tab="tab-scorer">📊 Live Scorer</button>
+      <button class="nav-btn" data-tab="tab-points">🏆 Standings & MVP</button>
+    </nav>
+
+    <div class="header-actions">
+      <div class="role-badge" id="currentRoleBadge">
+        <span>👑 Admin Auctioneer</span>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="openModal('claimCodeModal')">🔑 Redeem Code</button>
+      <select id="userRoleSelect" class="form-control" style="width: auto; padding: 4px 8px; font-size: 0.75rem;">
+        <option value="ADMIN_AUCTIONEER">Admin / Auctioneer</option>
+        <option value="TEAM_CAPTAIN">Team Captain / Owner</option>
+        <option value="SCORER">Live Scorer</option>
+        <option value="SPECTATOR">Spectator / Fan</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="container">
+
+    <!-- 1. HOME / TOURNAMENT TAB -->
+    <section id="tab-home" class="tab-pane active">
+      <div class="card" style="border-color: var(--color-gold);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 id="activeTourneyTitle" style="color: var(--color-gold); font-size: 1.5rem;">IPL 2026 Mega Auction</h2>
+            <p style="color: var(--color-text-sub); font-size: 0.85rem;">Active Tournament Workspace & Invites</p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn" onclick="openModal('createTourneyModal')">+ New Tournament</button>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px;" id="tourneyScorerChipBox">
+          <div class="invite-badge" onclick="copyText('SCORER2026', 'Scorer Code')">
+            <span>🔑 SCORER INVITE CODE: <strong id="tourneyScorerCode">SC8K2M</strong></span>
+            <span>📋</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="background: linear-gradient(135deg, rgba(255,215,0,0.1) 0%, rgba(0,210,255,0.05) 100%); border-color: var(--color-gold-glow);">
+        <h3 style="color: var(--color-gold); font-size: 1.1rem; margin-bottom: 8px;">🔑 TEAM BIDDING & SCORER CODES</h3>
+        <p style="color: var(--color-text-sub); font-size: 0.85rem; margin-bottom: 14px;">Team Owners & Scorers can redeem their 6-digit code without signing in to claim bidding access or scorer controls.</p>
+        <button class="btn btn-blue" onclick="openModal('claimCodeModal')">ENTER 6-DIGIT CODE NOW 🚀</button>
+      </div>
+
+      <h3 style="margin-bottom: 12px;">Registered Tournaments</h3>
+      <div id="tournamentsList"></div>
+    </section>
+
+    <!-- 2. AUCTION ARENA TAB (FULLSCREEN CAPABLE STAGE) -->
+    <section id="tab-auction" class="tab-pane">
+      <div class="arena-header">
+        <div class="live-indicator">
+          <span class="pulse-dot"></span>
+          <span>LIVE IPL AUCTION ARENA</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="btn btn-secondary btn-sm" id="fullscreenToggleBtn" onclick="toggleFullscreenStage()">
+            <span>⛶ Fullscreen Stage</span>
+          </button>
+          <div class="chip" style="background-color: var(--color-red); color: #FFF;" id="timerBadge">
+            ⏱️ <span id="timerVal">15</span>s
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero Stage Container -->
+      <div class="stage-container" id="stageContainer">
+        <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 12px;">
+          <div class="chip" id="stageSetTag">Set 1</div>
+          <div class="chip" id="stageFixedSetChip" style="cursor: pointer;" onclick="toggleFixedSet()">⭐ Fixed Set</div>
+          <div class="chip" id="stageCountryTag">Overseas (AUS)</div>
+        </div>
+
+        <div class="player-photo-box">
+          <img id="stagePlayerImg" src="https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=500&auto=format&fit=crop&q=60" alt="Player Photo">
+        </div>
+
+        <h2 class="player-name" id="stagePlayerName">Virat Kohli</h2>
+        <div class="player-meta">
+          <span class="chip" id="stageRoleTag">Batsman</span>
+          <span class="chip" id="stageBasePriceTag">Base: ₹2.00 Cr</span>
+        </div>
+        <p id="stageStatsText" style="color: var(--color-text-sub); font-size: 0.85rem; max-width: 600px; margin: 0 auto 12px auto;">IPL Matches: 237 | Runs: 7263 | SR: 130.0</p>
+
+        <div class="bid-display-box">
+          <div class="bid-label" id="bidStatusLabel">CURRENT BID</div>
+          <div class="bid-val" id="stageCurrentBid">₹2.00 Cr</div>
+          <div class="highest-bidder-badge" id="stageHighestBidderBadge">
+            <div class="team-avatar" id="bidderAvatar" style="background-color: var(--color-gold);">RCB</div>
+            <div style="text-align: left;">
+              <div id="bidderTeamName" style="font-weight: 800; font-size: 0.9rem;">Royal Challengers Bengaluru</div>
+              <div id="bidderTeamPurse" style="color: var(--color-gold); font-size: 0.75rem;">Purse: ₹98.00 Cr</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bidding Controls -->
+        <div class="card" style="margin-top: 16px; background-color: var(--bg-surface); text-align: left;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 0.75rem; color: var(--color-text-sub); font-weight: 800;">BIDDING TEAM</span>
+            <span id="biddingTeamLockedLabel" style="font-size: 0.85rem; font-weight: 800; color: var(--color-gold);">🔒 Select Team</span>
+          </div>
+
+          <div class="bid-increments">
+            <button class="btn-bid" onclick="placeBid(0.20)">+₹20L</button>
+            <button class="btn-bid" onclick="placeBid(0.50)">+₹50L</button>
+            <button class="btn-bid" onclick="placeBid(1.00)">+₹1.00Cr</button>
+          </div>
+
+          <!-- Admin Auctioneer Controls -->
+          <div class="admin-controls" id="adminAuctioneerControls">
+            <button class="btn btn-success" onclick="sellActivePlayer()">🔨 SELL BID</button>
+            <button class="btn" onclick="sellAtBasePrice()">🏷️ SELL BASE PRICE</button>
+            <button class="btn btn-danger" onclick="markUnsold()">❌ MARK UNSOLD</button>
+            <button class="btn btn-blue" onclick="openModal('spinWheelModal')">🎰 SPIN WHEEL</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Bidding Log -->
+      <div class="card" style="margin-top: 20px;">
+        <h4 style="color: var(--color-text-sub); font-size: 0.8rem; margin-bottom: 10px;">LIVE BIDDING LOG</h4>
+        <div id="bidsLogContainer" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+          <p style="color: var(--color-text-sub); font-size: 0.85rem;">No bids placed yet</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. TEAMS & SQUADS TAB -->
+    <section id="tab-teams" class="tab-pane">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h2 style="color: var(--color-gold); font-size: 1.3rem;">TEAMS & SQUADS DASHBOARD</h2>
+          <p style="color: var(--color-text-sub); font-size: 0.8rem;">View squad rosters, remaining budget purse & 6-digit invite codes</p>
+        </div>
+        <button class="btn" onclick="openModal('createTeamModal')">+ Create Custom Team</button>
+      </div>
+      <div id="teamsGridList" class="grid-2"></div>
+    </section>
+
+    <!-- 4. PLAYER ROSTER TAB -->
+    <section id="tab-players" class="tab-pane">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h2 style="color: var(--color-gold); font-size: 1.3rem;">PLAYER ROSTER MANAGER</h2>
+          <p style="color: var(--color-text-sub); font-size: 0.8rem;">Filter players, set fixed sets & update photo URLs</p>
+        </div>
+        <button class="btn" onclick="openModal('createPlayerModal')">+ Add New Player</button>
+      </div>
+      <div id="playersTableContainer" class="table-responsive"></div>
+    </section>
+
+    <!-- 5. LIVE SCORER TAB -->
+    <section id="tab-scorer" class="tab-pane">
+      <div class="arena-header">
+        <div>
+          <h3 style="color: var(--color-gold); font-size: 1.1rem;">LIVE MATCH SCORER & SCORECARD</h3>
+          <p style="color: var(--color-text-sub); font-size: 0.75rem;">Ball-by-ball commentary & Direct End Match with NRR</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm" onclick="openModal('createMatchModal')">+ New Match</button>
+          <button class="btn btn-sm btn-secondary" onclick="openModal('scorecardModal')">Scorecard</button>
+          <button class="btn btn-sm btn-danger" onclick="openModal('directEndMatchModal')">⚡ Direct End Match</button>
+        </div>
+      </div>
+
+      <div class="card" id="activeMatchCard">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3 id="scorerBattingTeamName" style="color: #FFF; font-size: 1.4rem;">Team A vs Team B</h3>
+            <div style="font-size: 2.2rem; font-weight: 900; color: var(--color-gold);" id="scorerScoreText">0 / 0</div>
+            <div style="color: var(--color-text-sub); font-size: 0.85rem;" id="scorerOversText">(0.0 / 20 Overs)</div>
+          </div>
+          <div id="targetRequirementBox" style="text-align: right;"></div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-sm" onclick="recordBallRun(0)">0</button>
+          <button class="btn btn-sm" onclick="recordBallRun(1)">1</button>
+          <button class="btn btn-sm" onclick="recordBallRun(2)">2</button>
+          <button class="btn btn-sm" onclick="recordBallRun(3)">3</button>
+          <button class="btn btn-sm" style="background-color: var(--color-gold); color:#000;" onclick="recordBallRun(4)">4</button>
+          <button class="btn btn-sm" style="background-color: var(--color-gold); color:#000;" onclick="recordBallRun(6)">6</button>
+          <button class="btn btn-sm btn-danger" onclick="recordWicket()">WICKET!</button>
+          <button class="btn btn-sm btn-secondary" onclick="undoLastBall()">UNDO</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. STANDINGS & MVP TAB -->
+    <section id="tab-points" class="tab-pane">
+      <h2 style="color: var(--color-gold); font-size: 1.3rem; margin-bottom: 4px;">AUTOMATED POINTS TABLE & NRR</h2>
+      <p style="color: var(--color-text-sub); font-size: 0.8rem; margin-bottom: 16px;">Live standings updated automatically from completed match records</p>
+      
+      <div id="pointsTableContainer" class="table-responsive card"></div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: CLAIM 6-DIGIT CODE -->
+  <div class="modal-backdrop" id="claimCodeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Enter 6-Digit Team / Scorer Code</h3>
+        <button class="close-btn" onclick="closeModal('claimCodeModal')">&times;</button>
+      </div>
+      <p style="color: var(--color-text-sub); font-size: 0.85rem; margin-bottom: 12px;">Redeem your 6-digit invite code provided by your Admin to claim Team Owner Bidding access or Scorer access.</p>
+      <div class="form-group">
+        <label>6-Digit Code (e.g. A1B2C3 or SC1234)</label>
+        <input type="text" id="claimCodeInput" class="form-control" placeholder="A1B2C3" maxlength="6" style="text-transform: uppercase;">
+      </div>
+      <button class="btn" style="width: 100%; margin-top: 10px;" onclick="submitClaimCode()">CLAIM ACCESS NOW 🚀</button>
+    </div>
+  </div>
+
+  <!-- MODAL: DIRECT END MATCH / DECLARE RESULT -->
+  <div class="modal-backdrop" id="directEndMatchModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Declare Match Winner & NRR</h3>
+        <button class="close-btn" onclick="closeModal('directEndMatchModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Select Winner Team</label>
+        <select id="directWinnerSelect" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label>Victory Margin Type</label>
+        <select id="directMarginType" class="form-control">
+          <option value="RUNS">By Runs</option>
+          <option value="WICKETS">By Wickets</option>
+          <option value="BALLS">By Balls Remaining</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Margin Value (e.g. 18 runs, 4 wickets, 12 balls)</label>
+        <input type="number" id="directMarginValue" class="form-control" value="10">
+      </div>
+      <div class="form-group">
+        <label>Team A Final Score (Runs / Overs)</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="number" id="directTeamARuns" class="form-control" placeholder="Runs">
+          <input type="number" step="0.1" id="directTeamAOvers" class="form-control" placeholder="Overs">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Team B Final Score (Runs / Overs)</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="number" id="directTeamBRuns" class="form-control" placeholder="Runs">
+          <input type="number" step="0.1" id="directTeamBOvers" class="form-control" placeholder="Overs">
+        </div>
+      </div>
+      <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="submitDirectEndMatch()">DECLARE WINNER & UPDATE NRR 🏆</button>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Firebase Web SDK JS (v10 compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
