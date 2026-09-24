@@ -54,6 +54,7 @@ data class Tournament(
     val maxOverseas: Int = 8,
     val driveFileUrl: String = "",
     val scorerInviteCode: String = "",
+    val adminCode: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -299,13 +300,17 @@ fun Double.formatIplCurrency(): String {
 
 // Data Model Sanitization Extensions (Guarantees safety after Gson deserialization)
 fun Tournament.sanitized(): Tournament {
+    val cleanId = id ?: "t_${System.currentTimeMillis()}"
+    val cleanAdminCode = if (adminCode.isNullOrBlank()) "ADM" + cleanId.takeLast(4).uppercase() else adminCode
     return this.copy(
-        id = id ?: "t_${System.currentTimeMillis()}",
+        id = cleanId,
         name = name ?: "Tournament",
         defaultPurse = if (defaultPurse <= 0) 100.0 else defaultPurse,
         maxSlots = if (maxSlots <= 0) 25 else maxSlots,
         maxOverseas = if (maxOverseas < 0) 8 else maxOverseas,
-        driveFileUrl = driveFileUrl ?: ""
+        driveFileUrl = driveFileUrl ?: "",
+        scorerInviteCode = if (scorerInviteCode.isNullOrBlank()) "SC" + cleanId.takeLast(4).uppercase() else scorerInviteCode,
+        adminCode = cleanAdminCode
     )
 }
 

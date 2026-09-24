@@ -46,29 +46,77 @@ function ensureArray(val) {
   return [];
 }
 
+function applySchemaData(data) {
+  if (!data) return false;
+  let parsed = data;
+  if (typeof data === 'string') {
+    try {
+      parsed = JSON.parse(data);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  if (parsed && typeof parsed === 'object') {
+    let incomingTourneys = ensureArray(parsed.tournaments);
+    let localSavedTourneys = [];
+    try {
+      localSavedTourneys = JSON.parse(localStorage.getItem("saved_web_tournaments") || "[]");
+    } catch (_e) {}
+
+    // Merge locally claimed/saved tournaments so they never disappear from registered list
+    const combinedTourneys = [...incomingTourneys];
+    [...(state.tournaments || []), ...localSavedTourneys].forEach(lt => {
+      if (lt && lt.id && !combinedTourneys.some(t => t.id === lt.id)) {
+        combinedTourneys.push(lt);
+      }
+    });
+
+    state.tournaments = combinedTourneys;
+    state.teams = ensureArray(parsed.teams);
+    state.players = ensureArray(parsed.players);
+    state.bids = ensureArray(parsed.bids);
+    state.matches = ensureArray(parsed.matches);
+    state.ballRecords = ensureArray(parsed.ballRecords);
+    state.activeTournamentId = parsed.activeTournamentId || (state.tournaments[0] ? state.tournaments[0].id : "t1");
+    state.activePlayerId = parsed.activePlayerId || (state.players[0] ? state.players[0].id : null);
+    state.activeMatchId = parsed.activeMatchId || (state.matches[0] ? state.matches[0].id : null);
+
+    try {
+      localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
+    } catch (_e) {}
+
+    renderAll();
+    return true;
+  }
+  return false;
+}
+
 function listenToFirebase() {
-  const dbRef = db.ref("users/default_user/database_schema");
-  dbRef.on("value", (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-      state.tournaments = ensureArray(data.tournaments);
-      state.teams = ensureArray(data.teams);
-      state.players = ensureArray(data.players);
-      state.bids = ensureArray(data.bids);
-      state.matches = ensureArray(data.matches);
-      state.ballRecords = ensureArray(data.ballRecords);
-      state.activeTournamentId = data.activeTournamentId || (state.tournaments[0] ? state.tournaments[0].id : "t1");
-      state.activePlayerId = data.activePlayerId || (state.players[0] ? state.players[0].id : null);
-      state.activeMatchId = data.activeMatchId || (state.matches[0] ? state.matches[0].id : null);
-      renderAll();
+  const rootRef = db.ref("database_schema");
+  const userRef = db.ref("users/default_user/database_schema");
+
+  rootRef.on("value", (snapshot) => {
+    const val = snapshot.val();
+    if (val) {
+      applySchemaData(val);
     } else {
-      seedDefaultData();
+      userRef.once("value", (userSnap) => {
+        const userVal = userSnap.val();
+        if (userVal) {
+          applySchemaData(userVal);
+        } else {
+          seedDefaultData();
+        }
+      });
     }
   });
 }
 
 function saveToFirebase() {
-  const dbRef = db.ref("users/default_user/database_schema");
+  try {
+    localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
+  } catch (_e) {}
+
   const payload = {
     tournaments: state.tournaments,
     teams: state.teams,
@@ -80,12 +128,14 @@ function saveToFirebase() {
     activePlayerId: state.activePlayerId,
     activeMatchId: state.activeMatchId
   };
-  dbRef.set(payload);
+  const jsonStr = JSON.stringify(payload);
+  db.ref("database_schema").set(jsonStr);
+  db.ref("users/default_user/database_schema").set(jsonStr);
 }
 
 function seedDefaultData() {
   state.tournaments = [
-    { id: "t1", name: "IPL 2026 Mega Auction", defaultPurse: 100.0, maxSlots: 25, maxOverseas: 8, scorerInviteCode: "SC8K2M" }
+    { id: "t1", name: "IPL 2026 Mega Auction", defaultPurse: 100.0, maxSlots: 25, maxOverseas: 8, scorerInviteCode: "SC8K2M", adminCode: "ADM2026" }
   ];
   state.teams = [
     { id: "team_rcb", tournamentId: "t1", name: "Royal Challengers Bengaluru", shortCode: "RCB", primaryColorHex: "#EC1C24", totalPurse: 100.0, spentPurse: 0.0, inviteCode: "RCB2026" },
@@ -388,7 +438,19 @@ function selectActivePlayer(playerId) {
 }
 
 // --- LIVE SCORER ENGINE ---
+function copyScorerCodeFromTab() {
+  const tourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+  const code = tourney ? (tourney.scorerInviteCode || "SC8K2M") : "SC8K2M";
+  copyText(code, "Scorer Invite Code");
+}
+
 function renderLiveScorer() {
+  const activeTourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+  const tabCodeEl = document.getElementById("tabScorerCodeVal");
+  if (tabCodeEl && activeTourney) {
+    tabCodeEl.innerText = activeTourney.scorerInviteCode || "SC8K2M";
+  }
+
   const activeMatch = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
   if (!activeMatch) {
     document.getElementById("scorerScoreText").innerText = "0 / 0";
@@ -486,11 +548,59 @@ function renderPointsTable() {
 // --- CODE CLAIMING ENGINE ---
 function submitClaimCode() {
   const code = document.getElementById("claimCodeInput").value.trim().toUpperCase();
-  const matchedTeam = state.teams.find(t => t.inviteCode.toUpperCase() === code);
+  if (!code) {
+    showToast("Please enter a code");
+    return;
+  }
+
+  // 1. Check if matches Admin Joining Code
+  let adminTourney = state.tournaments.find(t => (t.adminCode || "").toUpperCase() === code);
+  if (!adminTourney && code.startsWith("ADM")) {
+    adminTourney = {
+      id: "t_" + Date.now(),
+      name: "Tournament (" + code + ")",
+      defaultPurse: 100.0,
+      maxSlots: 25,
+      maxOverseas: 8,
+      scorerInviteCode: "SC" + Math.floor(1000 + Math.random() * 9000),
+      adminCode: code
+    };
+    state.tournaments.push(adminTourney);
+  }
+
+  if (adminTourney) {
+    state.activeTournamentId = adminTourney.id;
+    state.currentUser.role = "ADMIN_AUCTIONEER";
+    state.currentUser.assignedTeamId = null;
+    document.getElementById("userRoleSelect").value = "ADMIN_AUCTIONEER";
+    saveToFirebase();
+    closeModal("claimCodeModal");
+    renderAll();
+    showToast(`👑 Admin Access Granted for "${adminTourney.name}"! Registered in tournaments list.`);
+    return;
+  }
+
+  // 2. Check if matches Team Captain Invite Code
+  const matchedTeam = state.teams.find(t => t.inviteCode && t.inviteCode.toUpperCase() === code);
   if (matchedTeam) {
+    let parentTourney = state.tournaments.find(t => t.id === matchedTeam.tournamentId);
+    if (!parentTourney) {
+      parentTourney = {
+        id: matchedTeam.tournamentId || ("t_" + Date.now()),
+        name: "Tournament (" + matchedTeam.shortCode + ")",
+        defaultPurse: 100.0,
+        maxSlots: 25,
+        maxOverseas: 8,
+        scorerInviteCode: "SC" + Math.floor(1000 + Math.random() * 9000),
+        adminCode: "ADM" + Math.floor(1000 + Math.random() * 9000)
+      };
+      state.tournaments.push(parentTourney);
+    }
+    state.activeTournamentId = parentTourney.id;
     state.currentUser.role = "TEAM_CAPTAIN";
     state.currentUser.assignedTeamId = matchedTeam.id;
     document.getElementById("userRoleSelect").value = "TEAM_CAPTAIN";
+    saveToFirebase();
     closeModal("claimCodeModal");
     renderAll();
     document.querySelector('[data-tab="tab-auction"]').click();
@@ -498,19 +608,58 @@ function submitClaimCode() {
     return;
   }
 
-  const tourney = state.tournaments.find(t => (t.scorerInviteCode || "").toUpperCase() === code);
-  if (tourney || code.startsWith("SC")) {
+  // 3. Check if matches Scorer Invite Code
+  let tourney = state.tournaments.find(t => (t.scorerInviteCode || "").toUpperCase() === code);
+  if (!tourney && code.startsWith("SC")) {
+    tourney = {
+      id: "t_" + Date.now(),
+      name: "Scored Tournament (" + code + ")",
+      defaultPurse: 100.0,
+      maxSlots: 25,
+      maxOverseas: 8,
+      scorerInviteCode: code,
+      adminCode: "ADM" + Math.floor(1000 + Math.random() * 9000)
+    };
+    state.tournaments.push(tourney);
+  }
+
+  if (tourney) {
+    state.activeTournamentId = tourney.id;
     state.currentUser.role = "SCORER";
     state.currentUser.assignedTeamId = null;
     document.getElementById("userRoleSelect").value = "SCORER";
+    saveToFirebase();
     closeModal("claimCodeModal");
     renderAll();
     document.querySelector('[data-tab="tab-scorer"]').click();
-    showToast("🏆 Scorer Access Granted! Entering Scorer Screen...");
+    showToast(`🏆 Scorer Access Granted for "${tourney.name}"! Registered in tournaments list.`);
     return;
   }
 
-  showToast("❌ Invalid 6-digit code!");
+  // 4. Fallback: Any valid code (e.g. 7-character code or custom code)
+  if (code.length >= 3) {
+    let genTourney = {
+      id: "t_" + Date.now(),
+      name: "Tournament (" + code + ")",
+      defaultPurse: 100.0,
+      maxSlots: 25,
+      maxOverseas: 8,
+      scorerInviteCode: "SC" + Math.floor(1000 + Math.random() * 9000),
+      adminCode: code
+    };
+    state.tournaments.push(genTourney);
+    state.activeTournamentId = genTourney.id;
+    state.currentUser.role = "ADMIN_AUCTIONEER";
+    state.currentUser.assignedTeamId = null;
+    document.getElementById("userRoleSelect").value = "ADMIN_AUCTIONEER";
+    saveToFirebase();
+    closeModal("claimCodeModal");
+    renderAll();
+    showToast(`👑 Access Granted for "${genTourney.name}"! Registered in tournaments list.`);
+    return;
+  }
+
+  showToast("❌ Invalid joining or invite code!");
 }
 
 // --- TOURNAMENTS ENGINE & MODAL HANDLERS ---
@@ -535,7 +684,11 @@ function renderTournaments() {
     <div class="card" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface);">
       <div>
         <h4 style="color: var(--color-gold); font-size: 1.1rem; margin-bottom: 4px;">${t.name} ${t.id === state.activeTournamentId ? '⭐ (Active)' : ''}</h4>
-        <p style="color: var(--color-text-sub); font-size: 0.8rem;">Purse: ₹${t.defaultPurse} Cr | Max Slots: ${t.maxSlots} | Max Overseas: ${t.maxOverseas} | Scorer Code: <strong>${t.scorerInviteCode || 'SC8K2M'}</strong></p>
+        <p style="color: var(--color-text-sub); font-size: 0.8rem;">
+          Purse: ₹${t.defaultPurse} Cr | Max Slots: ${t.maxSlots} | Max Overseas: ${t.maxOverseas}<br>
+          <span style="color: var(--color-gold);">🔑 Admin Code: <strong>${t.adminCode || 'ADM2026'}</strong></span> | 
+          <span style="color: var(--color-blue);">🏏 Scorer Code: <strong>${t.scorerInviteCode || 'SC8K2M'}</strong></span>
+        </p>
       </div>
       <div>
         ${t.id !== state.activeTournamentId ? `<button class="btn btn-sm btn-secondary" onclick="switchActiveTournament('${t.id}')">Select</button>` : ''}
@@ -557,7 +710,8 @@ function submitCreateTourney() {
   const purse = parseFloat(document.getElementById("newTourneyPurse").value) || 100.0;
   const maxSlots = parseInt(document.getElementById("newTourneyMaxSlots").value) || 25;
   const maxOverseas = parseInt(document.getElementById("newTourneyMaxOverseas").value) || 8;
-  const scorerInviteCode = "SC" + Math.floor(100000 + Math.random() * 900000).toString().substring(0, 4);
+  const scorerInviteCode = "SC" + Math.floor(1000 + Math.random() * 9000).toString();
+  const adminCode = "ADM" + Math.floor(1000 + Math.random() * 9000).toString();
 
   const newId = "t_" + Date.now();
   const tourney = {
@@ -566,7 +720,8 @@ function submitCreateTourney() {
     defaultPurse: purse,
     maxSlots: maxSlots,
     maxOverseas: maxOverseas,
-    scorerInviteCode: scorerInviteCode
+    scorerInviteCode: scorerInviteCode,
+    adminCode: adminCode
   };
 
   state.tournaments.push(tourney);
@@ -575,7 +730,7 @@ function submitCreateTourney() {
   closeModal("createTourneyModal");
   document.getElementById("newTourneyName").value = "";
   renderAll();
-  showToast(`🏆 Created Tournament "${name}"!`);
+  showToast(`🏆 Created Tournament "${name}"! Admin Code: ${adminCode}`);
 }
 
 function submitCreateTeam() {

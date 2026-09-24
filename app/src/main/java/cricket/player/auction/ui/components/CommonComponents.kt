@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,17 +31,17 @@ import cricket.player.auction.model.formatIplCurrency
 import cricket.player.auction.ui.theme.*
 
 @Composable
-fun GoogleSignInButton(
+fun AdminJoinButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    text: String = "Sign in with Google"
+    text: String = "Enter Joining Code 🔑"
 ) {
     Button(
         onClick = onClick,
         modifier = modifier.height(44.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.White,
-            contentColor = Color(0xFF3C4043)
+            containerColor = IplGold,
+            contentColor = Color.Black
         ),
         shape = RoundedCornerShape(22.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
@@ -49,24 +50,16 @@ fun GoogleSignInButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF4285F4)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "G",
-                    color = Color.White,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 13.sp
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
+            Icon(
+                imageVector = Icons.Default.VpnKey,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = text,
-                color = Color(0xFF3C4043),
+                color = Color.Black,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp
             )

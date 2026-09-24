@@ -1,12 +1,9 @@
 package cricket.player.auction.viewmodel
 
 import android.app.Application
-import android.content.Context
-import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cricket.player.auction.data.local.LocalCricketRepository
-import cricket.player.auction.data.remote.GoogleAuthManager
 import cricket.player.auction.model.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -16,7 +13,6 @@ import kotlinx.coroutines.launch
 class AuctionViewModel(application: Application) : AndroidViewModel(application) {
 
     val localRepository = LocalCricketRepository(application)
-    val authManager = GoogleAuthManager(application)
 
     val tournaments: StateFlow<List<Tournament>> = localRepository.tournaments
     val activeTournamentId: StateFlow<String> = localRepository.activeTournamentId
@@ -40,8 +36,15 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     val activeMatchId: StateFlow<String?> = localRepository.activeMatchId
     val ballRecords: StateFlow<List<BallRecord>> = localRepository.ballRecords
 
-    val currentUser: StateFlow<UserProfile?> = authManager.currentUser
-    val isSignedIn: StateFlow<Boolean> = authManager.isSignedIn
+    private val _currentUser = MutableStateFlow(
+        UserProfile(
+            email = "admin@cricket.app",
+            displayName = "Tournament Admin",
+            role = UserRole.ADMIN_AUCTIONEER
+        )
+    )
+    val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
+    val isSignedIn: StateFlow<Boolean> = MutableStateFlow(true).asStateFlow()
 
     // Computed Active Player
     val activePlayer: StateFlow<Player?> = combine(players, activePlayerId) { playerList, id ->
@@ -262,7 +265,7 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         val email = currentUser.value?.email ?: "captain@tournament.com"
         val team = localRepository.claimCaptainInvite(code, email)
         if (team != null) {
-            authManager.assignTeam(team.id)
+            _currentUser.value = _currentUser.value.copy(role = UserRole.TEAM_CAPTAIN, assignedTeamId = team.id)
         }
         return team
     }
@@ -270,9 +273,32 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     fun claimScorerInvite(code: String): Tournament? {
         val tourney = localRepository.claimScorerInvite(code)
         if (tourney != null) {
-            authManager.updateUserRole(UserRole.SCORER, null)
+            _currentUser.value = _currentUser.value.copy(role = UserRole.SCORER, assignedTeamId = null)
         }
         return tourney
+    }
+
+    fun joinWithCode(inputCode: String): Pair<Boolean, String> {
+        val (tourney, role) = localRepository.joinTournamentWithCode(inputCode)
+        if (tourney != null && role != null) {
+            val teamId = if (role == UserRole.TEAM_CAPTAIN) {
+                val cleanCode = inputCode.trim().uppercase()
+                teams.value.find { it.inviteCode.equals(cleanCode, ignoreCase = true) }?.id
+            } else null
+
+            _currentUser.value = _currentUser.value.copy(
+                role = role,
+                assignedTeamId = teamId
+            )
+            val roleName = when (role) {
+                UserRole.ADMIN_AUCTIONEER -> "Admin / Auctioneer"
+                UserRole.SCORER -> "Live Scorer"
+                UserRole.TEAM_CAPTAIN -> "Team Captain / Owner"
+                UserRole.SPECTATOR -> "Spectator"
+            }
+            return Pair(true, "Successfully joined '${tourney.name}' as $roleName!")
+        }
+        return Pair(false, "Invalid joining code. Please check your admin or invite code.")
     }
 
     fun endMatchDirectly(
@@ -288,7 +314,7 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun switchUserRole(role: UserRole, teamId: String? = null) {
-        authManager.updateUserRole(role, teamId)
+        _currentUser.value = _currentUser.value.copy(role = role, assignedTeamId = teamId)
     }
 
     fun exportDatabaseJson(): String {

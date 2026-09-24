@@ -228,10 +228,7 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
 
                 OutlinedTextField(
                     value = nameInput,
-                    onValueChange = {
-                        nameInput = it
-                        viewModel.authManager.signInWithGoogle(emailInput, it, photoUrl = avatarUrl)
-                    },
+                    onValueChange = { nameInput = it },
                     label = { Text("Display Name") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -241,10 +238,7 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
 
                 OutlinedTextField(
                     value = emailInput,
-                    onValueChange = {
-                        emailInput = it
-                        viewModel.authManager.signInWithGoogle(it, nameInput, photoUrl = avatarUrl)
-                    },
+                    onValueChange = { emailInput = it },
                     label = { Text("Account Email") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -254,10 +248,7 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
 
                 PhotoUploaderField(
                     imageUrl = avatarUrl,
-                    onImageUrlChange = {
-                        avatarUrl = it
-                        viewModel.authManager.signInWithGoogle(emailInput, nameInput, photoUrl = it)
-                    },
+                    onImageUrlChange = { avatarUrl = it },
                     label = "Profile Avatar Photo"
                 )
 

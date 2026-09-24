@@ -51,6 +51,9 @@ class LocalCricketRepository(context: Context) {
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
     init {
+        firebaseRepo.onSchemaRemoteUpdated = { remoteSchema ->
+            mergeRemoteSchema(remoteSchema)
+        }
         scope.launch {
             val schema = dbManager.loadDatabase().sanitized()
             _tournaments.value = schema.tournaments
@@ -63,6 +66,47 @@ class LocalCricketRepository(context: Context) {
             _activeTournamentId.value = schema.activeTournamentId.ifEmpty { schema.tournaments.firstOrNull()?.id ?: "" }
             _activePlayerId.value = schema.activePlayerId ?: schema.players.firstOrNull()?.id
             _activeMatchId.value = schema.activeMatchId ?: schema.matches.firstOrNull()?.id
+
+            firebaseRepo.syncDatabaseToFirebase(schema)
+        }
+    }
+
+    private fun mergeRemoteSchema(remoteSchema: DatabaseSchema) {
+        val currentTournaments = _tournaments.value
+        val remoteTournaments = remoteSchema.tournaments
+        val mergedTourneys = (currentTournaments + remoteTournaments).distinctBy { it.id }
+
+        val mergedTeams = (_teams.value + remoteSchema.teams).distinctBy { it.id }
+        val mergedPlayers = (_players.value + remoteSchema.players).distinctBy { it.id }
+        val mergedBids = (_bids.value + remoteSchema.bids).distinctBy { it.id }
+        val mergedMatches = (_matches.value + remoteSchema.matches).distinctBy { it.id }
+        val mergedBallRecords = (_ballRecords.value + remoteSchema.ballRecords).distinctBy { it.id }
+
+        _tournaments.value = mergedTourneys
+        _teams.value = mergedTeams
+        _players.value = mergedPlayers
+        _bids.value = mergedBids
+        _matches.value = mergedMatches
+        _ballRecords.value = mergedBallRecords
+
+        if (_activeTournamentId.value.isBlank() || !_tournaments.value.any { it.id == _activeTournamentId.value }) {
+            _activeTournamentId.value = _tournaments.value.firstOrNull()?.id ?: ""
+        }
+
+        scope.launch {
+            val updatedSchema = DatabaseSchema(
+                tournaments = _tournaments.value,
+                teams = _teams.value,
+                players = _players.value,
+                bids = _bids.value,
+                captainInvites = _captainInvites.value,
+                matches = _matches.value,
+                ballRecords = _ballRecords.value,
+                activeTournamentId = _activeTournamentId.value,
+                activePlayerId = _activePlayerId.value,
+                activeMatchId = _activeMatchId.value
+            )
+            dbManager.saveDatabase(updatedSchema)
         }
     }
 
@@ -148,18 +192,115 @@ class LocalCricketRepository(context: Context) {
 
     fun createTournament(name: String, defaultPurse: Double, maxSlots: Int, maxOverseas: Int): Tournament {
         val scorerCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
+        val adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
         val newTourney = Tournament(
             id = "t_${System.currentTimeMillis()}",
             name = name,
             defaultPurse = defaultPurse,
             maxSlots = maxSlots,
             maxOverseas = maxOverseas,
-            scorerInviteCode = scorerCode
+            scorerInviteCode = scorerCode,
+            adminCode = adminCode
         )
         _tournaments.value = _tournaments.value + newTourney
         _activeTournamentId.value = newTourney.id
         persistAsync()
         return newTourney
+    }
+
+    fun joinTournamentWithCode(inputCode: String): Pair<Tournament?, UserRole?> {
+        val cleanCode = inputCode.trim().uppercase()
+        if (cleanCode.isBlank()) return Pair(null, null)
+
+        // 1. Check if code matches Admin Joining Code
+        val adminTourney = _tournaments.value.find { it.adminCode.equals(cleanCode, ignoreCase = true) }
+        if (adminTourney != null) {
+            _activeTournamentId.value = adminTourney.id
+            persistAsync()
+            return Pair(adminTourney, UserRole.ADMIN_AUCTIONEER)
+        }
+
+        // 2. Check if code matches Scorer Invite Code
+        val scorerTourney = _tournaments.value.find { it.scorerInviteCode.equals(cleanCode, ignoreCase = true) }
+        if (scorerTourney != null) {
+            _activeTournamentId.value = scorerTourney.id
+            persistAsync()
+            return Pair(scorerTourney, UserRole.SCORER)
+        }
+
+        // 3. Check if code matches Team Captain Invite Code
+        val matchingTeam = _teams.value.find { it.inviteCode.equals(cleanCode, ignoreCase = true) }
+        if (matchingTeam != null) {
+            var parentTourney = _tournaments.value.find { it.id == matchingTeam.tournamentId }
+            if (parentTourney == null) {
+                parentTourney = Tournament(
+                    id = matchingTeam.tournamentId.ifEmpty { "t_${System.currentTimeMillis()}" },
+                    name = "Tournament (${matchingTeam.shortCode})",
+                    defaultPurse = 100.0,
+                    maxSlots = 25,
+                    maxOverseas = 8,
+                    scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
+                    adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
+                )
+                _tournaments.value = _tournaments.value + parentTourney
+            }
+            _activeTournamentId.value = parentTourney.id
+            persistAsync()
+            return Pair(parentTourney, UserRole.TEAM_CAPTAIN)
+        }
+
+        // 4. Auto-register Admin code starting with ADM
+        if (cleanCode.startsWith("ADM")) {
+            val newTourney = Tournament(
+                id = "t_${System.currentTimeMillis()}",
+                name = "Tournament ($cleanCode)",
+                defaultPurse = 100.0,
+                maxSlots = 25,
+                maxOverseas = 8,
+                adminCode = cleanCode,
+                scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
+            )
+            _tournaments.value = _tournaments.value + newTourney
+            _activeTournamentId.value = newTourney.id
+            persistAsync()
+            return Pair(newTourney, UserRole.ADMIN_AUCTIONEER)
+        }
+
+        // 5. Auto-register Scorer code starting with SC
+        if (cleanCode.startsWith("SC")) {
+            val newTourney = Tournament(
+                id = "t_${System.currentTimeMillis()}",
+                name = "Scored Tournament ($cleanCode)",
+                defaultPurse = 100.0,
+                maxSlots = 25,
+                maxOverseas = 8,
+                scorerInviteCode = cleanCode,
+                adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
+            )
+            _tournaments.value = _tournaments.value + newTourney
+            _activeTournamentId.value = newTourney.id
+            persistAsync()
+            return Pair(newTourney, UserRole.SCORER)
+        }
+
+        // 6. Fallback: Any other valid code (e.g. 7-character code or custom code)
+        if (cleanCode.length >= 3) {
+            val newTourney = Tournament(
+                id = "t_${System.currentTimeMillis()}",
+                name = "Tournament ($cleanCode)",
+                defaultPurse = 100.0,
+                maxSlots = 25,
+                maxOverseas = 8,
+                adminCode = cleanCode,
+                scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
+            )
+            _tournaments.value = _tournaments.value + newTourney
+            _activeTournamentId.value = newTourney.id
+            persistAsync()
+            return Pair(newTourney, UserRole.ADMIN_AUCTIONEER)
+        }
+
+        return Pair(null, null)
     }
 
     fun updateTournament(tournament: Tournament) {

@@ -31,12 +31,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 import android.widget.Toast
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val activeTournament by viewModel.activeTournament.collectAsState()
     val teams by viewModel.teams.collectAsState()
     val players by viewModel.players.collectAsState()
     val activeMatchState by viewModel.activeMatch.collectAsState()
@@ -185,6 +189,55 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(13.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text("End Innings", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Scorer Invite Code Copy Banner Card
+            val scorerCode = activeTournament?.scorerInviteCode ?: ""
+            if (scorerCode.isNotBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clickable {
+                            clipboardManager.setText(AnnotatedString(scorerCode))
+                            Toast.makeText(context, "📋 Scorer Code '$scorerCode' copied!", Toast.LENGTH_SHORT).show()
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "SCORER INVITE CODE: $scorerCode",
+                                color = NeonBlue,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Surface(
+                            color = NeonBlue.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("COPY CODE 📋", color = NeonBlue, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
                             }
                         }
                     }

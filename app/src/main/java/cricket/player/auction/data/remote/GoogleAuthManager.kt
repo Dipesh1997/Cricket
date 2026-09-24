@@ -22,7 +22,7 @@ import kotlinx.coroutines.withContext
 
 class GoogleAuthManager(private val context: Context) {
 
-    val defaultWebClientId = "150081230722-8fctbo5vh0rp6ruvg43mm8vdgbs7d21e.apps.googleusercontent.com"
+    val defaultWebClientId = "5995891908-2sh5vspudnp5ot5k8n5ve063kph6ub5s.apps.googleusercontent.com"
 
     private val _currentUser = MutableStateFlow<UserProfile?>(
         UserProfile(

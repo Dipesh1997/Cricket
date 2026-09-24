@@ -12,34 +12,46 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
 
     private val databaseUrl = "https://cricket-auction-app-24750-default-rtdb.firebaseio.com"
     private val database: FirebaseDatabase by lazy {
-        FirebaseDatabase.getInstance(databaseUrl)
+        val instance = FirebaseDatabase.getInstance(databaseUrl)
+        try {
+            instance.setPersistenceEnabled(true)
+        } catch (_: Exception) {
+            // Persistence may already be enabled
+        }
+        instance
     }
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private var activeListener: ValueEventListener? = null
-    private var activeUserRef: DatabaseReference? = null
-    private var activeUid: String = ""
+    private var activeRef: DatabaseReference? = null
 
     init {
-        val currentUid = getActiveUserUid()
-        attachRealtimeListener(currentUid)
+        ensureAuthAndListen()
+    }
+
+    private fun ensureAuthAndListen() {
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            auth.signInAnonymously().addOnCompleteListener {
+                attachRealtimeListener()
+            }
+        } else {
+            attachRealtimeListener()
+        }
     }
 
     fun getActiveUserUid(): String {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
-        if (!uid.isNullOrBlank()) return uid
-        return "default_user"
+        return FirebaseAuth.getInstance().currentUser?.uid ?: "default_user"
     }
 
-    @Synchronized
-    fun attachRealtimeListener(userUid: String) {
-        val uid = if (userUid.isBlank()) getActiveUserUid() else userUid
-        if (activeUid == uid && activeListener != null) return
+    var onSchemaRemoteUpdated: ((DatabaseSchema) -> Unit)? = null
 
-        detachListener()
-        activeUid = uid
-        val userRef = database.reference.child("users").child(uid).child("database_schema")
-        activeUserRef = userRef
+    @Synchronized
+    fun attachRealtimeListener() {
+        if (activeListener != null) return
+
+        val rootRef = database.reference.child("database_schema")
+        activeRef = rootRef
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -48,8 +60,18 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
                     scope.launch {
                         val schema = dbManager.importFromJsonString(jsonString)
                         if (schema != null) {
-                            dbManager.saveDatabase(schema)
+                            if (onSchemaRemoteUpdated != null) {
+                                onSchemaRemoteUpdated?.invoke(schema)
+                            } else {
+                                dbManager.saveDatabase(schema)
+                            }
                         }
+                    }
+                } else {
+                    // Firebase database node is empty/null! Push current local schema to Firebase immediately!
+                    scope.launch {
+                        val localSchema = dbManager.loadDatabase().sanitized()
+                        syncDatabaseToFirebase(localSchema)
                     }
                 }
             }
@@ -60,23 +82,24 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
         }
 
         activeListener = listener
-        userRef.addValueEventListener(listener)
+        rootRef.addValueEventListener(listener)
     }
 
     private fun detachListener() {
         activeListener?.let { listener ->
-            activeUserRef?.removeEventListener(listener)
+            activeRef?.removeEventListener(listener)
         }
         activeListener = null
-        activeUserRef = null
+        activeRef = null
     }
 
     fun syncDatabaseToFirebase(schema: DatabaseSchema, userUid: String = getActiveUserUid()) {
         scope.launch {
             try {
-                val uid = if (userUid.isBlank()) getActiveUserUid() else userUid
                 val json = dbManager.exportToJsonString(schema)
-                database.reference.child("users").child(uid).child("database_schema").setValue(json)
+                // Write to both root database_schema AND users/default_user/database_schema
+                database.reference.child("database_schema").setValue(json)
+                database.reference.child("users").child("default_user").child("database_schema").setValue(json)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -86,8 +109,8 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
     fun clearUserDatabase(userUid: String = getActiveUserUid()) {
         scope.launch {
             try {
-                val uid = if (userUid.isBlank()) getActiveUserUid() else userUid
-                database.reference.child("users").child(uid).removeValue()
+                database.reference.child("database_schema").removeValue()
+                database.reference.child("users").child("default_user").removeValue()
             } catch (e: Exception) {
                 e.printStackTrace()
             }

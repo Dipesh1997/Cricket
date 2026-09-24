@@ -64,12 +64,6 @@ fun TournamentScreen(
 
     val currentUser by viewModel.currentUser.collectAsState()
 
-    val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        viewModel.authManager.handleSignInResult(result.data)
-    }
-
     // Export Backup File Launcher
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -166,70 +160,7 @@ fun TournamentScreen(
                 }
             }
 
-            // --- Google Sign-In & User Isolation Banner ---
-            Card(
-                colors = CardDefaults.cardColors(containerColor = if (isDarkTheme) StadiumCardDark else LightPitchSurface),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.4f))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            color = if (isDarkTheme) StadiumSurface else LightPitchContainer,
-                            shape = CircleShape,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = themeAccent,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column {
-                            Text(
-                                text = currentUser?.displayName ?: "Google Account",
-                                color = if (isDarkTheme) Color.White else LightPitchText,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                            Text(
-                                text = "Firebase Synced (${currentUser?.email ?: "Offline"})",
-                                color = if (isDarkTheme) Color.Gray else LightPitchSecondary,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            val intent = viewModel.authManager.getGoogleSignInIntent(context)
-                            googleSignInLauncher.launch(intent)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text("SIGN IN 🔐", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
-                    }
-                }
-            }
-
-            // --- Team Captain / Owner 6-Digit Invite Code Card ---
+            // --- Admin & Team Join Code Banner ---
             Card(
                 colors = CardDefaults.cardColors(containerColor = if (isDarkTheme) StadiumCardDark else LightPitchSurface),
                 shape = RoundedCornerShape(14.dp),
@@ -245,7 +176,10 @@ fun TournamentScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Surface(
                             color = IplGold.copy(alpha = 0.2f),
                             shape = CircleShape,
@@ -253,7 +187,7 @@ fun TournamentScreen(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.Person,
+                                    imageVector = Icons.Default.VpnKey,
                                     contentDescription = null,
                                     tint = IplGold,
                                     modifier = Modifier.size(20.dp)
@@ -263,28 +197,38 @@ fun TournamentScreen(
 
                         Spacer(modifier = Modifier.width(10.dp))
 
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "TEAM BIDDING INVITE CODE",
+                                text = "JOIN AS ADMIN / USER",
                                 color = if (isDarkTheme) Color.White else LightPitchText,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 13.sp
+                                fontSize = 12.sp,
+                                maxLines = 1
                             )
                             Text(
-                                text = "Got 6-digit code? Claim team & bid live instantly",
+                                text = "Enter Admin Code or invite code",
                                 color = if (isDarkTheme) Color.Gray else LightPitchSecondary,
-                                fontSize = 11.sp
+                                fontSize = 10.sp,
+                                maxLines = 1
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Button(
                         onClick = { showInviteCodeDialog = true },
                         colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text("ENTER CODE 🔑", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(
+                            text = "ENTER CODE 🔑",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }
@@ -449,31 +393,64 @@ fun TournamentScreen(
                                     StatChip(text = "Players: ${players.count { it.tournamentId == tourney.id }}", backgroundColor = StadiumSurface, textColor = IplGold)
                                 }
 
-                                if (tourney.scorerInviteCode.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Surface(
-                                        color = NeonBlue.copy(alpha = 0.15f),
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f)),
-                                        modifier = Modifier.clickable {
-                                            clipboardManager.setText(AnnotatedString(tourney.scorerInviteCode))
-                                            Toast.makeText(context, "🔑 Scorer Code ${tourney.scorerInviteCode} copied!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (tourney.adminCode.isNotBlank()) {
+                                        Surface(
+                                            color = IplGold.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.4f)),
+                                            modifier = Modifier.clickable {
+                                                clipboardManager.setText(AnnotatedString(tourney.adminCode))
+                                                Toast.makeText(context, "🔑 Admin Code ${tourney.adminCode} copied!", Toast.LENGTH_SHORT).show()
+                                            }
                                         ) {
-                                            Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "SCORER INVITE CODE: ${tourney.scorerInviteCode}",
-                                                color = NeonBlue,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "ADMIN CODE: ${tourney.adminCode}",
+                                                    color = IplGold,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = IplGold, modifier = Modifier.size(12.dp))
+                                            }
+                                        }
+                                    }
+
+                                    if (tourney.scorerInviteCode.isNotBlank()) {
+                                        Surface(
+                                            color = NeonBlue.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f)),
+                                            modifier = Modifier.clickable {
+                                                clipboardManager.setText(AnnotatedString(tourney.scorerInviteCode))
+                                                Toast.makeText(context, "🔑 Scorer Code ${tourney.scorerInviteCode} copied!", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "SCORER: ${tourney.scorerInviteCode}",
+                                                    color = NeonBlue,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                            }
                                         }
                                     }
                                 }
@@ -661,23 +638,24 @@ fun TournamentScreen(
         )
     }
 
-    // --- 6-Digit Team or Scorer Invite Code Dialog ---
+    // --- Admin / Team / Scorer Invite Code Dialog ---
     if (showInviteCodeDialog) {
         var inviteCodeInput by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showInviteCodeDialog = false },
-            title = { Text("Enter 6-Digit Team or Scorer Code", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Enter Admin Code or Invite Code 🔑", color = Color.White, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Enter the 6-digit code provided by your Admin to claim your Team (Captain Bidding) or Scorer access.",
+                        text = "Enter the autogenerated Admin joining code (e.g. ADM1234), Team Captain code, or Scorer code to claim your access and sync live.",
                         color = Color.LightGray,
                         fontSize = 12.sp
                     )
                     OutlinedTextField(
                         value = inviteCodeInput,
-                        onValueChange = { if (it.length <= 6) inviteCodeInput = it.uppercase() },
-                        label = { Text("6-Digit Code (e.g. A1B2C3 or SC1234)") },
+                        onValueChange = { if (it.length <= 12) inviteCodeInput = it.uppercase() },
+                        label = { Text("Joining / Admin Code") },
+                        placeholder = { Text("e.g. ADM84K or SC1234") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -687,26 +665,23 @@ fun TournamentScreen(
                 Button(
                     onClick = {
                         val input = inviteCodeInput.trim()
-                        val claimedTeam = viewModel.claimCaptainInvite(input)
-                        if (claimedTeam != null) {
+                        val (success, message) = viewModel.joinWithCode(input)
+                        if (success) {
                             showInviteCodeDialog = false
-                            Toast.makeText(context, "🎉 Welcome ${claimedTeam.name}! Entering Auction Arena...", Toast.LENGTH_LONG).show()
-                            onNavigateToAuction()
-                        } else {
-                            val claimedScorerTourney = viewModel.claimScorerInvite(input)
-                            if (claimedScorerTourney != null) {
-                                showInviteCodeDialog = false
-                                Toast.makeText(context, "🏆 Scorer Access Granted for ${claimedScorerTourney.name}! Entering Scorer Screen...", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            if (message.contains("Scorer")) {
                                 onNavigateToScorer()
-                            } else {
-                                Toast.makeText(context, "❌ Invalid 6-digit invite code. Check with your Tournament Admin.", Toast.LENGTH_SHORT).show()
+                            } else if (message.contains("Captain") || message.contains("Admin")) {
+                                onNavigateToAuction()
                             }
+                        } else {
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
-                    enabled = inviteCodeInput.trim().length >= 4
+                    enabled = inviteCodeInput.trim().length >= 3
                 ) {
-                    Text("CLAIM ACCESS 🚀", fontWeight = FontWeight.ExtraBold)
+                    Text("JOIN / CLAIM ACCESS 🚀", fontWeight = FontWeight.ExtraBold)
                 }
             },
             dismissButton = {
