@@ -31,12 +31,70 @@ let state = {
   timerSeconds: 15
 };
 
+// --- BROWSER DEVICE ID & PERSISTENCE ENGINE ---
+function getBrowserDeviceId() {
+  let id = localStorage.getItem("cricket_browser_device_id");
+  if (!id) {
+    id = "browser_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem("cricket_browser_device_id", id);
+  }
+  return id;
+}
+
+function registerBrowserDevice() {
+  const deviceId = getBrowserDeviceId();
+  const deviceInfo = {
+    deviceId: deviceId,
+    platform: "Web Browser",
+    userAgent: navigator.userAgent,
+    language: navigator.language || "en",
+    screenWidth: window.screen ? window.screen.width : 0,
+    screenHeight: window.screen ? window.screen.height : 0,
+    lastSeenDate: new Date().toISOString(),
+    lastSeenTimestamp: Date.now()
+  };
+  try {
+    db.ref("devices/" + deviceId + "/device_info").set(deviceInfo);
+    db.ref("active_devices/" + deviceId).set(deviceInfo);
+  } catch (e) {
+    console.error("Device registration error:", e);
+  }
+}
+
+function loadLocalCacheFirst() {
+  try {
+    const cached = localStorage.getItem("cricket_local_schema");
+    if (cached) {
+      applySchemaData(cached);
+    }
+  } catch (e) {
+    console.error("Local cache load error:", e);
+  }
+}
+
+function setupOfflineSyncListeners() {
+  window.addEventListener("online", () => {
+    showToast("Internet restored! Syncing data with cloud...");
+    const cached = localStorage.getItem("cricket_local_schema");
+    if (cached) {
+      saveToFirebase();
+    }
+  });
+
+  window.addEventListener("offline", () => {
+    showToast("Internet offline: actions saved locally & will sync when online.");
+  });
+}
+
 // --- INITIALIZATION & REALTIME DB LISTENERS ---
 document.addEventListener("DOMContentLoaded", () => {
   setupNavigation();
   setupRoleSelector();
+  registerBrowserDevice();
+  loadLocalCacheFirst();
   listenToFirebase();
   startBidTimer();
+  setupOfflineSyncListeners();
 });
 
 function ensureArray(val) {
@@ -44,6 +102,19 @@ function ensureArray(val) {
   if (Array.isArray(val)) return val;
   if (typeof val === 'object') return Object.values(val);
   return [];
+}
+
+function isSchemaEmptyWeb(data) {
+  if (!data) return true;
+  let parsed = data;
+  if (typeof data === 'string') {
+    try { parsed = JSON.parse(data); } catch (_e) { return true; }
+  }
+  if (!parsed || typeof parsed !== 'object') return true;
+  const tourneys = ensureArray(parsed.tournaments);
+  const teams = ensureArray(parsed.teams);
+  const players = ensureArray(parsed.players);
+  return tourneys.length === 0 && teams.length === 0 && players.length === 0;
 }
 
 function applySchemaData(data) {
@@ -83,6 +154,17 @@ function applySchemaData(data) {
 
     try {
       localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
+      localStorage.setItem("cricket_local_schema", JSON.stringify({
+        tournaments: state.tournaments,
+        teams: state.teams,
+        players: state.players,
+        bids: state.bids,
+        matches: state.matches,
+        ballRecords: state.ballRecords,
+        activeTournamentId: state.activeTournamentId,
+        activePlayerId: state.activePlayerId,
+        activeMatchId: state.activeMatchId
+      }));
     } catch (_e) {}
 
     renderAll();
@@ -93,19 +175,38 @@ function applySchemaData(data) {
 
 function listenToFirebase() {
   const rootRef = db.ref("database_schema");
+  const deviceId = getBrowserDeviceId();
+  const devRef = db.ref("devices/" + deviceId + "/database_schema");
   const userRef = db.ref("users/default_user/database_schema");
 
   rootRef.on("value", (snapshot) => {
     const val = snapshot.val();
-    if (val) {
+    if (val && !isSchemaEmptyWeb(val)) {
       applySchemaData(val);
     } else {
-      userRef.once("value", (userSnap) => {
-        const userVal = userSnap.val();
-        if (userVal) {
-          applySchemaData(userVal);
+      // If root is empty, check device-specific backup
+      devRef.once("value", (devSnap) => {
+        const devVal = devSnap.val();
+        if (devVal && !isSchemaEmptyWeb(devVal)) {
+          applySchemaData(devVal);
+          db.ref("database_schema").set(typeof devVal === 'string' ? devVal : JSON.stringify(devVal));
         } else {
-          seedDefaultData();
+          userRef.once("value", (userSnap) => {
+            const userVal = userSnap.val();
+            if (userVal && !isSchemaEmptyWeb(userVal)) {
+              applySchemaData(userVal);
+              db.ref("database_schema").set(typeof userVal === 'string' ? userVal : JSON.stringify(userVal));
+            } else {
+              // Check local cache
+              const cached = localStorage.getItem("cricket_local_schema");
+              if (cached && !isSchemaEmptyWeb(cached)) {
+                applySchemaData(cached);
+                saveToFirebase();
+              } else if (state.tournaments.length === 0) {
+                seedDefaultData();
+              }
+            }
+          });
         }
       });
     }
@@ -113,10 +214,6 @@ function listenToFirebase() {
 }
 
 function saveToFirebase() {
-  try {
-    localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
-  } catch (_e) {}
-
   const payload = {
     tournaments: state.tournaments,
     teams: state.teams,
@@ -129,8 +226,21 @@ function saveToFirebase() {
     activeMatchId: state.activeMatchId
   };
   const jsonStr = JSON.stringify(payload);
-  db.ref("database_schema").set(jsonStr);
-  db.ref("users/default_user/database_schema").set(jsonStr);
+
+  // 1. ALWAYS SAVE LOCALLY FIRST (Immediate local durability on weak or no internet)
+  try {
+    localStorage.setItem("cricket_local_schema", jsonStr);
+    localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
+  } catch (_e) {}
+
+  // 2. SYNC TO FIREBASE
+  const deviceId = getBrowserDeviceId();
+  db.ref("database_schema").set(jsonStr).catch(err => {
+    console.warn("Firebase sync delayed / offline:", err);
+  });
+  db.ref("users/default_user/database_schema").set(jsonStr).catch(() => {});
+  db.ref("devices/" + deviceId + "/database_schema").set(jsonStr).catch(() => {});
+  db.ref("devices/" + deviceId + "/device_info/lastSyncedTimestamp").set(Date.now()).catch(() => {});
 }
 
 function seedDefaultData() {
@@ -161,6 +271,7 @@ function renderAll() {
   renderPlayers();
   renderLiveScorer();
   renderPointsTable();
+  renderMvpLeaderboard();
 }
 
 // --- NAVIGATION TABS ---
@@ -172,7 +283,20 @@ function setupNavigation() {
       btn.classList.add("active");
       const target = btn.getAttribute("data-tab");
       document.querySelectorAll(".tab-pane").forEach(pane => pane.classList.remove("active"));
-      document.getElementById(target).classList.add("active");
+      const targetPane = document.getElementById(target);
+      if (targetPane) targetPane.classList.add("active");
+    });
+  });
+
+  const subButtons = document.querySelectorAll(".sub-nav-btn");
+  subButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      subButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const target = btn.getAttribute("data-subtab");
+      document.querySelectorAll(".sub-tab-pane").forEach(pane => pane.classList.remove("active"));
+      const targetSubPane = document.getElementById(target);
+      if (targetSubPane) targetSubPane.classList.add("active");
     });
   });
 }
@@ -517,6 +641,7 @@ function submitDirectEndMatch() {
 // --- POINTS TABLE ENGINE ---
 function renderPointsTable() {
   const container = document.getElementById("pointsTableContainer");
+  if (!container) return;
   container.innerHTML = `
     <table>
       <thead>
@@ -538,6 +663,103 @@ function renderPointsTable() {
             <td>0</td>
             <td><strong style="color: var(--color-gold);">0</strong></td>
             <td style="color: var(--color-blue);">+0.000</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+// --- MVP LEADERBOARD ENGINE ---
+let currentMvpCategory = 'ALL'; // 'ALL', 'RUNS', 'WKTS'
+
+function setMvpCategory(cat) {
+  currentMvpCategory = cat;
+  const btnAll = document.getElementById("mvpFilterAll");
+  const btnRuns = document.getElementById("mvpFilterRuns");
+  const btnWkts = document.getElementById("mvpFilterWkts");
+  if (btnAll) btnAll.className = cat === 'ALL' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+  if (btnRuns) btnRuns.className = cat === 'RUNS' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+  if (btnWkts) btnWkts.className = cat === 'WKTS' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+  renderMvpLeaderboard();
+}
+
+function renderMvpLeaderboard() {
+  const container = document.getElementById("mvpLeaderboardContainer");
+  if (!container) return;
+
+  const balls = state.ballRecords || [];
+  const playerStats = state.players.map(p => {
+    const team = state.teams.find(t => t.id === p.teamId);
+    const battingBalls = balls.filter(b => b.strikerId === p.id);
+    const bowlingBalls = balls.filter(b => b.bowlerId === p.id);
+
+    const runs = battingBalls.reduce((sum, b) => sum + (Number(b.runsScored) || 0), 0);
+    const ballsFaced = battingBalls.filter(b => b.extraType !== 'WIDE').length;
+    const fours = battingBalls.filter(b => b.runsScored === 4).length;
+    const sixes = battingBalls.filter(b => b.runsScored === 6).length;
+
+    const wickets = bowlingBalls.filter(b => b.isWicket && b.dismissalType !== 'RUN_OUT').length;
+    const dots = bowlingBalls.filter(b => (b.runsScored || 0) === 0 && (b.extraRuns || 0) === 0).length;
+
+    // CricHeroes MVP formula:
+    const mvpPoints = (runs * 1.0) + (fours * 1.0) + (sixes * 2.0) + (wickets * 25.0) + (dots * 1.0);
+
+    return {
+      id: p.id,
+      name: p.name,
+      teamName: team ? team.name : 'Unsold',
+      teamShort: team ? team.shortCode : '-',
+      role: p.role,
+      imageUrl: p.imageUrl,
+      runs,
+      ballsFaced,
+      wickets,
+      mvpPoints: Math.round(mvpPoints * 10) / 10
+    };
+  });
+
+  let sorted = [...playerStats];
+  if (currentMvpCategory === 'RUNS') {
+    sorted.sort((a, b) => b.runs - a.runs || b.mvpPoints - a.mvpPoints);
+  } else if (currentMvpCategory === 'WKTS') {
+    sorted.sort((a, b) => b.wickets - a.wickets || b.mvpPoints - a.mvpPoints);
+  } else {
+    sorted.sort((a, b) => b.mvpPoints - a.mvpPoints || b.runs - a.runs);
+  }
+
+  container.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50px;">Rank</th>
+          <th>Player</th>
+          <th>Team</th>
+          <th>Role</th>
+          <th style="text-align: right;">Runs</th>
+          <th style="text-align: right;">Wickets</th>
+          <th style="text-align: right;">MVP Points</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map((p, idx) => `
+          <tr>
+            <td>
+              <span class="chip" style="font-weight: 800; background: ${idx === 0 ? 'var(--color-gold)' : idx === 1 ? '#c0c0c0' : idx === 2 ? '#cd7f32' : 'var(--bg-card)'}; color: ${idx < 3 ? '#000' : 'var(--color-text-main)'};">
+                #${idx + 1}
+              </span>
+            </td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${p.imageUrl || 'https://via.placeholder.com/32'}" onerror="this.src='https://via.placeholder.com/32'" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.1);">
+                <strong>${p.name}</strong>
+              </div>
+            </td>
+            <td><span class="chip">${p.teamShort}</span></td>
+            <td><small style="color: var(--color-text-sub);">${p.role}</small></td>
+            <td style="text-align: right; font-weight: ${currentMvpCategory === 'RUNS' ? '900' : '600'}; color: ${currentMvpCategory === 'RUNS' ? 'var(--color-gold)' : 'inherit'};">${p.runs}</td>
+            <td style="text-align: right; font-weight: ${currentMvpCategory === 'WKTS' ? '900' : '600'}; color: ${currentMvpCategory === 'WKTS' ? '#b388ff' : 'inherit'};">${p.wickets}</td>
+            <td style="text-align: right; font-weight: 800; color: var(--color-gold); font-size: 1rem;">${p.mvpPoints.toFixed(1)}</td>
           </tr>
         `).join("")}
       </tbody>

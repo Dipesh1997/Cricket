@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,10 +21,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import cricket.player.auction.ui.screens.*
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
@@ -32,6 +35,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Tournament : Screen("tournament", "Home", Icons.Default.Home)
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.GridView)
     object Auction : Screen("auction", "Auction", Icons.Default.Gavel)
+    object List : Screen("list", "List", Icons.AutoMirrored.Filled.List)
     object Teams : Screen("teams", "Teams", Icons.Default.Shield)
     object Players : Screen("players", "Players", Icons.Default.Person)
     object Scorer : Screen("scorer", "Scorer", Icons.Default.SportsCricket)
@@ -72,11 +76,8 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
     val subPageScreens = listOf(
         Screen.Dashboard,
         Screen.Auction,
-        Screen.Teams,
-        Screen.Players,
+        Screen.List,
         Screen.Scorer,
-        Screen.Points,
-        Screen.MVP,
         Screen.Settings
     )
 
@@ -118,16 +119,17 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                         }
 
                         Text(
-                            text = when (currentRoute) {
-                                Screen.Tournament.route -> "CRICKET HUB"
-                                Screen.Dashboard.route -> "TOURNAMENT WORKSPACE"
-                                Screen.Auction.route -> "AUCTION ARENA"
-                                Screen.Teams.route -> "TEAMS & SQUADS"
-                                Screen.Players.route -> "PLAYER ROSTER"
-                                Screen.Scorer.route -> "LIVE SCORER"
-                                Screen.Points.route -> "POINTS TABLE"
-                                Screen.MVP.route -> "MVP LEADERBOARD"
-                                Screen.Settings.route -> "SETTINGS & BACKUP"
+                            text = when {
+                                currentRoute == Screen.Tournament.route -> "CRICKET HUB"
+                                currentRoute == Screen.Dashboard.route -> "TOURNAMENT WORKSPACE"
+                                currentRoute == Screen.Auction.route -> "AUCTION ARENA"
+                                currentRoute.startsWith("list") || currentRoute == Screen.List.route -> "TOURNAMENT LISTS"
+                                currentRoute == Screen.Teams.route -> "TEAMS & SQUADS"
+                                currentRoute == Screen.Players.route -> "PLAYER ROSTER"
+                                currentRoute == Screen.Scorer.route -> "LIVE SCORER"
+                                currentRoute == Screen.Points.route -> "POINTS TABLE"
+                                currentRoute == Screen.MVP.route -> "MVP LEADERBOARD"
+                                currentRoute == Screen.Settings.route -> "SETTINGS & BACKUP"
                                 else -> "CRICKET HUB"
                             },
                             fontWeight = FontWeight.Black,
@@ -195,7 +197,14 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                     contentColor = if (isDarkTheme) Color.White else LightPitchText
                 ) {
                     subPageScreens.forEach { screen ->
-                        val isSelected = currentRoute == screen.route
+                        val isSelected = currentRoute == screen.route ||
+                            (screen == Screen.List && (
+                                currentRoute.startsWith("list") ||
+                                currentRoute == Screen.Teams.route ||
+                                currentRoute == Screen.Players.route ||
+                                currentRoute == Screen.Points.route ||
+                                currentRoute == Screen.MVP.route
+                            ))
                         NavigationBarItem(
                             selected = isSelected,
                             onClick = {
@@ -218,7 +227,7 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                                 Text(
                                     text = screen.title,
                                     color = if (isSelected) accentColor else Color.Gray,
-                                    fontSize = 8.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                             },
@@ -267,20 +276,33 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
             composable(Screen.Auction.route) {
                 AuctionScreen(viewModel = viewModel)
             }
+            composable(
+                route = "list?tab={tab}",
+                arguments = listOf(
+                    navArgument("tab") {
+                        type = NavType.StringType
+                        defaultValue = "teams"
+                        nullable = true
+                    }
+                )
+            ) { backStackEntry ->
+                val tab = backStackEntry.arguments?.getString("tab") ?: "teams"
+                ListsScreen(viewModel = viewModel, initialTab = tab)
+            }
             composable(Screen.Teams.route) {
-                TeamsScreen(viewModel = viewModel)
+                ListsScreen(viewModel = viewModel, initialTab = "teams")
             }
             composable(Screen.Players.route) {
-                PlayersScreen(viewModel = viewModel)
+                ListsScreen(viewModel = viewModel, initialTab = "players")
+            }
+            composable(Screen.Points.route) {
+                ListsScreen(viewModel = viewModel, initialTab = "points")
+            }
+            composable(Screen.MVP.route) {
+                ListsScreen(viewModel = viewModel, initialTab = "mvp")
             }
             composable(Screen.Scorer.route) {
                 ScoreRecorderScreen(viewModel = viewModel)
-            }
-            composable(Screen.Points.route) {
-                PointsTableScreen(viewModel = viewModel)
-            }
-            composable(Screen.MVP.route) {
-                MvpLeaderboardScreen(viewModel = viewModel)
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(viewModel = viewModel)

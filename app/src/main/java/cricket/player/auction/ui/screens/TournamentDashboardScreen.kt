@@ -45,11 +45,11 @@ fun TournamentDashboardScreen(
 
     val subPages = listOf(
         DashboardSubPageItem("Auction Arena", "Live Bidding & Spin Wheel", "auction", Icons.Default.Gavel, IplGold),
-        DashboardSubPageItem("Teams & Squads", "Purse & Create Players", "teams", Icons.Default.Shield, NeonBlue),
-        DashboardSubPageItem("Player Roster", "Photos & Pool Management", "players", Icons.Default.Person, Color(0xFF9C27B0)),
+        DashboardSubPageItem("Teams & Squads", "Purse & Create Players", "list?tab=teams", Icons.Default.Shield, NeonBlue),
+        DashboardSubPageItem("Player Roster", "Photos & Pool Management", "list?tab=players", Icons.Default.Person, Color(0xFF9C27B0)),
         DashboardSubPageItem("Live Scorer", "Match Recorder & Solo Rule", "scorer", Icons.Default.SportsCricket, BidGreen),
-        DashboardSubPageItem("Points Table", "Standings & NRR", "points", Icons.Default.Assessment, Color(0xFFFF9800)),
-        DashboardSubPageItem("MVP Ranks", "CricHeroes Points & Stats", "mvp", Icons.Default.Star, Color(0xFFE91E63)),
+        DashboardSubPageItem("Points Table", "Standings & NRR", "list?tab=points", Icons.Default.Assessment, Color(0xFFFF9800)),
+        DashboardSubPageItem("MVP Ranks", "CricHeroes Points & Stats", "list?tab=mvp", Icons.Default.Star, Color(0xFFE91E63)),
         DashboardSubPageItem("Backup & Settings", "JSON Backup Export/Import", "settings", Icons.Default.Settings, Color(0xFF00BCD4))
     )
 

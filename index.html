@@ -21,10 +21,8 @@
     <nav class="nav-tabs">
       <button class="nav-btn active" data-tab="tab-home">🏠 Home</button>
       <button class="nav-btn" data-tab="tab-auction">🔨 Auction Arena</button>
-      <button class="nav-btn" data-tab="tab-teams">🛡️ Teams & Squads</button>
-      <button class="nav-btn" data-tab="tab-players">👤 Player Roster</button>
+      <button class="nav-btn" data-tab="tab-list">📋 List</button>
       <button class="nav-btn" data-tab="tab-scorer">📊 Live Scorer</button>
-      <button class="nav-btn" data-tab="tab-points">🏆 Standings & MVP</button>
     </nav>
 
     <div class="header-actions">
@@ -155,31 +153,65 @@
       </div>
     </section>
 
-    <!-- 3. TEAMS & SQUADS TAB -->
-    <section id="tab-teams" class="tab-pane">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <div>
-          <h2 style="color: var(--color-gold); font-size: 1.3rem;">TEAMS & SQUADS DASHBOARD</h2>
-          <p style="color: var(--color-text-sub); font-size: 0.8rem;">View squad rosters, remaining budget purse & 6-digit invite codes</p>
-        </div>
-        <button class="btn" onclick="openModal('createTeamModal')">+ Create Custom Team</button>
+    <!-- 3. LIST TAB (TEAMS, PLAYERS, POINTS, MVP SUB-TABS) -->
+    <section id="tab-list" class="tab-pane">
+      <!-- Sub-tabs bar under List tab -->
+      <div class="sub-nav-tabs">
+        <button class="sub-nav-btn active" data-subtab="subtab-teams">🛡️ Teams</button>
+        <button class="sub-nav-btn" data-subtab="subtab-players">👤 Players</button>
+        <button class="sub-nav-btn" data-subtab="subtab-points">🏆 Points</button>
+        <button class="sub-nav-btn" data-subtab="subtab-mvp">⭐ MVP</button>
       </div>
-      <div id="teamsGridList" class="grid-2"></div>
+
+      <!-- Sub-tab 1: Teams & Squads -->
+      <div id="subtab-teams" class="sub-tab-pane active">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h2 style="color: var(--color-gold); font-size: 1.3rem;">TEAMS & SQUADS DASHBOARD</h2>
+            <p style="color: var(--color-text-sub); font-size: 0.8rem;">View squad rosters, remaining budget purse & 6-digit invite codes</p>
+          </div>
+          <button class="btn" onclick="openModal('createTeamModal')">+ Create Custom Team</button>
+        </div>
+        <div id="teamsGridList" class="grid-2"></div>
+      </div>
+
+      <!-- Sub-tab 2: Players Roster -->
+      <div id="subtab-players" class="sub-tab-pane">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h2 style="color: var(--color-gold); font-size: 1.3rem;">PLAYER ROSTER MANAGER</h2>
+            <p style="color: var(--color-text-sub); font-size: 0.8rem;">Filter players, set fixed sets & update photo URLs</p>
+          </div>
+          <button class="btn" onclick="openModal('createPlayerModal')">+ Add New Player</button>
+        </div>
+        <div id="playersTableContainer" class="table-responsive"></div>
+      </div>
+
+      <!-- Sub-tab 3: Points Table -->
+      <div id="subtab-points" class="sub-tab-pane">
+        <h2 style="color: var(--color-gold); font-size: 1.3rem; margin-bottom: 4px;">AUTOMATED POINTS TABLE & NRR</h2>
+        <p style="color: var(--color-text-sub); font-size: 0.8rem; margin-bottom: 16px;">Live standings updated automatically from completed match records</p>
+        <div id="pointsTableContainer" class="table-responsive card"></div>
+      </div>
+
+      <!-- Sub-tab 4: MVP Leaderboard -->
+      <div id="subtab-mvp" class="sub-tab-pane">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h2 style="color: var(--color-gold); font-size: 1.3rem;">MVP & CAP LEADERBOARD</h2>
+            <p style="color: var(--color-text-sub); font-size: 0.8rem;">CricHeroes MVP points, Orange Cap (Runs) & Purple Cap (Wickets)</p>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-sm" id="mvpFilterAll" onclick="setMvpCategory('ALL')">Overall MVP</button>
+            <button class="btn btn-sm btn-secondary" id="mvpFilterRuns" onclick="setMvpCategory('RUNS')">🧡 Orange Cap</button>
+            <button class="btn btn-sm btn-secondary" id="mvpFilterWkts" onclick="setMvpCategory('WKTS')">💜 Purple Cap</button>
+          </div>
+        </div>
+        <div id="mvpLeaderboardContainer" class="table-responsive card"></div>
+      </div>
     </section>
 
-    <!-- 4. PLAYER ROSTER TAB -->
-    <section id="tab-players" class="tab-pane">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-        <div>
-          <h2 style="color: var(--color-gold); font-size: 1.3rem;">PLAYER ROSTER MANAGER</h2>
-          <p style="color: var(--color-text-sub); font-size: 0.8rem;">Filter players, set fixed sets & update photo URLs</p>
-        </div>
-        <button class="btn" onclick="openModal('createPlayerModal')">+ Add New Player</button>
-      </div>
-      <div id="playersTableContainer" class="table-responsive"></div>
-    </section>
-
-    <!-- 5. LIVE SCORER TAB -->
+    <!-- 4. LIVE SCORER TAB -->
     <section id="tab-scorer" class="tab-pane">
       <div class="arena-header">
         <div>
@@ -224,14 +256,6 @@
           <button class="btn btn-sm btn-secondary" onclick="undoLastBall()">UNDO</button>
         </div>
       </div>
-    </section>
-
-    <!-- 6. STANDINGS & MVP TAB -->
-    <section id="tab-points" class="tab-pane">
-      <h2 style="color: var(--color-gold); font-size: 1.3rem; margin-bottom: 4px;">AUTOMATED POINTS TABLE & NRR</h2>
-      <p style="color: var(--color-text-sub); font-size: 0.8rem; margin-bottom: 16px;">Live standings updated automatically from completed match records</p>
-      
-      <div id="pointsTableContainer" class="table-responsive card"></div>
     </section>
 
   </main>

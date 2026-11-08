@@ -14,7 +14,7 @@ import java.util.UUID
 class LocalCricketRepository(context: Context) {
 
     private val dbManager = LocalDatabaseManager(context)
-    private val firebaseRepo = FirebaseCricketRepository(dbManager)
+    private val firebaseRepo = FirebaseCricketRepository(context, dbManager)
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private val _tournaments = MutableStateFlow<List<Tournament>>(emptyList())
@@ -67,30 +67,52 @@ class LocalCricketRepository(context: Context) {
             _activePlayerId.value = schema.activePlayerId ?: schema.players.firstOrNull()?.id
             _activeMatchId.value = schema.activeMatchId ?: schema.matches.firstOrNull()?.id
 
-            firebaseRepo.syncDatabaseToFirebase(schema)
+            // CRITICAL: Only push to Firebase if local database actually has data.
+            // On fresh install / after reinstall, local schema is empty.
+            // Pushing an empty schema would wipe out the user's existing cloud data!
+            if (schema.tournaments.isNotEmpty() || schema.teams.isNotEmpty() || schema.players.isNotEmpty()) {
+                firebaseRepo.syncDatabaseToFirebase(schema)
+            }
         }
     }
 
     private fun mergeRemoteSchema(remoteSchema: DatabaseSchema) {
         val currentTournaments = _tournaments.value
         val remoteTournaments = remoteSchema.tournaments
-        val mergedTourneys = (currentTournaments + remoteTournaments).distinctBy { it.id }
 
-        val mergedTeams = (_teams.value + remoteSchema.teams).distinctBy { it.id }
-        val mergedPlayers = (_players.value + remoteSchema.players).distinctBy { it.id }
-        val mergedBids = (_bids.value + remoteSchema.bids).distinctBy { it.id }
-        val mergedMatches = (_matches.value + remoteSchema.matches).distinctBy { it.id }
-        val mergedBallRecords = (_ballRecords.value + remoteSchema.ballRecords).distinctBy { it.id }
+        if (currentTournaments.isEmpty() && remoteTournaments.isNotEmpty()) {
+            // Fresh install or re-install recovery: adopt remote data directly
+            _tournaments.value = remoteTournaments
+            _teams.value = remoteSchema.teams
+            _players.value = remoteSchema.players
+            _bids.value = remoteSchema.bids
+            _matches.value = remoteSchema.matches
+            _ballRecords.value = remoteSchema.ballRecords
+            _captainInvites.value = remoteSchema.captainInvites
+            _activeTournamentId.value = remoteSchema.activeTournamentId.ifEmpty { remoteTournaments.firstOrNull()?.id ?: "" }
+            _activePlayerId.value = remoteSchema.activePlayerId ?: remoteSchema.players.firstOrNull()?.id
+            _activeMatchId.value = remoteSchema.activeMatchId ?: remoteSchema.matches.firstOrNull()?.id
+        } else {
+            // Merge: remote updates override matching IDs, local-only entities are preserved
+            val mergedTourneys = (remoteTournaments + currentTournaments).distinctBy { it.id }
+            val mergedTeams = (remoteSchema.teams + _teams.value).distinctBy { it.id }
+            val mergedPlayers = (remoteSchema.players + _players.value).distinctBy { it.id }
+            val mergedBids = (remoteSchema.bids + _bids.value).distinctBy { it.id }
+            val mergedMatches = (remoteSchema.matches + _matches.value).distinctBy { it.id }
+            val mergedBallRecords = (remoteSchema.ballRecords + _ballRecords.value).distinctBy { it.id }
+            val mergedInvites = (remoteSchema.captainInvites + _captainInvites.value).distinctBy { it.code }
 
-        _tournaments.value = mergedTourneys
-        _teams.value = mergedTeams
-        _players.value = mergedPlayers
-        _bids.value = mergedBids
-        _matches.value = mergedMatches
-        _ballRecords.value = mergedBallRecords
+            _tournaments.value = mergedTourneys
+            _teams.value = mergedTeams
+            _players.value = mergedPlayers
+            _bids.value = mergedBids
+            _matches.value = mergedMatches
+            _ballRecords.value = mergedBallRecords
+            _captainInvites.value = mergedInvites
 
-        if (_activeTournamentId.value.isBlank() || !_tournaments.value.any { it.id == _activeTournamentId.value }) {
-            _activeTournamentId.value = _tournaments.value.firstOrNull()?.id ?: ""
+            if (_activeTournamentId.value.isBlank() || !_tournaments.value.any { it.id == _activeTournamentId.value }) {
+                _activeTournamentId.value = remoteSchema.activeTournamentId.ifEmpty { _tournaments.value.firstOrNull()?.id ?: "" }
+            }
         }
 
         scope.launch {
@@ -106,6 +128,7 @@ class LocalCricketRepository(context: Context) {
                 activePlayerId = _activePlayerId.value,
                 activeMatchId = _activeMatchId.value
             )
+            // Immediately store locally on disk
             dbManager.saveDatabase(updatedSchema)
         }
     }

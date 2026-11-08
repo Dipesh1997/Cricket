@@ -1,5 +1,8 @@
 package cricket.player.auction.data.remote
 
+import android.content.Context
+import android.os.Build
+import android.provider.Settings
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
 import cricket.player.auction.data.local.DatabaseSchema
@@ -7,8 +10,15 @@ import cricket.player.auction.data.local.LocalDatabaseManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 
-class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
+class FirebaseCricketRepository(
+    private val context: Context,
+    private val dbManager: LocalDatabaseManager
+) {
 
     private val databaseUrl = "https://cricket-auction-app-24750-default-rtdb.firebaseio.com"
     private val database: FirebaseDatabase by lazy {
@@ -16,7 +26,7 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
         try {
             instance.setPersistenceEnabled(true)
         } catch (_: Exception) {
-            // Persistence may already be enabled
+            // Persistence may already be initialized
         }
         instance
     }
@@ -24,6 +34,29 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
 
     private var activeListener: ValueEventListener? = null
     private var activeRef: DatabaseReference? = null
+
+    val deviceId: String by lazy {
+        try {
+            val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            if (!androidId.isNullOrBlank() && androidId != "9774d56d682e549c") {
+                "android_$androidId"
+            } else {
+                getPersistentFallbackDeviceId()
+            }
+        } catch (_: Exception) {
+            getPersistentFallbackDeviceId()
+        }
+    }
+
+    private fun getPersistentFallbackDeviceId(): String {
+        val prefs = context.getSharedPreferences("cricket_device_prefs", Context.MODE_PRIVATE)
+        var savedId = prefs.getString("device_unique_id", null)
+        if (savedId.isNullOrBlank()) {
+            savedId = "android_" + UUID.randomUUID().toString().replace("-", "").take(16)
+            prefs.edit().putString("device_unique_id", savedId).apply()
+        }
+        return savedId
+    }
 
     init {
         ensureAuthAndListen()
@@ -44,36 +77,106 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
         return FirebaseAuth.getInstance().currentUser?.uid ?: "default_user"
     }
 
+    fun registerDeviceInfo() {
+        scope.launch {
+            try {
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                val deviceInfo = mapOf(
+                    "deviceId" to deviceId,
+                    "platform" to "Android",
+                    "manufacturer" to Build.MANUFACTURER,
+                    "model" to Build.MODEL,
+                    "androidVersion" to Build.VERSION.RELEASE,
+                    "sdkInt" to Build.VERSION.SDK_INT,
+                    "appVersion" to "2.1",
+                    "lastSeenTimestamp" to System.currentTimeMillis(),
+                    "lastSeenDate" to dateFormat.format(Date())
+                )
+                database.reference.child("devices").child(deviceId).child("device_info").setValue(deviceInfo)
+                database.reference.child("active_devices").child(deviceId).setValue(deviceInfo)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     var onSchemaRemoteUpdated: ((DatabaseSchema) -> Unit)? = null
+
+    private fun isSchemaEmpty(schema: DatabaseSchema?): Boolean {
+        if (schema == null) return true
+        return schema.tournaments.isEmpty() && schema.teams.isEmpty() && schema.players.isEmpty()
+    }
 
     @Synchronized
     fun attachRealtimeListener() {
         if (activeListener != null) return
 
+        registerDeviceInfo()
+
         val rootRef = database.reference.child("database_schema")
+        val deviceRef = database.reference.child("devices").child(deviceId).child("database_schema")
+        val userRef = database.reference.child("users").child("default_user").child("database_schema")
         activeRef = rootRef
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val jsonString = snapshot.value as? String
                 if (!jsonString.isNullOrBlank()) {
-                    scope.launch {
-                        val schema = dbManager.importFromJsonString(jsonString)
-                        if (schema != null) {
-                            if (onSchemaRemoteUpdated != null) {
-                                onSchemaRemoteUpdated?.invoke(schema)
-                            } else {
-                                dbManager.saveDatabase(schema)
-                            }
+                    val schema = dbManager.importFromJsonString(jsonString)
+                    if (schema != null && !isSchemaEmpty(schema)) {
+                        scope.launch {
+                            onSchemaRemoteUpdated?.invoke(schema) ?: dbManager.saveDatabase(schema)
                         }
-                    }
-                } else {
-                    // Firebase database node is empty/null! Push current local schema to Firebase immediately!
-                    scope.launch {
-                        val localSchema = dbManager.loadDatabase().sanitized()
-                        syncDatabaseToFirebase(localSchema)
+                        return
                     }
                 }
+
+                // If root was empty, check device-specific backup node to restore:
+                deviceRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(devSnap: DataSnapshot) {
+                        val devJson = devSnap.value as? String
+                        if (!devJson.isNullOrBlank()) {
+                            val devSchema = dbManager.importFromJsonString(devJson)
+                            if (devSchema != null && !isSchemaEmpty(devSchema)) {
+                                scope.launch {
+                                    onSchemaRemoteUpdated?.invoke(devSchema) ?: dbManager.saveDatabase(devSchema)
+                                    // Restore root schema as well
+                                    database.reference.child("database_schema").setValue(devJson)
+                                }
+                                return
+                            }
+                        }
+
+                        // Check user node:
+                        userRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                            override fun onDataChange(uSnap: DataSnapshot) {
+                                val uJson = uSnap.value as? String
+                                if (!uJson.isNullOrBlank()) {
+                                    val uSchema = dbManager.importFromJsonString(uJson)
+                                    if (uSchema != null && !isSchemaEmpty(uSchema)) {
+                                        scope.launch {
+                                            onSchemaRemoteUpdated?.invoke(uSchema) ?: dbManager.saveDatabase(uSchema)
+                                            database.reference.child("database_schema").setValue(uJson)
+                                        }
+                                        return
+                                    }
+                                }
+
+                                // If cloud is truly empty, but local has data, sync local to cloud:
+                                scope.launch {
+                                    val localSchema = dbManager.loadDatabase().sanitized()
+                                    if (!isSchemaEmpty(localSchema)) {
+                                        syncDatabaseToFirebase(localSchema)
+                                    }
+                                }
+                            }
+
+                            override fun onCancelled(error: DatabaseError) {}
+                        })
+                    }
+
+                    override fun onCancelled(error: DatabaseError) {}
+                })
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -96,10 +199,19 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
     fun syncDatabaseToFirebase(schema: DatabaseSchema, userUid: String = getActiveUserUid()) {
         scope.launch {
             try {
+                // Never push empty schema to cloud to prevent wiping out data on fresh install
+                if (isSchemaEmpty(schema)) {
+                    return@launch
+                }
                 val json = dbManager.exportToJsonString(schema)
-                // Write to both root database_schema AND users/default_user/database_schema
+                // 1. Shared root schema
                 database.reference.child("database_schema").setValue(json)
+                // 2. Default user node
                 database.reference.child("users").child("default_user").child("database_schema").setValue(json)
+                // 3. Device-specific backup node
+                database.reference.child("devices").child(deviceId).child("database_schema").setValue(json)
+                // Update device last synced
+                database.reference.child("devices").child(deviceId).child("device_info").child("lastSyncedTimestamp").setValue(System.currentTimeMillis())
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -111,6 +223,7 @@ class FirebaseCricketRepository(private val dbManager: LocalDatabaseManager) {
             try {
                 database.reference.child("database_schema").removeValue()
                 database.reference.child("users").child("default_user").removeValue()
+                database.reference.child("devices").child(deviceId).child("database_schema").removeValue()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
