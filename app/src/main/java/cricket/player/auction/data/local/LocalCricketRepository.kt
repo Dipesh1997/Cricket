@@ -544,22 +544,14 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
-    fun undoEndInnings(matchId: String) {
-        val match = _matches.value.find { it.id == matchId } ?: return
-        if (match.status == MatchStatus.COMPLETED) {
-            val matchBalls = _ballRecords.value.filter { it.matchId == matchId }
-            val inn2Balls = matchBalls.filter { it.innings == 2 }
-            val targetInnings = if (inn2Balls.isNotEmpty()) 2 else 1
-            val targetStatus = if (targetInnings == 2) MatchStatus.LIVE_INNINGS_2 else MatchStatus.LIVE_INNINGS_1
-
-            val updated = match.copy(
-                status = targetStatus,
-                currentInnings = targetInnings,
-                winnerTeamId = null,
-                resultSummary = ""
-            )
-            _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
-        } else if (match.currentInnings == 2) {
+    fun undoEndInnings(matchId: String): BallRecord? {
+        val match = _matches.value.find { it.id == matchId } ?: return null
+        val matchBalls = _ballRecords.value.filter { it.matchId == matchId }
+        val lastBall = matchBalls.lastOrNull()
+        if (lastBall != null) {
+            // Undo the last ball that concluded the innings or match to revert wickets/overs below threshold
+            return undoLastBall(matchId)
+        } else {
             val updated = match.copy(
                 currentInnings = 1,
                 status = MatchStatus.LIVE_INNINGS_1,
@@ -567,8 +559,9 @@ class LocalCricketRepository(context: Context) {
                 resultSummary = ""
             )
             _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
+            persistAsync()
+            return null
         }
-        persistAsync()
     }
 
     // --- Captain Invites ---
@@ -786,12 +779,12 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
-    fun undoLastBall(matchId: String) {
-        val lastBall = _ballRecords.value.filter { it.matchId == matchId }.lastOrNull() ?: return
+    fun undoLastBall(matchId: String): BallRecord? {
+        val lastBall = _ballRecords.value.filter { it.matchId == matchId }.lastOrNull() ?: return null
         _ballRecords.value = _ballRecords.value.filterNot { it.id == lastBall.id }
 
         // Recalculate match statistics from remaining ball records
-        val match = _matches.value.find { it.id == matchId } ?: return
+        val match = _matches.value.find { it.id == matchId } ?: return lastBall
         val matchBalls = _ballRecords.value.filter { it.matchId == matchId }
 
         val inn1Balls = matchBalls.filter { it.innings == 1 }
@@ -820,6 +813,7 @@ class LocalCricketRepository(context: Context) {
 
         _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
         persistAsync()
+        return lastBall
     }
 
     private fun incrementOvers(currentOvers: Double, isLegalBall: Boolean): Double {

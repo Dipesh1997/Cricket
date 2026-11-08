@@ -736,29 +736,52 @@ function endCurrentInnings() {
   renderLiveScorer();
 }
 
+function recalculateMatchFromBalls(match) {
+  const matchBalls = (state.ballRecords || []).filter(b => b.matchId === match.id);
+  const inn1Balls = matchBalls.filter(b => b.innings === 1);
+  const inn2Balls = matchBalls.filter(b => b.innings === 2);
+
+  const teamARuns = inn1Balls.reduce((acc, b) => acc + (b.runsScored || 0) + (b.extraRuns || 0), 0);
+  const teamAWkts = inn1Balls.filter(b => b.isWicket).length;
+  const legal1 = inn1Balls.filter(b => b.extraType !== 'WIDE' && b.extraType !== 'NO_BALL').length;
+  const teamAOvers = Math.floor(legal1 / 6) + ((legal1 % 6) / 10.0);
+
+  const teamBRuns = inn2Balls.reduce((acc, b) => acc + (b.runsScored || 0) + (b.extraRuns || 0), 0);
+  const teamBWkts = inn2Balls.filter(b => b.isWicket).length;
+  const legal2 = inn2Balls.filter(b => b.extraType !== 'WIDE' && b.extraType !== 'NO_BALL').length;
+  const teamBOvers = Math.floor(legal2 / 6) + ((legal2 % 6) / 10.0);
+
+  match.teamARuns = teamARuns;
+  match.teamAWickets = teamAWkts;
+  match.teamAOversBatted = parseFloat(teamAOvers.toFixed(1));
+
+  match.teamBRuns = teamBRuns;
+  match.teamBWickets = teamBWkts;
+  match.teamBOversBatted = parseFloat(teamBOvers.toFixed(1));
+
+  match.currentInnings = inn2Balls.length > 0 ? 2 : 1;
+  match.status = match.currentInnings === 2 ? "LIVE_INNINGS_2" : "LIVE_INNINGS_1";
+  match.winnerTeamId = null;
+  match.resultSummary = "";
+}
+
 function undoEndInnings() {
   const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
   if (!match) return;
 
-  if (match.status === "COMPLETED") {
-    if (!confirm("Reopen this match so you can continue scoring?")) return;
-    const matchBalls = (state.ballRecords || []).filter(b => b.matchId === match.id);
-    const inn2Balls = matchBalls.filter(b => b.innings === 2);
-    match.currentInnings = inn2Balls.length > 0 ? 2 : 1;
-    match.status = match.currentInnings === 2 ? "LIVE_INNINGS_2" : "LIVE_INNINGS_1";
-    match.winnerTeamId = null;
-    match.resultSummary = "";
-    showToast(`↩️ Match reopened in Innings ${match.currentInnings}!`);
-  } else if ((match.currentInnings || 1) === 2) {
-    if (!confirm("Reopen Innings 1? This will take the match back to 1st innings.")) return;
+  const matchBalls = (state.ballRecords || []).filter(b => b.matchId === match.id);
+  if (matchBalls.length > 0) {
+    if (!confirm("Undo the last ball that concluded the innings/match and resume scoring?")) return;
+    const lastBall = matchBalls[matchBalls.length - 1];
+    state.ballRecords = state.ballRecords.filter(b => b.id !== lastBall.id);
+    recalculateMatchFromBalls(match);
+    showToast(`↩️ Reopened in Innings ${match.currentInnings}! Last ball removed.`);
+  } else {
     match.currentInnings = 1;
     match.status = "LIVE_INNINGS_1";
     match.winnerTeamId = null;
     match.resultSummary = "";
-    showToast("↩️ Innings 1 Reopened successfully!");
-  } else {
-    showToast("Match is already in Innings 1.");
-    return;
+    showToast("↩️ Innings 1 Reopened!");
   }
 
   saveToFirebase();
@@ -784,12 +807,39 @@ function recordBallRun(runs) {
   if (!match) return;
 
   const currentInnings = match.currentInnings || 1;
+  const battingTeamId = currentInnings === 1 ? match.teamAId : match.teamBId;
+  const bowlingTeamId = currentInnings === 1 ? match.teamBId : match.teamAId;
+  const battingSquad = getMatchSquad(match, battingTeamId);
+  const bowlingSquad = getMatchSquad(match, bowlingTeamId);
+
+  const striker = battingSquad[0] || { id: "p1" };
+  const nonStriker = battingSquad[1] || { id: "p2" };
+  const bowler = bowlingSquad[0] || { id: "b1" };
+
   if (currentInnings === 1) {
     match.teamARuns = (match.teamARuns || 0) + runs;
     match.teamAOversBatted = parseFloat((((match.teamAOversBatted || 0) * 10 + 1) / 10).toFixed(1));
     if (match.teamAOversBatted % 1 >= 0.6) {
       match.teamAOversBatted = Math.floor(match.teamAOversBatted) + 1.0;
     }
+
+    if (!Array.isArray(state.ballRecords)) state.ballRecords = [];
+    state.ballRecords.push({
+      id: "ball_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      matchId: match.id,
+      innings: 1,
+      overNumber: Math.floor(match.teamAOversBatted),
+      ballNumber: Math.round((match.teamAOversBatted % 1) * 10),
+      strikerId: striker.id,
+      nonStrikerId: nonStriker.id,
+      bowlerId: bowler.id,
+      runsScored: runs,
+      isExtra: false,
+      extraType: "NONE",
+      extraRuns: 0,
+      isWicket: false,
+      timestamp: Date.now()
+    });
 
     if (match.teamAOversBatted >= (match.totalOvers || 20)) {
       match.currentInnings = 2;
@@ -802,6 +852,24 @@ function recordBallRun(runs) {
     if (match.teamBOversBatted % 1 >= 0.6) {
       match.teamBOversBatted = Math.floor(match.teamBOversBatted) + 1.0;
     }
+
+    if (!Array.isArray(state.ballRecords)) state.ballRecords = [];
+    state.ballRecords.push({
+      id: "ball_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      matchId: match.id,
+      innings: 2,
+      overNumber: Math.floor(match.teamBOversBatted),
+      ballNumber: Math.round((match.teamBOversBatted % 1) * 10),
+      strikerId: striker.id,
+      nonStrikerId: nonStriker.id,
+      bowlerId: bowler.id,
+      runsScored: runs,
+      isExtra: false,
+      extraType: "NONE",
+      extraRuns: 0,
+      isWicket: false,
+      timestamp: Date.now()
+    });
 
     const target = (match.teamARuns || 0) + 1;
     if (match.teamBRuns >= target) {
@@ -880,12 +948,41 @@ function confirmRecordWicket() {
   const battingTeamId = currentInnings === 1 ? match.teamAId : match.teamBId;
   const allOutWkts = getAllOutWicketsThreshold(match, battingTeamId);
 
+  const bowlingTeamId = currentInnings === 1 ? match.teamBId : match.teamAId;
+  const battingSquad = getMatchSquad(match, battingTeamId);
+  const bowlingSquad = getMatchSquad(match, bowlingTeamId);
+  const striker = battingSquad[0] || { id: "p1" };
+  const nonStriker = battingSquad[1] || { id: "p2" };
+  const bowler = bowlingSquad[0] || { id: "b1" };
+  const outPlayerId = document.getElementById("wicketOutPlayerSelect") ? document.getElementById("wicketOutPlayerSelect").value : (striker ? striker.id : "");
+  const dismissalType = document.getElementById("wicketDismissalType") ? document.getElementById("wicketDismissalType").value : "CAUGHT";
+
   if (currentInnings === 1) {
     match.teamAWickets = (match.teamAWickets || 0) + 1;
     match.teamAOversBatted = parseFloat((((match.teamAOversBatted || 0) * 10 + 1) / 10).toFixed(1));
     if (match.teamAOversBatted % 1 >= 0.6) {
       match.teamAOversBatted = Math.floor(match.teamAOversBatted) + 1.0;
     }
+
+    if (!Array.isArray(state.ballRecords)) state.ballRecords = [];
+    state.ballRecords.push({
+      id: "ball_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      matchId: match.id,
+      innings: 1,
+      overNumber: Math.floor(match.teamAOversBatted),
+      ballNumber: Math.round((match.teamAOversBatted % 1) * 10),
+      strikerId: striker.id,
+      nonStrikerId: nonStriker.id,
+      bowlerId: bowler.id,
+      runsScored: 0,
+      isExtra: false,
+      extraType: "NONE",
+      extraRuns: 0,
+      isWicket: true,
+      dismissalType: dismissalType,
+      batsmanOutId: outPlayerId,
+      timestamp: Date.now()
+    });
 
     if (match.teamAWickets >= allOutWkts || match.teamAOversBatted >= (match.totalOvers || 20)) {
       match.currentInnings = 2;
@@ -900,6 +997,26 @@ function confirmRecordWicket() {
     if (match.teamBOversBatted % 1 >= 0.6) {
       match.teamBOversBatted = Math.floor(match.teamBOversBatted) + 1.0;
     }
+
+    if (!Array.isArray(state.ballRecords)) state.ballRecords = [];
+    state.ballRecords.push({
+      id: "ball_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      matchId: match.id,
+      innings: 2,
+      overNumber: Math.floor(match.teamBOversBatted),
+      ballNumber: Math.round((match.teamBOversBatted % 1) * 10),
+      strikerId: striker.id,
+      nonStrikerId: nonStriker.id,
+      bowlerId: bowler.id,
+      runsScored: 0,
+      isExtra: false,
+      extraType: "NONE",
+      extraRuns: 0,
+      isWicket: true,
+      dismissalType: dismissalType,
+      batsmanOutId: outPlayerId,
+      timestamp: Date.now()
+    });
 
     if (match.teamBWickets >= allOutWkts || match.teamBOversBatted >= (match.totalOvers || 20)) {
       match.status = "COMPLETED";
@@ -930,7 +1047,22 @@ function recordWicket() {
 }
 
 function undoLastBall() {
-  showToast("Last ball undone");
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+
+  const matchBalls = (state.ballRecords || []).filter(b => b.matchId === match.id);
+  if (matchBalls.length === 0) {
+    showToast("No balls to undo");
+    return;
+  }
+
+  const lastBall = matchBalls[matchBalls.length - 1];
+  state.ballRecords = state.ballRecords.filter(b => b.id !== lastBall.id);
+  recalculateMatchFromBalls(match);
+
+  saveToFirebase();
+  renderLiveScorer();
+  showToast("↩️ Last ball undone");
 }
 
 function submitDirectEndMatch() {

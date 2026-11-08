@@ -247,8 +247,8 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.addBallRecord(ball)
     }
 
-    fun undoLastBall(matchId: String) {
-        localRepository.undoLastBall(matchId)
+    fun undoLastBall(matchId: String): BallRecord? {
+        return localRepository.undoLastBall(matchId)
     }
 
     fun endActiveInnings() {
@@ -256,9 +256,9 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.endInnings(matchId)
     }
 
-    fun undoEndInnings() {
-        val matchId = activeMatchId.value ?: activeMatch.value?.id ?: return
-        localRepository.undoEndInnings(matchId)
+    fun undoEndInnings(): BallRecord? {
+        val matchId = activeMatchId.value ?: activeMatch.value?.id ?: return null
+        return localRepository.undoEndInnings(matchId)
     }
 
     // --- Captain Invite & Role Switch ---

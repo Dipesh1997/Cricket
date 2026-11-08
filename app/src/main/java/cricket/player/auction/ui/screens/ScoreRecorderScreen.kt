@@ -120,10 +120,17 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     LaunchedEffect(currentInnings, battingTeamId, bowlingTeamId, activeMatch?.id) {
         if (currentInnings != lastObservedInnings) {
             lastObservedInnings = currentInnings
-            // Reset players on crease when innings transitions
-            strikerId = battingPlayers.firstOrNull()?.id
-            nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
-            bowlerId = bowlingPlayers.firstOrNull()?.id
+            val lastBallOfInnings = matchBalls.filter { it.innings == currentInnings }.lastOrNull()
+            if (lastBallOfInnings != null) {
+                strikerId = lastBallOfInnings.strikerId
+                nonStrikerId = lastBallOfInnings.nonStrikerId
+                bowlerId = lastBallOfInnings.bowlerId
+            } else {
+                // Reset players on crease when starting fresh innings
+                strikerId = battingPlayers.firstOrNull()?.id
+                nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
+                bowlerId = bowlingPlayers.firstOrNull()?.id
+            }
             if (currentInnings == 2) {
                 showTargetModal = true
                 Toast.makeText(context, "🏁 Innings 1 Ended! 2nd Innings Started. Target: ${(activeMatch?.teamARuns ?: 0) + 1}", Toast.LENGTH_LONG).show()
@@ -828,7 +835,16 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
                                     // Undo Ball Button
                                     Button(
-                                        onClick = { viewModel.undoLastBall(match.id) },
+                                        onClick = {
+                                            val undone = viewModel.undoLastBall(match.id)
+                                            if (undone != null) {
+                                                strikerId = undone.strikerId
+                                                nonStrikerId = undone.nonStrikerId
+                                                bowlerId = undone.bowlerId
+                                            }
+                                            showTargetModal = false
+                                            Toast.makeText(context, "↩️ Last ball undone", Toast.LENGTH_SHORT).show()
+                                        },
                                         colors = ButtonDefaults.buttonColors(containerColor = StadiumSurface, contentColor = Color.LightGray),
                                         shape = RoundedCornerShape(12.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
@@ -994,9 +1010,15 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.undoEndInnings()
+                        val undone = viewModel.undoEndInnings()
+                        if (undone != null) {
+                            strikerId = undone.strikerId
+                            nonStrikerId = undone.nonStrikerId
+                            bowlerId = undone.bowlerId
+                        }
+                        showTargetModal = false
                         showUndoEndInningsConfirmModal = false
-                        Toast.makeText(context, "↩️ Previous innings restored successfully!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "↩️ Innings re-opened & last ball restored!", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black)
                 ) {

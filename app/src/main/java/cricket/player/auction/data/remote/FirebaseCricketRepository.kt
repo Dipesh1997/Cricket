@@ -113,6 +113,16 @@ class FirebaseCricketRepository(
 
         registerDeviceInfo()
 
+        // Clean up legacy duplicate nodes to keep Realtime Database clean
+        scope.launch {
+            try {
+                database.reference.child("active_devices").removeValue()
+                database.reference.child("devices").child(deviceId).child("database_schema").removeValue()
+                database.reference.child("devices").child(deviceId).child("device_info").removeValue()
+                database.reference.child("users").removeValue()
+            } catch (_: Exception) {}
+        }
+
         val rootRef = database.reference.child("database_schema")
         activeRef = rootRef
 
