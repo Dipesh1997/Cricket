@@ -245,6 +245,9 @@
           <div id="targetRequirementBox" style="text-align: right;"></div>
         </div>
 
+        <!-- Cricbuzz Live Batter & Bowler Stats Table -->
+        <div id="cricbuzzCreaseContainer" style="margin-top: 14px;"></div>
+
         <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-sm" onclick="recordBallRun(0)">0</button>
           <button class="btn btn-sm" onclick="recordBallRun(1)">1</button>
@@ -252,7 +255,7 @@
           <button class="btn btn-sm" onclick="recordBallRun(3)">3</button>
           <button class="btn btn-sm" style="background-color: var(--color-gold); color:#000;" onclick="recordBallRun(4)">4</button>
           <button class="btn btn-sm" style="background-color: var(--color-gold); color:#000;" onclick="recordBallRun(6)">6</button>
-          <button class="btn btn-sm btn-danger" onclick="recordWicket()">WICKET!</button>
+          <button class="btn btn-sm btn-danger" onclick="openRecordWicketModal()">WICKET!</button>
           <button class="btn btn-sm btn-secondary" onclick="undoLastBall()">UNDO</button>
         </div>
       </div>
@@ -414,12 +417,47 @@
 
   <!-- MODAL: SCORECARD -->
   <div class="modal-backdrop" id="scorecardModal">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 650px;">
       <div class="modal-header">
-        <h3 class="modal-title">📊 Match Scorecard</h3>
+        <h3 class="modal-title">📊 Cricbuzz-Style Match Scorecard</h3>
         <button class="close-btn" onclick="closeModal('scorecardModal')">&times;</button>
       </div>
       <div id="scorecardContent"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: RECORD WICKET -->
+  <div class="modal-backdrop" id="recordWicketModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--color-red);">🚨 Record Wicket / Dismissal</h3>
+        <button class="close-btn" onclick="closeModal('recordWicketModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>1. Which Batsman Got Out?</label>
+        <select id="wicketOutPlayerSelect" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label>2. Dismissal Method</label>
+        <select id="wicketDismissalType" class="form-control">
+          <option value="BOWLED">Bowled</option>
+          <option value="CAUGHT">Caught</option>
+          <option value="RUN_OUT">Run Out</option>
+          <option value="LBW">LBW</option>
+          <option value="STUMPED">Stumped</option>
+          <option value="HIT_WICKET">Hit Wicket</option>
+          <option value="RETIRED_HURT">Retired Hurt</option>
+        </select>
+      </div>
+      <div class="form-group" id="wicketNextBatsmanGroup">
+        <label>3. Incoming Batsman</label>
+        <select id="wicketNextBatsmanSelect" class="form-control"></select>
+      </div>
+      <div id="wicketAllOutNotice" style="display: none; padding: 10px; background: rgba(255, 75, 75, 0.15); border: 1px solid var(--color-red); border-radius: 8px; margin-bottom: 12px;">
+        <strong style="color: var(--color-red);">🏁 ALL OUT!</strong>
+        <p style="font-size: 0.8rem; color: #FFF; margin: 4px 0 0 0;">This wicket completes the innings. The batting side will change automatically!</p>
+      </div>
+      <button class="btn btn-danger" style="width: 100%; margin-top: 8px;" onclick="confirmRecordWicket()">RECORD WICKET 🚨</button>
     </div>
   </div>
 

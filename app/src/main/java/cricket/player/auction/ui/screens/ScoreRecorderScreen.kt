@@ -87,19 +87,47 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val bowlingTeam = teams.find { it.id == bowlingTeamId }
 
     // Strictly filter players by team! Batting batsmen from batting team, Bowler from opponent bowling team!
+    val allTourneyPlayers = players.filter { it.tournamentId == activeMatch?.tournamentId }
     val soldBatting = players.filter { it.soldToTeamId == battingTeamId }
-    val battingPlayers = if (soldBatting.isNotEmpty()) soldBatting else players.filter { it.tournamentId == activeMatch?.tournamentId }
+    val battingPlayers = if (soldBatting.isNotEmpty()) {
+        soldBatting
+    } else {
+        if (battingTeamId == activeMatch?.teamAId) {
+            allTourneyPlayers.take((allTourneyPlayers.size / 2).coerceAtLeast(1)).ifEmpty { allTourneyPlayers }
+        } else {
+            allTourneyPlayers.drop((allTourneyPlayers.size / 2).coerceAtLeast(1)).ifEmpty { allTourneyPlayers }
+        }
+    }
 
     val soldBowling = players.filter { it.soldToTeamId == bowlingTeamId }
-    val bowlingPlayers = if (soldBowling.isNotEmpty()) soldBowling else players.filter { it.tournamentId == activeMatch?.tournamentId }
+    val bowlingPlayers = if (soldBowling.isNotEmpty()) {
+        soldBowling
+    } else {
+        if (bowlingTeamId == activeMatch?.teamAId) {
+            allTourneyPlayers.take((allTourneyPlayers.size / 2).coerceAtLeast(1)).ifEmpty { allTourneyPlayers }
+        } else {
+            allTourneyPlayers.drop((allTourneyPlayers.size / 2).coerceAtLeast(1)).ifEmpty { allTourneyPlayers }
+        }
+    }
 
     val striker = players.find { it.id == strikerId }
     val nonStriker = players.find { it.id == nonStrikerId }
     val bowler = players.find { it.id == bowlerId }
 
-    // Auto-assign initial players & update dropdowns when team switches
-    LaunchedEffect(activeMatch?.id, currentInnings, battingTeamId, bowlingTeamId) {
-        if (activeMatch != null) {
+    // Auto-assign initial players & update when innings switches
+    var lastObservedInnings by remember { mutableStateOf(currentInnings) }
+    LaunchedEffect(currentInnings, battingTeamId, bowlingTeamId, activeMatch?.id) {
+        if (currentInnings != lastObservedInnings) {
+            lastObservedInnings = currentInnings
+            // Reset players on crease when innings transitions
+            strikerId = battingPlayers.firstOrNull()?.id
+            nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
+            bowlerId = bowlingPlayers.firstOrNull()?.id
+            if (currentInnings == 2) {
+                showTargetModal = true
+                Toast.makeText(context, "🏁 Innings 1 Ended! 2nd Innings Started. Target: ${(activeMatch?.teamARuns ?: 0) + 1}", Toast.LENGTH_LONG).show()
+            }
+        } else if (activeMatch != null) {
             if (strikerId == null || battingPlayers.none { it.id == strikerId }) {
                 strikerId = battingPlayers.firstOrNull()?.id
             }
@@ -394,92 +422,155 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    // --- Striker & Non-Striker Cards with Circular Cutouts ---
+                    // --- Cricbuzz-Style Batsmen Scorecard Card ---
                     item {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(16.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.35f))
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
-                                Text("BATSMEN ON CREASE (${battingTeam?.name ?: "Batting Team"})", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // Striker Picker / Display
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(CircleShape)
-                                                .border(1.5.dp, IplGold, CircleShape)
-                                                .background(StadiumDark)
-                                        ) {
-                                            if (striker != null) {
-                                                DriveImage(url = striker.imageUrl, contentDescription = striker.name, modifier = Modifier.fillMaxSize())
-                                            } else {
-                                                Text("🏏", fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
+                                    Text(
+                                        text = "🏏 BATSMEN ON CREASE (${battingTeam?.name ?: "Batting Team"})",
+                                        color = IplGold,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    // Swap strike button
+                                    Surface(
+                                        onClick = {
+                                            if (nonStrikerId != null) {
+                                                val temp = strikerId
+                                                strikerId = nonStrikerId
+                                                nonStrikerId = temp
                                             }
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text(text = striker?.name ?: "Select Striker", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                            Text(text = "Striker 🏏", color = IplGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        },
+                                        color = StadiumSurface,
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = Icons.Default.SwapHoriz, contentDescription = null, tint = IplGold, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Swap Strike", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
+                                }
 
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Cricbuzz Header Row
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(StadiumSurface.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("BATTER", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                                    Text("R", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("B", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("4s", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("6s", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("SR", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Striker Row with Stats
+                                if (striker != null) {
+                                    val sBalls = currentInningsBalls.filter { it.strikerId == striker.id }
+                                    val sRuns = sBalls.sumOf { it.runsScored }
+                                    val sFaced = sBalls.count { it.extraType != ExtraType.WIDE }
+                                    val s4s = sBalls.count { it.runsScored == 4 }
+                                    val s6s = sBalls.count { it.runsScored == 6 }
+                                    val sSR = if (sFaced > 0) String.format("%.1f", sRuns * 100.0 / sFaced) else "0.0"
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(modifier = Modifier.weight(2.3f), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).border(1.5.dp, IplGold, CircleShape).background(StadiumDark)) {
+                                                DriveImage(url = striker.imageUrl, contentDescription = striker.name, modifier = Modifier.fillMaxSize())
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Column {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(striker.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                    Text("*", color = IplGold, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                                }
+                                                Text("Striker", color = IplGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        Text("$sRuns", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$sFaced", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$s4s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text("$s6s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text(sSR, color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                    }
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.End) {
                                     DropdownPlayerPicker(
                                         selectedPlayer = striker,
                                         players = battingPlayers,
+                                        title = "Select Striker",
                                         onPlayerSelected = { strikerId = it.id }
                                     )
                                 }
 
-                                Divider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 10.dp))
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 8.dp))
 
-                                // Non-Striker Picker / Display & Solo Batting Rule
+                                // Non-Striker Row with Stats
                                 val isLastBatsmanSolo = match.isLastPlayerBattingAllowed &&
                                         ((currentInnings == 1 && match.teamAWickets >= (battingPlayers.size.coerceAtLeast(10) - 1)) ||
                                          (currentInnings == 2 && match.teamBWickets >= (battingPlayers.size.coerceAtLeast(10) - 1)))
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(CircleShape)
-                                                .border(1.5.dp, NeonBlue, CircleShape)
-                                                .background(StadiumDark)
-                                        ) {
-                                            if (nonStriker != null) {
+                                if (isLastBatsmanSolo) {
+                                    Text("⚡ [SOLO BATTING - LAST REMAINING BATSMAN]", color = NeonBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
+                                } else if (nonStriker != null) {
+                                    val nsBalls = currentInningsBalls.filter { it.strikerId == nonStriker.id }
+                                    val nsRuns = nsBalls.sumOf { it.runsScored }
+                                    val nsFaced = nsBalls.count { it.extraType != ExtraType.WIDE }
+                                    val ns4s = nsBalls.count { it.runsScored == 4 }
+                                    val ns6s = nsBalls.count { it.runsScored == 6 }
+                                    val nsSR = if (nsFaced > 0) String.format("%.1f", nsRuns * 100.0 / nsFaced) else "0.0"
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(modifier = Modifier.weight(2.3f), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).border(1.5.dp, NeonBlue, CircleShape).background(StadiumDark)) {
                                                 DriveImage(url = nonStriker.imageUrl, contentDescription = nonStriker.name, modifier = Modifier.fillMaxSize())
-                                            } else {
-                                                Text("👤", fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Column {
+                                                Text(nonStriker.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                Text("Non-Striker", color = Color.Gray, fontSize = 9.sp)
                                             }
                                         }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text(
-                                                text = if (isLastBatsmanSolo) "[SOLO BATTING - LAST PLAYER]" else nonStriker?.name ?: "Select Non-Striker",
-                                                color = if (isLastBatsmanSolo) NeonBlue else Color.White,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 13.sp
-                                            )
-                                            Text(text = "Non-Striker", color = Color.Gray, fontSize = 11.sp)
-                                        }
+                                        Text("$nsRuns", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$nsFaced", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$ns4s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text("$ns6s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text(nsSR, color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
                                     }
 
-                                    if (!isLastBatsmanSolo) {
+                                    Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.End) {
                                         DropdownPlayerPicker(
                                             selectedPlayer = nonStriker,
                                             players = battingPlayers.filter { it.id != strikerId },
+                                            title = "Select Non-Striker",
                                             onPlayerSelected = { nonStrikerId = it.id }
                                         )
                                     }
@@ -488,46 +579,89 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    // --- Bowler Selection Card (Opponent Team) ---
+                    // --- Cricbuzz-Style Bowler Card ---
                     item {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
                             shape = RoundedCornerShape(16.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f))
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .border(1.5.dp, NeonBlue, CircleShape)
-                                            .background(StadiumDark)
-                                    ) {
-                                        if (bowler != null) {
-                                            DriveImage(url = bowler.imageUrl, contentDescription = bowler.name, modifier = Modifier.fillMaxSize())
-                                        } else {
-                                            Text("⚡", fontSize = 16.sp, modifier = Modifier.align(Alignment.Center))
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(text = bowler?.name ?: "Select Bowler", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                        Text(text = "Current Bowler (${bowlingTeam?.name ?: "Opponent Team"})", color = NeonBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "⚡ CURRENT BOWLER (${bowlingTeam?.name ?: "Opponent Team"})",
+                                        color = NeonBlue,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    DropdownPlayerPicker(
+                                        selectedPlayer = bowler,
+                                        players = bowlingPlayers,
+                                        title = "Select Bowler",
+                                        onPlayerSelected = { bowlerId = it.id }
+                                    )
                                 }
 
-                                DropdownPlayerPicker(
-                                    selectedPlayer = bowler,
-                                    players = bowlingPlayers,
-                                    onPlayerSelected = { bowlerId = it.id }
-                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Cricbuzz Header Row
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(StadiumSurface.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("BOWLER", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                                    Text("O", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("M", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("R", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("W", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("ECON", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                if (bowler != null) {
+                                    val bBalls = currentInningsBalls.filter { it.bowlerId == bowler.id }
+                                    val bLegal = bBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                    val bOvers = "${bLegal / 6}.${bLegal % 6}"
+                                    val bRuns = bBalls.sumOf { it.runsScored + (if (it.extraType == ExtraType.WIDE || it.extraType == ExtraType.NO_BALL) it.extraRuns else 0) }
+                                    val bWkts = bBalls.count { it.isWicket && it.dismissalType != DismissalType.RUN_OUT }
+                                    val bEcon = if (bLegal > 0) String.format("%.2f", bRuns * 6.0 / bLegal) else "0.00"
+
+                                    val oversMap = bBalls.groupBy { it.overNumber }
+                                    val bMaidens = oversMap.count { (_, overBalls) ->
+                                        val legals = overBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                        val rInOver = overBalls.sumOf { it.runsScored + it.extraRuns }
+                                        legals == 6 && rInOver == 0
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(modifier = Modifier.weight(2.3f), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).border(1.5.dp, NeonBlue, CircleShape).background(StadiumDark)) {
+                                                DriveImage(url = bowler.imageUrl, contentDescription = bowler.name, modifier = Modifier.fillMaxSize())
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(bowler.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
+                                        Text(bOvers, color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$bMaidens", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text("$bRuns", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$bWkts", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text(bEcon, color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                    }
+                                } else {
+                                    Text("Select Bowler", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(6.dp))
+                                }
                             }
                         }
                     }
@@ -1177,17 +1311,86 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     // --- Wicket Modal Dialog ---
     if (showWicketModal) {
         var dismissalType by remember { mutableStateOf(DismissalType.BOWLED) }
-        var nextBatsmanId by remember { mutableStateOf<String?>(null) }
+        var dismissedPlayerId by remember { mutableStateOf(strikerId ?: "") }
+        var selectedNextBatsmanId by remember { mutableStateOf<String?>(null) }
+
+        val currentWkts = if (currentInnings == 1) (activeMatch?.teamAWickets ?: 0) else (activeMatch?.teamBWickets ?: 0)
+        val wicketsAfterThis = currentWkts + 1
+        val squadCount = battingPlayers.size.coerceAtLeast(2)
+        val allOutWickets = if (activeMatch?.isLastPlayerBattingAllowed == true) squadCount else (squadCount - 1).coerceAtLeast(1)
+        val isAllOut = wicketsAfterThis >= allOutWickets
+
+        val alreadyOutIds = currentInningsBalls.filter { it.isWicket }.mapNotNull { it.dismissedPlayerId }.toSet()
+        val outIdsNow = alreadyOutIds + dismissedPlayerId
+        val availableNextBatsmen = battingPlayers.filter {
+            it.id != strikerId && it.id != nonStrikerId && !outIdsNow.contains(it.id)
+        }
+
+        // Initialize default next batsman
+        LaunchedEffect(availableNextBatsmen) {
+            if (selectedNextBatsmanId == null && availableNextBatsmen.isNotEmpty()) {
+                selectedNextBatsmanId = availableNextBatsmen.firstOrNull()?.id
+            }
+        }
 
         AlertDialog(
             onDismissRequest = { showWicketModal = false },
-            title = { Text("RECORD WICKET", color = UnsoldRed, fontWeight = FontWeight.Bold) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Cancel, contentDescription = null, tint = UnsoldRed, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("RECORD WICKET / OUT", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                }
+            },
             text = {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 440.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Select Dismissal Type", color = Color.LightGray, fontSize = 12.sp)
+                    // 1. WHICH BATSMAN GOT OUT?
+                    Text("1. Which Batsman Got Out? (Tap to select)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Striker option
+                        val isStrikerSelected = dismissedPlayerId == strikerId
+                        Surface(
+                            onClick = { dismissedPlayerId = strikerId ?: "" },
+                            color = if (isStrikerSelected) UnsoldRed.copy(alpha = 0.25f) else StadiumSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, if (isStrikerSelected) UnsoldRed else Color.Transparent),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("🏏 STRIKER", color = if (isStrikerSelected) UnsoldRed else Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(striker?.name ?: "Striker", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                            }
+                        }
+
+                        // Non-Striker option
+                        val isNonStrikerSelected = dismissedPlayerId == nonStrikerId
+                        Surface(
+                            onClick = { dismissedPlayerId = nonStrikerId ?: "" },
+                            color = if (isNonStrikerSelected) UnsoldRed.copy(alpha = 0.25f) else StadiumSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, if (isNonStrikerSelected) UnsoldRed else Color.Transparent),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("👤 NON-STRIKER", color = if (isNonStrikerSelected) UnsoldRed else Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(nonStriker?.name ?: "Non-Striker", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                            }
+                        }
+                    }
+
+                    // 2. DISMISSAL METHOD
+                    Text("2. Dismissal Method", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
 
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(DismissalType.values()) { type ->
@@ -1205,20 +1408,82 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    Text("Select Next Batsman", color = Color.LightGray, fontSize = 12.sp)
-                    DropdownPlayerPicker(
-                        selectedPlayer = players.find { it.id == nextBatsmanId },
-                        players = battingPlayers.filter { it.id != strikerId && it.id != nonStrikerId },
-                        onPlayerSelected = { nextBatsmanId = it.id }
-                    )
+                    // 3. ALL OUT OR NEXT BATSMAN
+                    if (isAllOut || availableNextBatsmen.isEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = UnsoldRed.copy(alpha = 0.2f)),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, UnsoldRed),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("🏁 ALL OUT! ($wicketsAfterThis / $allOutWickets Wickets)", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (currentInnings == 1) {
+                                        "Innings 1 will conclude immediately and ${bowlingTeam?.name ?: "Opponent"} will begin batting to chase the target!"
+                                    } else {
+                                        "Innings 2 concluded! Match result will be calculated automatically."
+                                    },
+                                    color = Color.White,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    } else {
+                        Text("3. Select Incoming Batsman", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 140.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(availableNextBatsmen) { player ->
+                                val isSelected = selectedNextBatsmanId == player.id
+                                Surface(
+                                    onClick = { selectedNextBatsmanId = player.id },
+                                    color = if (isSelected) IplGold.copy(alpha = 0.25f) else StadiumSurface,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) IplGold else Color.Transparent),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(StadiumDark)
+                                        ) {
+                                            DriveImage(url = player.imageUrl, contentDescription = player.name, modifier = Modifier.fillMaxSize())
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(player.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            Text(player.role.label, color = Color.Gray, fontSize = 10.sp)
+                                        }
+                                        if (isSelected) {
+                                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = IplGold, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         val match = activeMatch
-                        if (match != null && strikerId != null && bowlerId != null) {
+                        if (match != null && bowlerId != null) {
                             val legalBallsBefore = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                            val effectiveDismissedId = if (dismissedPlayerId.isNotBlank()) dismissedPlayerId else (strikerId ?: "")
+                            val dismissedPlayerObj = players.find { it.id == effectiveDismissedId }
+
                             val ball = BallRecord(
                                 id = "b_${System.currentTimeMillis()}",
                                 matchId = match.id,
@@ -1231,16 +1496,22 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 runsScored = 0,
                                 isWicket = true,
                                 dismissalType = dismissalType,
-                                dismissedPlayerId = strikerId,
-                                commentary = "WICKET! ${striker?.name} ${dismissalType.label}"
+                                dismissedPlayerId = effectiveDismissedId,
+                                commentary = "WICKET! ${dismissedPlayerObj?.name ?: "Batsman"} ${dismissalType.label}"
                             )
                             viewModel.addBallRecord(ball)
-                            if (nextBatsmanId != null) {
-                                strikerId = nextBatsmanId
+
+                            if (!isAllOut && availableNextBatsmen.isNotEmpty()) {
+                                val nextId = selectedNextBatsmanId ?: availableNextBatsmen.firstOrNull()?.id
+                                if (effectiveDismissedId == strikerId) {
+                                    strikerId = nextId
+                                } else if (effectiveDismissedId == nonStrikerId) {
+                                    nonStrikerId = nextId
+                                }
                             }
 
                             // Check end of over on wicket ball
-                            if ((legalBallsBefore + 1) % 6 == 0 && nonStrikerId != null) {
+                            if ((legalBallsBefore + 1) % 6 == 0 && nonStrikerId != null && !isAllOut) {
                                 val temp = strikerId
                                 strikerId = nonStrikerId
                                 nonStrikerId = temp
@@ -1253,7 +1524,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White)
                 ) {
-                    Text("RECORD DISMISSAL", fontWeight = FontWeight.Bold)
+                    Text(if (isAllOut) "RECORD WICKET & END INNINGS 🏁" else "RECORD DISMISSAL", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1265,48 +1536,259 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
         )
     }
 
-    // --- Full Scorecard Modal ---
+    // --- Cricbuzz-Style Full Scorecard Modal ---
     if (showScorecardModal) {
+        var selectedScorecardInnings by remember { mutableStateOf(currentInnings) }
+        val innBalls = matchBalls.filter { it.innings == selectedScorecardInnings }
+        val innBattingTeamId = if (selectedScorecardInnings == 1) activeMatch?.teamAId else activeMatch?.teamBId
+        val innBowlingTeamId = if (selectedScorecardInnings == 1) activeMatch?.teamBId else activeMatch?.teamAId
+        val innBattingTeam = teams.find { it.id == innBattingTeamId }
+        val innBowlingTeam = teams.find { it.id == innBowlingTeamId }
+
         AlertDialog(
             onDismissRequest = { showScorecardModal = false },
-            title = { Text("FULL MATCH SCORECARD", color = IplGold, fontWeight = FontWeight.Bold) },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("CRICBUZZ SCORECARD", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(
+                            selected = selectedScorecardInnings == 1,
+                            onClick = { selectedScorecardInnings = 1 },
+                            label = { Text("Inn 1", fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = IplGold,
+                                selectedLabelColor = Color.Black,
+                                containerColor = StadiumSurface,
+                                labelColor = Color.White
+                            )
+                        )
+                        FilterChip(
+                            selected = selectedScorecardInnings == 2,
+                            onClick = { selectedScorecardInnings = 2 },
+                            label = { Text("Inn 2", fontSize = 10.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = IplGold,
+                                selectedLabelColor = Color.Black,
+                                containerColor = StadiumSurface,
+                                labelColor = Color.White
+                            )
+                        )
+                    }
+                }
+            },
             text = {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(360.dp),
+                        .height(420.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(currentInningsBalls.reversed()) { ball ->
+                    // Header banner
+                    item {
+                        val innRuns = if (selectedScorecardInnings == 1) activeMatch?.teamARuns ?: 0 else activeMatch?.teamBRuns ?: 0
+                        val innWkts = if (selectedScorecardInnings == 1) activeMatch?.teamAWickets ?: 0 else activeMatch?.teamBWickets ?: 0
+                        val innOvers = if (selectedScorecardInnings == 1) activeMatch?.teamAOversBatted ?: 0.0 else activeMatch?.teamBOversBatted ?: 0.0
+
                         Card(
                             colors = CardDefaults.cardColors(containerColor = StadiumSurface),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(10.dp)
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(8.dp),
+                                    .padding(10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Over ${ball.overNumber}.${ball.ballNumber}",
-                                    color = IplGold,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = ball.commentary,
+                                    text = "${innBattingTeam?.name ?: "Batting"} Innings",
                                     color = Color.White,
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                                )
-                                Text(
-                                    text = if (ball.isWicket) "W" else "${ball.runsScored}",
-                                    color = if (ball.isWicket) UnsoldRed else Color.LightGray,
-                                    fontWeight = FontWeight.ExtraBold,
+                                    fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
+                                Text(
+                                    text = "$innRuns / $innWkts ($innOvers ov)",
+                                    color = IplGold,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // --- BATTING SECTION ---
+                    item {
+                        Text("BATTING", color = IplGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(StadiumSurface.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Batter", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                            Text("R", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("B", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("4s", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("6s", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("SR", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                        }
+                    }
+
+                    // List each batsman who batted
+                    val battedPlayerIds = innBalls.map { it.strikerId }.distinct()
+                    val dismissedPlayerIds = innBalls.filter { it.isWicket }.mapNotNull { it.dismissedPlayerId }.distinct()
+                    val allInningsBatsmenIds = (battedPlayerIds + dismissedPlayerIds).distinct()
+
+                    if (allInningsBatsmenIds.isEmpty()) {
+                        item {
+                            Text("No batting records yet for this innings.", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
+                        }
+                    } else {
+                        items(allInningsBatsmenIds) { pId ->
+                            val p = players.find { it.id == pId }
+                            val pBalls = innBalls.filter { it.strikerId == pId }
+                            val pRuns = pBalls.sumOf { it.runsScored }
+                            val pFaced = pBalls.count { it.extraType != ExtraType.WIDE }
+                            val p4s = pBalls.count { it.runsScored == 4 }
+                            val p6s = pBalls.count { it.runsScored == 6 }
+                            val pSR = if (pFaced > 0) String.format("%.1f", pRuns * 100.0 / pFaced) else "0.0"
+                            val wicketBall = innBalls.find { it.isWicket && it.dismissedPlayerId == pId }
+                            val isOut = wicketBall != null
+                            val statusStr = if (isOut) {
+                                val bName = players.find { it.id == wicketBall?.bowlerId }?.name ?: ""
+                                "${wicketBall?.dismissalType?.label ?: "Out"} ${if (bName.isNotBlank()) "b $bName" else ""}"
+                            } else {
+                                "not out *"
+                            }
+
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(2.3f)) {
+                                        Text(p?.name ?: pId, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                        Text(statusStr, color = if (isOut) Color.Gray else BidGreen, fontSize = 9.sp)
+                                    }
+                                    Text("$pRuns", color = if (pRuns >= 50) IplGold else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("$pFaced", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("$p4s", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("$p6s", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text(pSR, color = Color.LightGray, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                }
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+
+                    // Extras
+                    item {
+                        val wides = innBalls.count { it.extraType == ExtraType.WIDE }
+                        val noBalls = innBalls.count { it.extraType == ExtraType.NO_BALL }
+                        val byes = innBalls.sumOf { if (it.extraType == ExtraType.BYE) it.extraRuns else 0 }
+                        val legByes = innBalls.sumOf { if (it.extraType == ExtraType.LEG_BYE) it.extraRuns else 0 }
+                        val totalExtras = innBalls.sumOf { it.extraRuns }
+
+                        Surface(
+                            color = StadiumDark,
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Extras", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("$totalExtras (wd $wides, nb $noBalls, b $byes, lb $legByes)", color = Color.White, fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    // --- BOWLING SECTION ---
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("BOWLING", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(StadiumSurface.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Bowler", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                            Text("O", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("M", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("R", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("W", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("ECON", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                        }
+                    }
+
+                    val bowlingPlayerIds = innBalls.map { it.bowlerId }.distinct()
+                    if (bowlingPlayerIds.isEmpty()) {
+                        item {
+                            Text("No bowling records yet for this innings.", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
+                        }
+                    } else {
+                        items(bowlingPlayerIds) { bId ->
+                            val b = players.find { it.id == bId }
+                            val bBalls = innBalls.filter { it.bowlerId == bId }
+                            val bLegal = bBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                            val bOvers = "${bLegal / 6}.${bLegal % 6}"
+                            val bRuns = bBalls.sumOf { it.runsScored + (if (it.extraType == ExtraType.WIDE || it.extraType == ExtraType.NO_BALL) it.extraRuns else 0) }
+                            val bWkts = bBalls.count { it.isWicket && it.dismissalType != DismissalType.RUN_OUT }
+                            val bEcon = if (bLegal > 0) String.format("%.2f", bRuns * 6.0 / bLegal) else "0.00"
+
+                            val oversMap = bBalls.groupBy { it.overNumber }
+                            val bMaidens = oversMap.count { (_, overBalls) ->
+                                val legals = overBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                val rInOver = overBalls.sumOf { it.runsScored + it.extraRuns }
+                                legals == 6 && rInOver == 0
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(b?.name ?: bId, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(2.3f), maxLines = 1)
+                                Text(bOvers, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                Text("$bMaidens", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                Text("$bRuns", color = Color.White, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                Text("$bWkts", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                Text(bEcon, color = NeonBlue, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 2.dp))
+                        }
+                    }
+
+                    // Fall of Wickets
+                    val wicketsList = innBalls.filter { it.isWicket }
+                    if (wicketsList.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("FALL OF WICKETS", color = UnsoldRed, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                        item {
+                            val fowString = wicketsList.mapIndexed { index, wBall ->
+                                val outP = players.find { it.id == wBall.dismissedPlayerId }?.name ?: "Batter"
+                                val runsAtWicket = innBalls.takeWhile { it.id != wBall.id }.sumOf { it.runsScored + it.extraRuns } + wBall.runsScored + wBall.extraRuns
+                                "${index + 1}-$runsAtWicket ($outP, ${wBall.overNumber}.${wBall.ballNumber} ov)"
+                            }.joinToString(", ")
+
+                            Surface(
+                                color = StadiumDark,
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(fowString, color = Color.LightGray, fontSize = 10.sp, modifier = Modifier.padding(8.dp))
                             }
                         }
                     }
@@ -1528,69 +2010,103 @@ fun CoinTossModal(
 fun DropdownPlayerPicker(
     selectedPlayer: Player?,
     players: List<Player>,
+    title: String = "Select Player",
     onPlayerSelected: (Player) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
 
-    Box {
-        Surface(
-            onClick = { expanded = true },
-            color = StadiumSurface,
-            shape = RoundedCornerShape(10.dp)
+    Surface(
+        onClick = { showDialog = true },
+        color = StadiumSurface,
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (selectedPlayer != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .border(1.dp, IplGold, CircleShape)
-                            .background(StadiumDark)
-                    ) {
-                        DriveImage(url = selectedPlayer.imageUrl, contentDescription = selectedPlayer.name, modifier = Modifier.fillMaxSize())
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
+            if (selectedPlayer != null) {
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, IplGold, CircleShape)
+                        .background(StadiumDark)
+                ) {
+                    DriveImage(url = selectedPlayer.imageUrl, contentDescription = selectedPlayer.name, modifier = Modifier.fillMaxSize())
                 }
-
-                Text(
-                    text = selectedPlayer?.name ?: "Select Player",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = IplGold)
+                Spacer(modifier = Modifier.width(6.dp))
             }
-        }
 
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(StadiumCardDark)
-        ) {
-            players.forEach { player ->
-                DropdownMenuItem(
-                    leadingIcon = {
-                        Box(
-                            modifier = Modifier
-                                .size(26.dp)
-                                .clip(CircleShape)
-                                .border(1.dp, IplGold, CircleShape)
-                                .background(StadiumDark)
-                        ) {
-                            DriveImage(url = player.imageUrl, contentDescription = player.name, modifier = Modifier.fillMaxSize())
+            Text(
+                text = selectedPlayer?.name ?: "Select Player",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = IplGold)
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(title, color = IplGold, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                if (players.isEmpty()) {
+                    Text("No players available for selection.", color = Color.Gray, fontSize = 13.sp)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(players) { player ->
+                            val isSelected = player.id == selectedPlayer?.id
+                            Surface(
+                                onClick = {
+                                    onPlayerSelected(player)
+                                    showDialog = false
+                                },
+                                color = if (isSelected) IplGold.copy(alpha = 0.2f) else StadiumSurface,
+                                shape = RoundedCornerShape(8.dp),
+                                border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, IplGold) else null,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(StadiumDark)
+                                    ) {
+                                        DriveImage(url = player.imageUrl, contentDescription = player.name, modifier = Modifier.fillMaxSize())
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(player.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(player.role.label, color = Color.Gray, fontSize = 10.sp)
+                                    }
+                                    if (isSelected) {
+                                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = IplGold, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
                         }
-                    },
-                    text = { Text(player.name, color = Color.White) },
-                    onClick = {
-                        onPlayerSelected(player)
-                        expanded = false
                     }
-                )
-            }
-        }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Close", color = Color.Gray)
+                }
+            },
+            containerColor = StadiumCardDark
+        )
     }
 }
 

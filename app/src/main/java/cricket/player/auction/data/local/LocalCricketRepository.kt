@@ -519,9 +519,25 @@ class LocalCricketRepository(context: Context) {
             } else {
                 "TIE"
             }
+            val summary = if (winnerId == "TIE") {
+                "Match Tied"
+            } else {
+                val winTeam = _teams.value.find { it.id == winnerId }?.name ?: "Winner"
+                if (winnerId == match.teamBId) {
+                    val soldBatting = _players.value.filter { it.soldToTeamId == match.teamBId }
+                    val squadCount = if (soldBatting.isNotEmpty()) soldBatting.size else 11
+                    val allOutWkts = if (match.isLastPlayerBattingAllowed) squadCount else (squadCount - 1).coerceAtLeast(1)
+                    val wktsLeft = (allOutWkts - match.teamBWickets).coerceAtLeast(1)
+                    "$winTeam won by $wktsLeft wickets"
+                } else {
+                    val margin = match.teamARuns - match.teamBRuns
+                    "$winTeam won by $margin runs"
+                }
+            }
             val updated = match.copy(
                 status = MatchStatus.COMPLETED,
-                winnerTeamId = winnerId
+                winnerTeamId = winnerId,
+                resultSummary = summary
             )
             _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
         }
@@ -662,9 +678,17 @@ class LocalCricketRepository(context: Context) {
                 val newWickets = if (ball.isWicket) match.teamAWickets + 1 else match.teamAWickets
                 val newOvers = incrementOvers(match.teamAOversBatted, isLegalBall)
 
+                // Calculate all-out threshold for team A
+                val soldBatting = _players.value.filter { it.soldToTeamId == match.teamAId }
+                val squadCount = if (soldBatting.isNotEmpty()) soldBatting.size else {
+                    val tourneyPlayers = _players.value.filter { it.tournamentId == match.tournamentId }
+                    if (tourneyPlayers.isNotEmpty()) (tourneyPlayers.size / 2).coerceAtLeast(2) else 11
+                }
+                val allOutWickets = if (match.isLastPlayerBattingAllowed) squadCount else (squadCount - 1).coerceAtLeast(1)
+
                 var currentInnings = 1
                 var status = MatchStatus.LIVE_INNINGS_1
-                if (newOvers >= match.totalOvers || (newWickets >= 10 && !match.isLastPlayerBattingAllowed)) {
+                if (newOvers >= match.totalOvers || newWickets >= allOutWickets) {
                     currentInnings = 2
                     status = MatchStatus.LIVE_INNINGS_2
                 }
@@ -681,15 +705,41 @@ class LocalCricketRepository(context: Context) {
                 val newWickets = if (ball.isWicket) match.teamBWickets + 1 else match.teamBWickets
                 val newOvers = incrementOvers(match.teamBOversBatted, isLegalBall)
 
+                // Calculate all-out threshold for team B
+                val soldBatting = _players.value.filter { it.soldToTeamId == match.teamBId }
+                val squadCount = if (soldBatting.isNotEmpty()) soldBatting.size else {
+                    val tourneyPlayers = _players.value.filter { it.tournamentId == match.tournamentId }
+                    if (tourneyPlayers.isNotEmpty()) (tourneyPlayers.size / 2).coerceAtLeast(2) else 11
+                }
+                val allOutWickets = if (match.isLastPlayerBattingAllowed) squadCount else (squadCount - 1).coerceAtLeast(1)
+
                 var winnerId = match.winnerTeamId
                 var status = updatedMatch.status
+                var resultSummary = match.resultSummary
 
                 // Check Target Chased or All Out / Overs Finish
-                if (newRuns > match.teamARuns) {
+                val target = match.teamARuns + 1
+                if (newRuns >= target) {
                     winnerId = match.teamBId
                     status = MatchStatus.COMPLETED
-                } else if (newOvers >= match.totalOvers || (newWickets >= 10 && !match.isLastPlayerBattingAllowed)) {
-                    winnerId = if (newRuns > match.teamARuns) match.teamBId else if (match.teamARuns > newRuns) match.teamAId else "TIE"
+                    val teamB = _teams.value.find { it.id == match.teamBId }?.name ?: "Team B"
+                    val wktsLeft = (allOutWickets - newWickets).coerceAtLeast(1)
+                    resultSummary = "$teamB won by $wktsLeft wickets"
+                } else if (newOvers >= match.totalOvers || newWickets >= allOutWickets) {
+                    if (newRuns > match.teamARuns) {
+                        winnerId = match.teamBId
+                        val teamB = _teams.value.find { it.id == match.teamBId }?.name ?: "Team B"
+                        val wktsLeft = (allOutWickets - newWickets).coerceAtLeast(1)
+                        resultSummary = "$teamB won by $wktsLeft wickets"
+                    } else if (match.teamARuns > newRuns) {
+                        winnerId = match.teamAId
+                        val teamA = _teams.value.find { it.id == match.teamAId }?.name ?: "Team A"
+                        val runMargin = match.teamARuns - newRuns
+                        resultSummary = "$teamA won by $runMargin runs"
+                    } else {
+                        winnerId = "TIE"
+                        resultSummary = "Match Tied"
+                    }
                     status = MatchStatus.COMPLETED
                 }
 
@@ -698,7 +748,8 @@ class LocalCricketRepository(context: Context) {
                     teamBWickets = newWickets,
                     teamBOversBatted = newOvers,
                     winnerTeamId = winnerId,
-                    status = status
+                    status = status,
+                    resultSummary = resultSummary
                 )
             }
 

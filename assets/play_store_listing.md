@@ -129,3 +129,4 @@ Download Cricket Auction & Live Scorer now and turn your tournament into a grand
 - **Secondary Category**: Sports Games / Productivity
 - **Content Rating**: Everyone (PEGI 3 / ESRB Everyone)
 - **Target Audience**: Cricket tournament organizers, club captains, box cricket players, sports enthusiasts.
+
