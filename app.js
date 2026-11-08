@@ -54,8 +54,7 @@ function registerBrowserDevice() {
     lastSeenTimestamp: Date.now()
   };
   try {
-    db.ref("devices/" + deviceId + "/device_info").set(deviceInfo);
-    db.ref("active_devices/" + deviceId).set(deviceInfo);
+    db.ref("devices/" + deviceId).set(deviceInfo);
   } catch (e) {
     console.error("Device registration error:", e);
   }
@@ -175,40 +174,20 @@ function applySchemaData(data) {
 
 function listenToFirebase() {
   const rootRef = db.ref("database_schema");
-  const deviceId = getBrowserDeviceId();
-  const devRef = db.ref("devices/" + deviceId + "/database_schema");
-  const userRef = db.ref("users/default_user/database_schema");
 
   rootRef.on("value", (snapshot) => {
     const val = snapshot.val();
     if (val && !isSchemaEmptyWeb(val)) {
       applySchemaData(val);
     } else {
-      // If root is empty, check device-specific backup
-      devRef.once("value", (devSnap) => {
-        const devVal = devSnap.val();
-        if (devVal && !isSchemaEmptyWeb(devVal)) {
-          applySchemaData(devVal);
-          db.ref("database_schema").set(typeof devVal === 'string' ? devVal : JSON.stringify(devVal));
-        } else {
-          userRef.once("value", (userSnap) => {
-            const userVal = userSnap.val();
-            if (userVal && !isSchemaEmptyWeb(userVal)) {
-              applySchemaData(userVal);
-              db.ref("database_schema").set(typeof userVal === 'string' ? userVal : JSON.stringify(userVal));
-            } else {
-              // Check local cache
-              const cached = localStorage.getItem("cricket_local_schema");
-              if (cached && !isSchemaEmptyWeb(cached)) {
-                applySchemaData(cached);
-                saveToFirebase();
-              } else if (state.tournaments.length === 0) {
-                seedDefaultData();
-              }
-            }
-          });
-        }
-      });
+      // If cloud is empty, check local cache:
+      const cached = localStorage.getItem("cricket_local_schema");
+      if (cached && !isSchemaEmptyWeb(cached)) {
+        applySchemaData(cached);
+        saveToFirebase();
+      } else if (state.tournaments.length === 0) {
+        seedDefaultData();
+      }
     }
   });
 }
@@ -233,14 +212,12 @@ function saveToFirebase() {
     localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
   } catch (_e) {}
 
-  // 2. SYNC TO FIREBASE
+  // 2. SYNC TO FIREBASE (Single canonical location: database_schema)
   const deviceId = getBrowserDeviceId();
   db.ref("database_schema").set(jsonStr).catch(err => {
     console.warn("Firebase sync delayed / offline:", err);
   });
-  db.ref("users/default_user/database_schema").set(jsonStr).catch(() => {});
-  db.ref("devices/" + deviceId + "/database_schema").set(jsonStr).catch(() => {});
-  db.ref("devices/" + deviceId + "/device_info/lastSyncedTimestamp").set(Date.now()).catch(() => {});
+  db.ref("devices/" + deviceId + "/lastSyncedTimestamp").set(Date.now()).catch(() => {});
 }
 
 function seedDefaultData() {
