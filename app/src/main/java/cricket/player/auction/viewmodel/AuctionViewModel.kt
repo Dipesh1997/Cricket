@@ -256,6 +256,11 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.endInnings(matchId)
     }
 
+    fun undoEndInnings() {
+        val matchId = activeMatchId.value ?: activeMatch.value?.id ?: return
+        localRepository.undoEndInnings(matchId)
+    }
+
     // --- Captain Invite & Role Switch ---
     fun generateCaptainInvite(teamId: String): CaptainInvite {
         return localRepository.generateCaptainInvite(teamId)

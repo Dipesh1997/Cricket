@@ -696,6 +696,73 @@ function renderLiveScorer() {
       <option value="TIE">TIE / DRAW</option>
     `;
   }
+
+  // Toggle Undo Innings button visibility
+  const headerUndoBtn = document.getElementById("headerUndoInningsBtn");
+  const keypadUndoBtn = document.getElementById("keypadUndoInningsBtn");
+  const canUndoInnings = currentInnings === 2 || activeMatch.status === "COMPLETED";
+  if (headerUndoBtn) headerUndoBtn.style.display = canUndoInnings ? "inline-block" : "none";
+  if (keypadUndoBtn) keypadUndoBtn.style.display = canUndoInnings ? "inline-block" : "none";
+}
+
+function endCurrentInnings() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+
+  const currentInnings = match.currentInnings || 1;
+  if (currentInnings === 1) {
+    if (!confirm("Are you sure you want to end Innings 1 now? This will declare the batting team and set the target for Innings 2.")) return;
+    match.currentInnings = 2;
+    match.status = "LIVE_INNINGS_2";
+    showToast(`🏁 Innings 1 Ended! Target: ${(match.teamARuns || 0) + 1} runs. (Use 'Undo Innings' to revert)`);
+  } else {
+    if (!confirm("Are you sure you want to end Innings 2 and complete the match?")) return;
+    match.status = "COMPLETED";
+    if ((match.teamBRuns || 0) > (match.teamARuns || 0)) {
+      match.winnerTeamId = match.teamBId;
+      match.resultSummary = `${state.teams.find(t => t.id === match.teamBId)?.name || 'Team B'} won`;
+    } else if ((match.teamARuns || 0) > (match.teamBRuns || 0)) {
+      match.winnerTeamId = match.teamAId;
+      const margin = (match.teamARuns || 0) - (match.teamBRuns || 0);
+      match.resultSummary = `${state.teams.find(t => t.id === match.teamAId)?.name || 'Team A'} won by ${margin} runs`;
+    } else {
+      match.winnerTeamId = "TIE";
+      match.resultSummary = "Match Tied";
+    }
+    showToast(`🏆 ${match.resultSummary}`);
+  }
+
+  saveToFirebase();
+  renderLiveScorer();
+}
+
+function undoEndInnings() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+
+  if (match.status === "COMPLETED") {
+    if (!confirm("Reopen this match so you can continue scoring?")) return;
+    const matchBalls = (state.ballRecords || []).filter(b => b.matchId === match.id);
+    const inn2Balls = matchBalls.filter(b => b.innings === 2);
+    match.currentInnings = inn2Balls.length > 0 ? 2 : 1;
+    match.status = match.currentInnings === 2 ? "LIVE_INNINGS_2" : "LIVE_INNINGS_1";
+    match.winnerTeamId = null;
+    match.resultSummary = "";
+    showToast(`↩️ Match reopened in Innings ${match.currentInnings}!`);
+  } else if ((match.currentInnings || 1) === 2) {
+    if (!confirm("Reopen Innings 1? This will take the match back to 1st innings.")) return;
+    match.currentInnings = 1;
+    match.status = "LIVE_INNINGS_1";
+    match.winnerTeamId = null;
+    match.resultSummary = "";
+    showToast("↩️ Innings 1 Reopened successfully!");
+  } else {
+    showToast("Match is already in Innings 1.");
+    return;
+  }
+
+  saveToFirebase();
+  renderLiveScorer();
 }
 
 function getMatchSquad(match, teamId) {

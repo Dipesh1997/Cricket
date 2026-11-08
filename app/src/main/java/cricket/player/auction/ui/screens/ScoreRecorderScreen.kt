@@ -53,6 +53,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var showScorecardModal by remember { mutableStateOf(false) }
     var showTargetModal by remember { mutableStateOf(false) }
     var showEndInningsConfirmModal by remember { mutableStateOf(false) }
+    var showUndoEndInningsConfirmModal by remember { mutableStateOf(false) }
     var showChangeBowlerModal by remember { mutableStateOf(false) }
     var showDirectEndMatchModal by remember { mutableStateOf(false) }
 
@@ -216,7 +217,32 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             ) {
                                 Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(13.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("End Innings", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(if (currentInnings == 1) "End Inn 1" else "End Inn 2", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            if (currentInnings == 2) {
+                                Button(
+                                    onClick = { showUndoEndInningsConfirmModal = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = StadiumCardDark, contentColor = NeonBlue),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Undo Inn 1", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else if (mStatus == MatchStatus.COMPLETED) {
+                            Button(
+                                onClick = { showUndoEndInningsConfirmModal = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Reopen Match ↩️", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
                             }
                         }
                     }
@@ -770,19 +796,34 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     // Wicket Button
                                     Button(
                                         onClick = { showWicketModal = true },
                                         colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed),
                                         shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                                        modifier = Modifier.weight(1.1f),
                                         enabled = match.status != MatchStatus.COMPLETED
                                     ) {
-                                        Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("WICKET!", fontWeight = FontWeight.ExtraBold)
+                                        Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("WICKET!", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                    }
+
+                                    // End Innings Button (directly on keypad)
+                                    Button(
+                                        onClick = { showEndInningsConfirmModal = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed.copy(alpha = 0.85f), contentColor = Color.White),
+                                        shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+                                        modifier = Modifier.weight(1.2f),
+                                        enabled = match.status != MatchStatus.COMPLETED
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(if (currentInnings == 1) "END INN 1" else "END INN 2", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                     }
 
                                     // Undo Ball Button
@@ -790,11 +831,27 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         onClick = { viewModel.undoLastBall(match.id) },
                                         colors = ButtonDefaults.buttonColors(containerColor = StadiumSurface, contentColor = Color.LightGray),
                                         shape = RoundedCornerShape(12.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
-                                        Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("UNDO BALL", fontWeight = FontWeight.Bold)
+                                        Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("UNDO", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+
+                                    // Undo End Innings Button (visible when Innings 2 is active or match completed)
+                                    if (currentInnings == 2 || match.status == MatchStatus.COMPLETED) {
+                                        Button(
+                                            onClick = { showUndoEndInningsConfirmModal = true },
+                                            colors = ButtonDefaults.buttonColors(containerColor = NeonBlue.copy(alpha = 0.2f), contentColor = NeonBlue),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue),
+                                            shape = RoundedCornerShape(12.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text("Undo Inn", fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                        }
                                     }
                                 }
                             }
@@ -897,6 +954,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     onClick = {
                         viewModel.endActiveInnings()
                         showEndInningsConfirmModal = false
+                        Toast.makeText(context, if (currentInnings == 1) "Innings 1 Ended! Target set. (Tap 'Undo Inn 1' to revert)" else "Innings 2 Ended!", Toast.LENGTH_LONG).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White)
                 ) {
@@ -905,6 +963,48 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showEndInningsConfirmModal = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            },
+            containerColor = StadiumCardDark
+        )
+    }
+
+    // --- Undo End Innings Confirmation Dialog ---
+    if (showUndoEndInningsConfirmModal) {
+        AlertDialog(
+            onDismissRequest = { showUndoEndInningsConfirmModal = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Replay, contentDescription = null, tint = NeonBlue)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Undo End Innings / Reopen?", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Text(
+                    text = if (activeMatch?.status == MatchStatus.COMPLETED)
+                        "Are you sure you want to reopen this match? This will restore scoring mode so you can continue recording balls."
+                    else
+                        "Are you sure you want to reopen Innings 1? This will take the match back to the 1st innings so you can continue batting or make corrections.",
+                    color = Color.LightGray,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.undoEndInnings()
+                        showUndoEndInningsConfirmModal = false
+                        Toast.makeText(context, "↩️ Previous innings restored successfully!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black)
+                ) {
+                    Text("REOPEN INNINGS ↩️", fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUndoEndInningsConfirmModal = false }) {
                     Text("Cancel", color = Color.Gray)
                 }
             },

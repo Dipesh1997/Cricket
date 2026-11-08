@@ -544,6 +544,33 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
+    fun undoEndInnings(matchId: String) {
+        val match = _matches.value.find { it.id == matchId } ?: return
+        if (match.status == MatchStatus.COMPLETED) {
+            val matchBalls = _ballRecords.value.filter { it.matchId == matchId }
+            val inn2Balls = matchBalls.filter { it.innings == 2 }
+            val targetInnings = if (inn2Balls.isNotEmpty()) 2 else 1
+            val targetStatus = if (targetInnings == 2) MatchStatus.LIVE_INNINGS_2 else MatchStatus.LIVE_INNINGS_1
+
+            val updated = match.copy(
+                status = targetStatus,
+                currentInnings = targetInnings,
+                winnerTeamId = null,
+                resultSummary = ""
+            )
+            _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
+        } else if (match.currentInnings == 2) {
+            val updated = match.copy(
+                currentInnings = 1,
+                status = MatchStatus.LIVE_INNINGS_1,
+                winnerTeamId = null,
+                resultSummary = ""
+            )
+            _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
+        }
+        persistAsync()
+    }
+
     // --- Captain Invites ---
     fun generateCaptainInvite(teamId: String): CaptainInvite {
         val code = UUID.randomUUID().toString().take(6).uppercase()
@@ -785,8 +812,10 @@ class LocalCricketRepository(context: Context) {
             teamBRuns = teamBRuns,
             teamBWickets = teamBWkts,
             teamBOversBatted = teamBOvers,
+            currentInnings = if (inn2Balls.isNotEmpty()) 2 else 1,
             status = if (inn2Balls.isNotEmpty()) MatchStatus.LIVE_INNINGS_2 else MatchStatus.LIVE_INNINGS_1,
-            winnerTeamId = null
+            winnerTeamId = null,
+            resultSummary = ""
         )
 
         _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
