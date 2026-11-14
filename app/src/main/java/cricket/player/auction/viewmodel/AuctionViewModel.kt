@@ -292,6 +292,19 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         return localRepository.undoEndInnings(matchId)
     }
 
+    fun resumeMatch(matchId: String) {
+        localRepository.resumeMatch(matchId)
+    }
+
+    fun isMatchEditable(match: Match): Boolean {
+        val tourneyMatches = matches.value.filter { it.tournamentId == match.tournamentId }
+        val matchIndex = tourneyMatches.indexOfFirst { it.id == match.id }
+        if (matchIndex == -1) return true
+        val subsequentMatches = tourneyMatches.drop(matchIndex + 1)
+        // Match is editable until any next match is completed
+        return subsequentMatches.none { it.status == MatchStatus.COMPLETED }
+    }
+
     // --- Captain Invite & Role Switch ---
     fun generateCaptainInvite(teamId: String): CaptainInvite {
         return localRepository.generateCaptainInvite(teamId)

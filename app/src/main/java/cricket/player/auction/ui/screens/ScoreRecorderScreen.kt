@@ -55,6 +55,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
     val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
+    val matches by viewModel.matches.collectAsState()
+    val tourneyMatches = remember(matches, activeTournament) {
+        matches.filter { it.tournamentId == activeTournament?.id }
+    }
+    val isEditable = remember(activeMatch, matches) {
+        activeMatch?.let { viewModel.isMatchEditable(it) } ?: true
+    }
+
     var showCreateMatchModal by remember { mutableStateOf(false) }
     var showCoinTossModal by remember { mutableStateOf(false) }
     var showWicketModal by remember { mutableStateOf(false) }
@@ -171,142 +179,220 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Action Bar Header
+            // Sleek Single-Line Top Action Strip (Compact, High Efficiency)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "LIVE SCORER & SCORECARD",
-                    color = IplGold,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Button(
-                        onClick = { showCreateMatchModal = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                // Left: Match Selector Dropdown
+                var showMatchDropdown by remember { mutableStateOf(false) }
+                Box {
+                    Surface(
+                        onClick = { showMatchDropdown = true },
+                        color = surfaceBg,
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isEditable && activeMatch?.status != MatchStatus.COMPLETED) BidGreen else if (isEditable) themeAccent else Color.Gray.copy(alpha = 0.5f)
+                        )
                     ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(13.dp))
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text("New Match", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val tA = teams.find { it.id == activeMatch?.teamAId }
+                            val tB = teams.find { it.id == activeMatch?.teamBId }
+                            val mIdx = tourneyMatches.indexOfFirst { it.id == activeMatch?.id }
+                            val mLabel = if (activeMatch != null) {
+                                "M${mIdx + 1}: ${tA?.shortCode ?: "A"} v ${tB?.shortCode ?: "B"}"
+                            } else {
+                                "Select Match"
+                            }
+                            Text(
+                                text = mLabel,
+                                color = textMain,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = themeAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
 
-                    if (activeMatch != null) {
-                        Button(
-                            onClick = { showScorecardModal = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = StadiumCardDark, contentColor = Color.White),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, IplGold),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("Scorecard", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        val mStatus = activeMatch?.status
-                        if (mStatus != null && mStatus != MatchStatus.COMPLETED) {
-                            Button(
-                                onClick = { showDirectEndMatchModal = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("End Match", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            Button(
-                                onClick = { showEndInningsConfirmModal = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(if (currentInnings == 1) "End Inn 1" else "End Inn 2", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            if (currentInnings == 2) {
-                                Button(
-                                    onClick = { showUndoEndInningsConfirmModal = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = StadiumCardDark, contentColor = NeonBlue),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(13.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text("Undo Inn 1", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        } else if (mStatus == MatchStatus.COMPLETED) {
-                            Button(
-                                onClick = { showUndoEndInningsConfirmModal = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("Reopen Match ↩️", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                    DropdownMenu(
+                        expanded = showMatchDropdown,
+                        onDismissRequest = { showMatchDropdown = false },
+                        modifier = Modifier.background(cardBg)
+                    ) {
+                        if (tourneyMatches.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("No matches created yet", color = textSub, fontSize = 11.sp) },
+                                onClick = { showMatchDropdown = false }
+                            )
+                        } else {
+                            tourneyMatches.forEachIndexed { index, m ->
+                                val mA = teams.find { it.id == m.teamAId }
+                                val mB = teams.find { it.id == m.teamBId }
+                                val mEditable = viewModel.isMatchEditable(m)
+                                val isSelected = m.id == activeMatch?.id
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Match ${index + 1}: ${mA?.shortCode ?: "T1"} vs ${mB?.shortCode ?: "T2"}",
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) themeAccent else textMain,
+                                                fontSize = 12.sp
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            val statusBadge = when {
+                                                m.status != MatchStatus.COMPLETED -> "LIVE 🔴"
+                                                mEditable -> "Editable ✏️"
+                                                else -> "Locked 🔒"
+                                            }
+                                            Text(
+                                                text = statusBadge,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (m.status != MatchStatus.COMPLETED) BidGreen else if (mEditable) themeAccent else Color.Gray
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        viewModel.selectActiveMatch(m.id)
+                                        showMatchDropdown = false
+                                    }
+                                )
                             }
                         }
                     }
                 }
-            }
 
-            // Scorer Invite Code Copy Banner Card
-            val scorerCode = activeTournament?.scorerInviteCode ?: ""
-            if (scorerCode.isNotBlank()) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
-                    shape = RoundedCornerShape(10.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clickable {
-                            clipboardManager.setText(AnnotatedString(scorerCode))
-                            Toast.makeText(context, "📋 Scorer Code '$scorerCode' copied!", Toast.LENGTH_SHORT).show()
-                        }
+                // Right: Action Buttons (+ New, Scorecard, Key, Reopen/Resume, End)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "SCORER INVITE CODE: $scorerCode",
-                                color = NeonBlue,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
-                        }
+                    // Scorer Invite Code Mini Chip
+                    val scorerCode = activeTournament?.scorerInviteCode ?: ""
+                    if (scorerCode.isNotBlank()) {
                         Surface(
-                            color = NeonBlue.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(6.dp)
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(scorerCode))
+                                Toast.makeText(context, "📋 Scorer Code '$scorerCode' copied!", Toast.LENGTH_SHORT).show()
+                            },
+                            color = NeonBlue.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.8.dp, NeonBlue.copy(alpha = 0.5f))
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("COPY CODE 📋", color = NeonBlue, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(11.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(scorerCode, color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // + New Match Button
+                    Surface(
+                        onClick = { showCreateMatchModal = true },
+                        color = themeAccent,
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("New", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+
+                    if (activeMatch != null) {
+                        // Scorecard Button
+                        Surface(
+                            onClick = { showScorecardModal = true },
+                            color = surfaceBg,
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text("Scorecard", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Status actions: Resume/Edit or End
+                        if (activeMatch.status == MatchStatus.COMPLETED) {
+                            if (isEditable) {
+                                Surface(
+                                    onClick = {
+                                        viewModel.resumeMatch(activeMatch.id)
+                                        Toast.makeText(context, "✏️ Match reopened for editing!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    color = themeAccent.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent, modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("Edit ✏️", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Surface(
+                                    color = Color.Gray.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("Locked 🔒", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else {
+                            // Live match actions
+                            Surface(
+                                onClick = { showEndInningsConfirmModal = true },
+                                color = UnsoldRed.copy(alpha = 0.9f),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(if (currentInnings == 1) "End Inn" else "End Inn 2", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -321,102 +407,135 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = IplGold, modifier = Modifier.size(64.dp))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("No Active Match Running", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Setup a new match with Coin Toss & Captain Bat/Bowl decisions to start scoring", color = Color.Gray, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = themeAccent, modifier = Modifier.size(56.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text("No Active Match Selected", color = textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        if (tourneyMatches.isNotEmpty()) "Select a match from the dropdown above or create a new one"
+                        else "Setup a new match with Coin Toss & Captain Bat/Bowl decisions to start scoring",
+                        color = textSub,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
                     Button(
                         onClick = { showCreateMatchModal = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
-                        shape = RoundedCornerShape(12.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.Casino, contentDescription = null)
+                        Icon(imageVector = Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold)
+                        Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                     }
                 }
             } else if (activeMatch != null) {
                 val match = activeMatch
                 val tossWinnerTeam = teams.find { it.id == match.tossWinnerTeamId }
+                val winnerTeam = teams.find { it.id == match.winnerTeamId }
 
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // --- Top Main Live Scoreboard ---
+                    // --- Ultra-Compact Main Scoreboard Banner ---
                     item {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
-                            shape = RoundedCornerShape(18.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.5.dp, IplGold)
+                            colors = CardDefaults.cardColors(containerColor = cardBg),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (match.status != MatchStatus.COMPLETED) themeAccent.copy(alpha = 0.5f) else Color.Gray.copy(alpha = 0.3f)
+                            )
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                // Top status bar
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    StatChip(
-                                        text = if (match.status == MatchStatus.COMPLETED) "MATCH COMPLETED" else "INNINGS $currentInnings LIVE",
-                                        backgroundColor = if (match.status == MatchStatus.COMPLETED) BidGreen.copy(alpha = 0.2f) else StadiumSurface,
-                                        textColor = if (match.status == MatchStatus.COMPLETED) BidGreen else IplGold
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        val statusText = when {
+                                            match.status != MatchStatus.COMPLETED -> "● INN $currentInnings LIVE"
+                                            isEditable -> "COMPLETED (EDITABLE ✏️)"
+                                            else -> "COMPLETED (LOCKED 🔒)"
+                                        }
+                                        val statusColor = when {
+                                            match.status != MatchStatus.COMPLETED -> BidGreen
+                                            isEditable -> themeAccent
+                                            else -> Color.Gray
+                                        }
+                                        Surface(
+                                            color = statusColor.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = statusText,
+                                                color = statusColor,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+
+                                        if (tossWinnerTeam != null && match.tossDecision != null) {
+                                            Text(
+                                                text = "🪙 ${tossWinnerTeam.shortCode} (${match.tossDecision.lowercase()})",
+                                                color = textSub,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
 
                                     if (match.isLastPlayerBattingAllowed) {
-                                        StatChip(
-                                            text = "Last Player Batting Allowed",
-                                            backgroundColor = NeonBlue.copy(alpha = 0.2f),
-                                            textColor = NeonBlue
+                                        Text(
+                                            text = "1-Batter Allowed",
+                                            color = NeonBlue,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
 
-                                // Toss Result Badge
-                                if (tossWinnerTeam != null && match.tossDecision != null) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    StatChip(
-                                        text = "🪙 Toss: ${tossWinnerTeam.shortCode} won & elected to ${match.tossDecision}",
-                                        backgroundColor = StadiumSurface,
-                                        textColor = Color.LightGray
-                                    )
-                                }
+                                Spacer(modifier = Modifier.height(4.dp))
 
-                                Spacer(modifier = Modifier.height(12.dp))
-
+                                // Main Score Row
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column {
+                                    val runs = if (currentInnings == 1) match.teamARuns else match.teamBRuns
+                                    val wkts = if (currentInnings == 1) match.teamAWickets else match.teamBWickets
+                                    val overs = if (currentInnings == 1) match.teamAOversBatted else match.teamBOversBatted
+
+                                    Row(verticalAlignment = Alignment.Bottom) {
                                         Text(
                                             text = battingTeam?.name ?: "Batting Team",
-                                            color = Color.White,
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.ExtraBold
+                                            color = textMain,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
-                                        val runs = if (currentInnings == 1) match.teamARuns else match.teamBRuns
-                                        val wkts = if (currentInnings == 1) match.teamAWickets else match.teamBWickets
-                                        val overs = if (currentInnings == 1) match.teamAOversBatted else match.teamBOversBatted
-
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "$runs / $wkts",
-                                            color = IplGold,
-                                            fontSize = 34.sp,
+                                            text = "$runs/$wkts",
+                                            color = themeAccent,
+                                            fontSize = 22.sp,
                                             fontWeight = FontWeight.Black
                                         )
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "($overs / ${match.totalOvers} Overs)",
-                                            color = Color.LightGray,
-                                            fontSize = 13.sp
+                                            text = "($overs/${match.totalOvers} ov)",
+                                            color = textSub,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(bottom = 2.dp)
                                         )
                                     }
 
-                                    if (currentInnings == 2) {
+                                    if (currentInnings == 2 && match.status != MatchStatus.COMPLETED) {
                                         val target = match.teamARuns + 1
                                         val needed = (target - match.teamBRuns).coerceAtLeast(0)
                                         val legalBalls = (match.teamBOversBatted.toInt() * 6) + (((match.teamBOversBatted - match.teamBOversBatted.toInt()) * 10) + 0.5).toInt()
@@ -428,34 +547,22 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             horizontalAlignment = Alignment.End,
                                             modifier = Modifier.clickable { showTargetModal = true }
                                         ) {
-                                            Text(text = "TARGET: $target", color = BidGreen, fontSize = 14.sp, fontWeight = FontWeight.Black)
-                                            Text(text = "Need $needed in $remainingBalls b", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                            Text(text = "RRR: $rrrVal", color = IplGold, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                                            Text(text = "T: $target", color = BidGreen, fontSize = 12.sp, fontWeight = FontWeight.Black)
+                                            Text(text = "Need $needed in $remainingBalls b", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Text(text = "RRR: $rrrVal", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                                         }
-                                    }
-                                }
-
-                                if (match.status == MatchStatus.COMPLETED && match.winnerTeamId != null) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Surface(
-                                        color = BidGreen.copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        val winnerName = teams.find { it.id == match.winnerTeamId }?.name ?: "TIE"
+                                    } else if (match.status == MatchStatus.COMPLETED) {
                                         val summaryStr = if (match.resultSummary.isNotBlank()) {
                                             "🏆 ${match.resultSummary}"
-                                        } else if (winnerName == "TIE") {
-                                            "MATCH TIED!"
                                         } else {
-                                            "🏆 WINNER: $winnerName"
+                                            val wName = winnerTeam?.name ?: "TIE"
+                                            if (wName == "TIE") "Match Tied!" else "🏆 $wName won"
                                         }
                                         Text(
                                             text = summaryStr,
                                             color = BidGreen,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 15.sp,
-                                            modifier = Modifier.padding(8.dp)
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
                                 }
@@ -463,27 +570,27 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    // --- Cricbuzz-Style Batsmen Scorecard Card ---
+                    // --- Cricbuzz-Style Unified On-Crease & Bowler Card ---
                     item {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
-                            shape = RoundedCornerShape(16.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.35f))
+                            colors = CardDefaults.cardColors(containerColor = cardBg),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, surfaceBg)
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                // Batters Header & Strike Swap
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "🏏 BATSMEN ON CREASE (${battingTeam?.name ?: "Batting Team"})",
-                                        color = IplGold,
-                                        fontSize = 11.sp,
+                                        text = "🏏 BATTERS (${battingTeam?.shortCode ?: "Batting"})",
+                                        color = themeAccent,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
                                     )
 
-                                    // Swap strike button
                                     Surface(
                                         onClick = {
                                             if (nonStrikerId != null) {
@@ -492,41 +599,39 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                 nonStrikerId = temp
                                             }
                                         },
-                                        color = StadiumSurface,
-                                        shape = RoundedCornerShape(8.dp)
+                                        color = surfaceBg,
+                                        shape = RoundedCornerShape(6.dp)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(imageVector = Icons.Default.SwapHoriz, contentDescription = null, tint = IplGold, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Swap Strike", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Icon(imageVector = Icons.Default.SwapHoriz, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text("Swap Strike", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
 
-                                // Cricbuzz Header Row
+                                // Batters Table Header
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(StadiumSurface.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                        .background(surfaceBg.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("BATTER", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
-                                    Text("R", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                    Text("B", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                    Text("4s", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                    Text("6s", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                    Text("SR", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                    Text("BATTER", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                                    Text("R", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("B", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("4s", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("6s", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("SR", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
                                 }
 
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                // Striker Row with Stats
+                                // Striker Row
                                 if (striker != null) {
                                     val sBalls = currentInningsBalls.filter { it.strikerId == striker.id }
                                     val sRuns = sBalls.sumOf { it.runsScored }
@@ -536,48 +641,49 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     val sSR = if (sFaced > 0) String.format("%.1f", sRuns * 100.0 / sFaced) else "0.0"
 
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(modifier = Modifier.weight(2.3f), verticalAlignment = Alignment.CenterVertically) {
-                                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).border(1.5.dp, IplGold, CircleShape).background(StadiumDark)) {
+                                        Row(
+                                            modifier = Modifier.weight(2.3f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, themeAccent, CircleShape).background(surfaceBg)) {
                                                 DriveImage(url = striker.imageUrl, contentDescription = striker.name, modifier = Modifier.fillMaxSize())
                                             }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Column {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Text(striker.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                    Text("*", color = IplGold, fontWeight = FontWeight.Black, fontSize = 14.sp)
-                                                }
-                                                Text("Striker", color = IplGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "${striker.name}*",
+                                                color = textMain,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                maxLines = 1,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            DropdownPlayerPicker(
+                                                selectedPlayer = striker,
+                                                players = battingPlayers,
+                                                title = "Select Striker",
+                                                isCompact = true,
+                                                isDarkTheme = isDarkTheme,
+                                                onPlayerSelected = { strikerId = it.id }
+                                            )
                                         }
-                                        Text("$sRuns", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                        Text("$sFaced", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                        Text("$s4s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                        Text("$s6s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                        Text(sSR, color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                        Text("$sRuns", color = themeAccent, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$sFaced", color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$s4s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text("$s6s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text(sSR, color = textSub, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
                                     }
                                 }
 
-                                Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.End) {
-                                    DropdownPlayerPicker(
-                                        selectedPlayer = striker,
-                                        players = battingPlayers,
-                                        title = "Select Striker",
-                                        onPlayerSelected = { strikerId = it.id }
-                                    )
-                                }
-
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(vertical = 8.dp))
-
-                                // Non-Striker Row with Stats
+                                // Non-Striker Row
                                 val isLastBatsmanSolo = match.isLastPlayerBattingAllowed &&
                                         ((currentInnings == 1 && match.teamAWickets >= (battingPlayers.size.coerceAtLeast(10) - 1)) ||
                                          (currentInnings == 2 && match.teamBWickets >= (battingPlayers.size.coerceAtLeast(10) - 1)))
 
                                 if (isLastBatsmanSolo) {
-                                    Text("⚡ [SOLO BATTING - LAST REMAINING BATSMAN]", color = NeonBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
+                                    Text("⚡ [SOLO BATTING - LAST BATSMAN]", color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                                 } else if (nonStriker != null) {
                                     val nsBalls = currentInningsBalls.filter { it.strikerId == nonStriker.id }
                                     val nsRuns = nsBalls.sumOf { it.runsScored }
@@ -587,56 +693,54 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     val nsSR = if (nsFaced > 0) String.format("%.1f", nsRuns * 100.0 / nsFaced) else "0.0"
 
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(modifier = Modifier.weight(2.3f), verticalAlignment = Alignment.CenterVertically) {
-                                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).border(1.5.dp, NeonBlue, CircleShape).background(StadiumDark)) {
+                                        Row(
+                                            modifier = Modifier.weight(2.3f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, NeonBlue, CircleShape).background(surfaceBg)) {
                                                 DriveImage(url = nonStriker.imageUrl, contentDescription = nonStriker.name, modifier = Modifier.fillMaxSize())
                                             }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Column {
-                                                Text(nonStriker.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                Text("Non-Striker", color = Color.Gray, fontSize = 9.sp)
-                                            }
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = nonStriker.name,
+                                                color = textMain,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 11.sp,
+                                                maxLines = 1,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            DropdownPlayerPicker(
+                                                selectedPlayer = nonStriker,
+                                                players = battingPlayers.filter { it.id != strikerId },
+                                                title = "Select Non-Striker",
+                                                isCompact = true,
+                                                isDarkTheme = isDarkTheme,
+                                                onPlayerSelected = { nonStrikerId = it.id }
+                                            )
                                         }
-                                        Text("$nsRuns", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                        Text("$nsFaced", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                        Text("$ns4s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                        Text("$ns6s", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                        Text(nsSR, color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
-                                    }
-
-                                    Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.End) {
-                                        DropdownPlayerPicker(
-                                            selectedPlayer = nonStriker,
-                                            players = battingPlayers.filter { it.id != strikerId },
-                                            title = "Select Non-Striker",
-                                            onPlayerSelected = { nonStrikerId = it.id }
-                                        )
+                                        Text("$nsRuns", color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$nsFaced", color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$ns4s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text("$ns6s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text(nsSR, color = textSub, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
                                     }
                                 }
-                            }
-                        }
-                    }
 
-                    // --- Cricbuzz-Style Bowler Card ---
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
-                            shape = RoundedCornerShape(16.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f))
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
+                                HorizontalDivider(color = surfaceBg, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
+
+                                // Bowler Header Row
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "⚡ CURRENT BOWLER (${bowlingTeam?.name ?: "Opponent Team"})",
+                                        text = "⚡ BOWLER (${bowlingTeam?.shortCode ?: "Bowling"})",
                                         color = NeonBlue,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
                                     )
 
@@ -644,29 +748,29 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         selectedPlayer = bowler,
                                         players = bowlingPlayers,
                                         title = "Select Bowler",
+                                        isCompact = true,
+                                        isDarkTheme = isDarkTheme,
                                         onPlayerSelected = { bowlerId = it.id }
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
 
-                                // Cricbuzz Header Row
+                                // Bowler Table Header
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(StadiumSurface.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                        .background(surfaceBg.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("BOWLER", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
-                                    Text("O", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                    Text("M", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                    Text("R", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                    Text("W", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                    Text("ECON", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                    Text("BOWLER", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                                    Text("O", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("M", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("R", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("W", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("ECON", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
                                 }
-
-                                Spacer(modifier = Modifier.height(6.dp))
 
                                 if (bowler != null) {
                                     val bBalls = currentInningsBalls.filter { it.bowlerId == bowler.id }
@@ -684,24 +788,24 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     }
 
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(modifier = Modifier.weight(2.3f), verticalAlignment = Alignment.CenterVertically) {
-                                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).border(1.5.dp, NeonBlue, CircleShape).background(StadiumDark)) {
+                                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, NeonBlue, CircleShape).background(surfaceBg)) {
                                                 DriveImage(url = bowler.imageUrl, contentDescription = bowler.name, modifier = Modifier.fillMaxSize())
                                             }
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(bowler.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(bowler.name, color = textMain, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
                                         }
-                                        Text(bOvers, color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                        Text("$bMaidens", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                        Text("$bRuns", color = Color.White, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                        Text("$bWkts", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                        Text(bEcon, color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                        Text(bOvers, color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$bMaidens", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text("$bRuns", color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                        Text("$bWkts", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                        Text(bEcon, color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
                                     }
                                 } else {
-                                    Text("Select Bowler", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(6.dp))
+                                    Text("Select Bowler to begin over", color = textSub, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
                                 }
                             }
                         }
@@ -710,43 +814,55 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     // --- Ball-by-Ball Instant Scoring Keypad ---
                     item {
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
-                            shape = RoundedCornerShape(18.dp)
+                            colors = CardDefaults.cardColors(containerColor = cardBg),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, surfaceBg)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("SCORING KEYPAD", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                // Extras Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("EXTRAS", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold)
 
-                                Spacer(modifier = Modifier.height(10.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        ExtraType.values().forEach { extra ->
+                                            val isSel = selectedExtraType == extra
+                                            Surface(
+                                                onClick = { selectedExtraType = if (isSel) ExtraType.NONE else extra },
+                                                color = if (isSel) NeonBlue else surfaceBg,
+                                                shape = RoundedCornerShape(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = extra.name,
+                                                    color = if (isSel) Color.Black else textMain,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
 
-                                // Extras Selector
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Runs Row: 0, 1, 2, 3, 4, 6
+                                val runsList = listOf(0, 1, 2, 3, 4, 6)
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    ExtraType.values().forEach { extra ->
-                                        FilterChip(
-                                            selected = selectedExtraType == extra,
-                                            onClick = { selectedExtraType = if (selectedExtraType == extra) ExtraType.NONE else extra },
-                                            label = { Text(extra.name, fontSize = 10.sp) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = NeonBlue,
-                                                selectedLabelColor = Color.Black,
-                                                containerColor = StadiumSurface,
-                                                labelColor = Color.White
-                                            )
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                // Runs Buttons: 0, 1, 2, 3, 4, 6
-                                val runsList = listOf(0, 1, 2, 3, 4, 6)
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items(runsList) { run ->
+                                    runsList.forEach { run ->
                                         Button(
                                             onClick = {
-                                                if (strikerId != null && bowlerId != null && match.status != MatchStatus.COMPLETED) {
+                                                if (strikerId != null && bowlerId != null && isEditable) {
+                                                    // Auto-resume if match was completed
+                                                    if (match.status == MatchStatus.COMPLETED) {
+                                                        viewModel.resumeMatch(match.id)
+                                                    }
                                                     val extraRuns = if (selectedExtraType == ExtraType.WIDE || selectedExtraType == ExtraType.NO_BALL) 1 else 0
                                                     val isLegal = selectedExtraType != ExtraType.WIDE && selectedExtraType != ExtraType.NO_BALL
                                                     val legalBallsBefore = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
@@ -795,55 +911,67 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                 }
                                             },
                                             colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (run == 4 || run == 6) IplGold else StadiumSurface,
-                                                contentColor = if (run == 4 || run == 6) Color.Black else Color.White
+                                                containerColor = if (run == 4 || run == 6) themeAccent else surfaceBg,
+                                                contentColor = if (run == 4 || run == 6) Color.Black else textMain
                                             ),
-                                            shape = RoundedCornerShape(12.dp),
-                                            modifier = Modifier.size(52.dp),
-                                            enabled = match.status != MatchStatus.COMPLETED
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(0.dp),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(42.dp),
+                                            enabled = isEditable
                                         ) {
-                                            Text("$run", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                            Text("$run", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                                         }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(14.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
 
+                                // Action Buttons Row: WICKET, END INN, UNDO, REOPEN
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     // Wicket Button
                                     Button(
-                                        onClick = { showWicketModal = true },
+                                        onClick = {
+                                            if (match.status == MatchStatus.COMPLETED) {
+                                                viewModel.resumeMatch(match.id)
+                                            }
+                                            showWicketModal = true
+                                        },
                                         colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
-                                        modifier = Modifier.weight(1.1f),
-                                        enabled = match.status != MatchStatus.COMPLETED
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                                        modifier = Modifier.weight(1.1f).height(38.dp),
+                                        enabled = isEditable
                                     ) {
-                                        Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(13.dp))
                                         Spacer(modifier = Modifier.width(3.dp))
-                                        Text("WICKET!", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                        Text("WICKET", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
                                     }
 
-                                    // End Innings Button (directly on keypad)
+                                    // End Innings Button
                                     Button(
                                         onClick = { showEndInningsConfirmModal = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed.copy(alpha = 0.85f), contentColor = Color.White),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
-                                        modifier = Modifier.weight(1.2f),
-                                        enabled = match.status != MatchStatus.COMPLETED
+                                        colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed.copy(alpha = 0.8f), contentColor = Color.White),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                        modifier = Modifier.weight(1.1f).height(38.dp),
+                                        enabled = isEditable && match.status != MatchStatus.COMPLETED
                                     ) {
-                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(15.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(if (currentInnings == 1) "END INN 1" else "END INN 2", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text(if (currentInnings == 1) "END INN" else "END INN 2", fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                     }
 
                                     // Undo Ball Button
                                     Button(
                                         onClick = {
+                                            if (match.status == MatchStatus.COMPLETED) {
+                                                viewModel.resumeMatch(match.id)
+                                            }
                                             val undone = viewModel.undoLastBall(match.id)
                                             if (undone != null) {
                                                 strikerId = undone.strikerId
@@ -853,28 +981,79 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             showTargetModal = false
                                             Toast.makeText(context, "↩️ Last ball undone", Toast.LENGTH_SHORT).show()
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = StadiumSurface, contentColor = Color.LightGray),
-                                        shape = RoundedCornerShape(12.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
-                                        modifier = Modifier.weight(1f)
+                                        colors = ButtonDefaults.buttonColors(containerColor = surfaceBg, contentColor = textMain),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                                        modifier = Modifier.weight(1f).height(38.dp),
+                                        enabled = isEditable && matchBalls.isNotEmpty()
                                     ) {
-                                        Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(15.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text("UNDO", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("UNDO", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                     }
 
-                                    // Undo End Innings Button (visible when Innings 2 is active or match completed)
+                                    // Undo End Innings or Reopen
                                     if (currentInnings == 2 || match.status == MatchStatus.COMPLETED) {
                                         Button(
                                             onClick = { showUndoEndInningsConfirmModal = true },
                                             colors = ButtonDefaults.buttonColors(containerColor = NeonBlue.copy(alpha = 0.2f), contentColor = NeonBlue),
                                             border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue),
-                                            shape = RoundedCornerShape(12.dp),
-                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                            modifier = Modifier.weight(0.9f).height(38.dp),
+                                            enabled = isEditable
                                         ) {
-                                            Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(12.dp))
                                             Spacer(modifier = Modifier.width(2.dp))
-                                            Text("Undo Inn", fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                            Text("Undo Inn", fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                        }
+                                    }
+                                }
+
+                                if (!isEditable) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "🔒 Match is locked because a subsequent match has completed.",
+                                        color = Color.Gray,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Over Timeline Row ---
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("THIS OVER", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+
+                            val currentOverBalls = currentInningsBalls.takeLast(6)
+                            if (currentOverBalls.isEmpty()) {
+                                Text("No balls bowled yet", color = textSub, fontSize = 10.sp)
+                            } else {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    items(currentOverBalls) { ball ->
+                                        val text = if (ball.isWicket) "W" else if (ball.extraType != ExtraType.NONE) "${ball.runsScored}${ball.extraType.name.take(1)}" else "${ball.runsScored}"
+                                        val color = if (ball.isWicket) UnsoldRed else if (ball.runsScored == 4 || ball.runsScored == 6) themeAccent else surfaceBg
+
+                                        Surface(
+                                            color = color,
+                                            shape = CircleShape,
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = text,
+                                                    color = if (ball.runsScored == 4 || ball.runsScored == 6) Color.Black else if (ball.isWicket) Color.White else textMain,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -882,73 +1061,46 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    // --- Over Commentary Timeline ---
-                    item {
-                        Text("CURRENT OVER TIMELINE", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val currentOverBalls = currentInningsBalls.takeLast(6)
-                            items(currentOverBalls) { ball ->
-                                val text = if (ball.isWicket) "W" else if (ball.extraType != ExtraType.NONE) "${ball.runsScored}${ball.extraType.name.take(1)}" else "${ball.runsScored}"
-                                val color = if (ball.isWicket) UnsoldRed else if (ball.runsScored == 4 || ball.runsScored == 6) IplGold else StadiumSurface
-
-                                Surface(
-                                    color = color,
-                                    shape = CircleShape,
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = text,
-                                            color = if (ball.runsScored == 4 || ball.runsScored == 6) Color.Black else Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // --- Direct End Match / Declare Result Option ---
+                    // --- Compact Direct End Match / Declare Result Option ---
                     if (match.status != MatchStatus.COMPLETED) {
                         item {
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
-                                shape = RoundedCornerShape(16.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.5f)),
+                                colors = CardDefaults.cardColors(containerColor = cardBg),
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, surfaceBg),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(14.dp),
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "DIRECT END MATCH / DECLARE RESULT",
-                                            color = IplGold,
+                                            color = themeAccent,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
+                                            fontSize = 10.sp
                                         )
                                         Text(
-                                            text = "Declare winner directly & update NRR without completing full overs",
-                                            color = Color.Gray,
-                                            fontSize = 11.sp
+                                            text = "Declare winner directly & update NRR",
+                                            color = textSub,
+                                            fontSize = 9.sp
                                         )
                                     }
 
                                     Button(
                                         onClick = { showDirectEndMatchModal = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
-                                        shape = RoundedCornerShape(10.dp)
+                                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        modifier = Modifier.height(28.dp)
                                     ) {
-                                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("DECLARE WINNER", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("DECLARE", fontWeight = FontWeight.ExtraBold, fontSize = 10.sp)
                                     }
                                 }
                             }
@@ -970,7 +1122,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         "Are you sure you want to end Innings 1 now? This will declare the batting team and set the target for Innings 2."
                     else
                         "Are you sure you want to end Innings 2 now? This will complete the match.",
-                    color = Color.LightGray
+                    color = textSub
                 )
             },
             confirmButton = {
@@ -987,10 +1139,10 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showEndInningsConfirmModal = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -1011,7 +1163,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         "Are you sure you want to reopen this match? This will restore scoring mode so you can continue recording balls."
                     else
                         "Are you sure you want to reopen Innings 1? This will take the match back to the 1st innings so you can continue batting or make corrections.",
-                    color = Color.LightGray,
+                    color = textSub,
                     fontSize = 13.sp
                 )
             },
@@ -1035,10 +1187,10 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showUndoEndInningsConfirmModal = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -1059,7 +1211,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
         AlertDialog(
             onDismissRequest = { showDirectEndMatchModal = false },
-            title = { Text("Declare Match Winner & NRR", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Declare Match Winner & NRR", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
@@ -1094,7 +1246,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
                     if (selectedWinnerId != "TIE") {
                         item {
-                            Text("VICTORY MARGIN TYPE", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("VICTORY MARGIN TYPE", color = textSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1134,7 +1286,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     }
 
                     item {
-                        Text("${teamA?.name ?: "Team A"} Final Runs & Overs:", color = Color.LightGray, fontSize = 11.sp)
+                        Text("${teamA?.name ?: "Team A"} Final Runs & Overs:", color = textSub, fontSize = 11.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = teamARunsInput,
@@ -1218,7 +1370,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     Text("Cancel", color = Color.Gray)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -1229,8 +1381,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             title = { Text("OVER COMPLETED! ⚡", color = IplGold, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("The over is complete! Strike has been rotated automatically.", color = Color.White, fontSize = 13.sp)
-                    Text("Select new bowler for the next over from ${bowlingTeam?.name ?: "opponent team"}:", color = Color.LightGray, fontSize = 12.sp)
+                    Text("The over is complete! Strike has been rotated automatically.", color = textMain, fontSize = 13.sp)
+                    Text("Select new bowler for the next over from ${bowlingTeam?.name ?: "opponent team"}:", color = textSub, fontSize = 12.sp)
 
                     DropdownPlayerPicker(
                         selectedPlayer = bowler,
@@ -1250,7 +1402,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     Text("CONTINUE MATCH", fontWeight = FontWeight.Bold)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -1265,7 +1417,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             onDismissRequest = { showTargetModal = false },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = IplGold)
+                    Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = themeAccent)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("TARGET & REQUIRED RUN RATE", color = IplGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
@@ -1278,12 +1430,12 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 ) {
                     Text(
                         text = "${teams.find { it.id == match.teamAId }?.name ?: "Team A"} scored ${match.teamARuns}/${match.teamAWickets} in ${match.teamAOversBatted} overs",
-                        color = Color.LightGray,
+                        color = textSub,
                         fontSize = 13.sp
                     )
 
                     Surface(
-                        color = StadiumSurface,
+                        color = surfaceBg,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1311,7 +1463,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     Text("START CHASE!", fontWeight = FontWeight.ExtraBold)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -1319,7 +1471,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     if (showCreateMatchModal) {
         AlertDialog(
             onDismissRequest = { showCreateMatchModal = false },
-            title = { Text("Setup New Cricket Match", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Setup New Cricket Match", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -1348,7 +1500,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     )
 
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = StadiumSurface),
+                        colors = CardDefaults.cardColors(containerColor = surfaceBg),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1400,7 +1552,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     Text("Cancel", color = Color.Gray)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -1480,7 +1632,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // 1. WHICH BATSMAN GOT OUT?
-                    Text("1. Which Batsman Got Out? (Tap to select)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("1. Which Batsman Got Out? (Tap to select)", color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1498,7 +1650,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("🏏 STRIKER", color = if (isStrikerSelected) UnsoldRed else Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text(striker?.name ?: "Striker", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                Text(striker?.name ?: "Striker", color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                             }
                         }
 
@@ -1514,13 +1666,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("👤 NON-STRIKER", color = if (isNonStrikerSelected) UnsoldRed else Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text(nonStriker?.name ?: "Non-Striker", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                Text(nonStriker?.name ?: "Non-Striker", color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                             }
                         }
                     }
 
                     // 2. DISMISSAL METHOD
-                    Text("2. Dismissal Method", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("2. Dismissal Method", color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp)
 
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(DismissalType.values()) { type ->
@@ -1555,13 +1707,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     } else {
                                         "Innings 2 concluded! Match result will be calculated automatically."
                                     },
-                                    color = Color.White,
+                                    color = textMain,
                                     fontSize = 11.sp
                                 )
                             }
                         }
                     } else {
-                        Text("3. Select Incoming Batsman", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("3. Select Incoming Batsman", color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp)
 
                         LazyColumn(
                             modifier = Modifier
@@ -1592,7 +1744,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(player.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            Text(player.name, color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                             Text(player.role.label, color = Color.Gray, fontSize = 10.sp)
                                         }
                                         if (isSelected) {
@@ -1609,7 +1761,10 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 Button(
                     onClick = {
                         val match = activeMatch
-                        if (match != null && bowlerId != null) {
+                        if (match != null && bowlerId != null && isEditable) {
+                            if (match.status == MatchStatus.COMPLETED) {
+                                viewModel.resumeMatch(match.id)
+                            }
                             val legalBallsBefore = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
                             val effectiveDismissedId = if (dismissedPlayerId.isNotBlank()) dismissedPlayerId else (strikerId ?: "")
                             val dismissedPlayerObj = players.find { it.id == effectiveDismissedId }
@@ -1662,7 +1817,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     Text("Cancel", color = Color.Gray)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -1683,7 +1838,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("CRICBUZZ SCORECARD", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                    Text("MATCH SCORECARD", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(
                             selected = selectedScorecardInnings == 1,
@@ -1692,7 +1847,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = IplGold,
                                 selectedLabelColor = Color.Black,
-                                containerColor = StadiumSurface,
+                                containerColor = surfaceBg,
                                 labelColor = Color.White
                             )
                         )
@@ -1703,7 +1858,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = IplGold,
                                 selectedLabelColor = Color.Black,
-                                containerColor = StadiumSurface,
+                                containerColor = surfaceBg,
                                 labelColor = Color.White
                             )
                         )
@@ -1714,7 +1869,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(420.dp),
+                        .heightIn(max = 480.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Header banner
@@ -1724,7 +1879,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         val innOvers = if (selectedScorecardInnings == 1) activeMatch?.teamAOversBatted ?: 0.0 else activeMatch?.teamBOversBatted ?: 0.0
 
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = StadiumSurface),
+                            colors = CardDefaults.cardColors(containerColor = surfaceBg),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Row(
@@ -1736,7 +1891,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             ) {
                                 Text(
                                     text = "${innBattingTeam?.name ?: "Batting"} Innings",
-                                    color = Color.White,
+                                    color = textMain,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -1759,16 +1914,16 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(StadiumSurface.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .background(surfaceBg.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                                 .padding(horizontal = 4.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Batter", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
-                            Text("R", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                            Text("B", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                            Text("4s", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                            Text("6s", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                            Text("SR", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                            Text("Batter", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                            Text("R", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("B", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("4s", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("6s", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("SR", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
                         }
                     }
 
@@ -1779,7 +1934,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
                     if (allInningsBatsmenIds.isEmpty()) {
                         item {
-                            Text("No batting records yet for this innings.", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
+                            Text("No batting records yet for this innings.", color = textSub, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
                         }
                     } else {
                         items(allInningsBatsmenIds) { pId ->
@@ -1802,16 +1957,16 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(2.3f)) {
-                                        Text(p?.name ?: pId, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                        Text(p?.name ?: pId, color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
                                         Text(statusStr, color = if (isOut) Color.Gray else BidGreen, fontSize = 9.sp)
                                     }
                                     Text("$pRuns", color = if (pRuns >= 50) IplGold else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                    Text("$pFaced", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                    Text("$p4s", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                    Text("$p6s", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                    Text(pSR, color = Color.LightGray, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                    Text("$pFaced", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("$p4s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text("$p6s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                    Text(pSR, color = textSub, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
                                 }
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(top = 4.dp))
+                                HorizontalDivider(color = textMain.copy(alpha = 0.05f), modifier = Modifier.padding(top = 4.dp))
                             }
                         }
                     }
@@ -1825,7 +1980,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         val totalExtras = innBalls.sumOf { it.extraRuns }
 
                         Surface(
-                            color = StadiumDark,
+                            color = surfaceBg,
                             shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -1833,8 +1988,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 modifier = Modifier.padding(8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Extras", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("$totalExtras (wd $wides, nb $noBalls, b $byes, lb $legByes)", color = Color.White, fontSize = 11.sp)
+                                Text("Extras", color = textSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("$totalExtras (wd $wides, nb $noBalls, b $byes, lb $legByes)", color = textMain, fontSize = 11.sp)
                             }
                         }
                     }
@@ -1849,23 +2004,23 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(StadiumSurface.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .background(surfaceBg.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                                 .padding(horizontal = 4.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Bowler", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
-                            Text("O", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                            Text("M", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                            Text("R", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                            Text("W", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                            Text("ECON", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                            Text("Bowler", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.3f))
+                            Text("O", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("M", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("R", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                            Text("W", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                            Text("ECON", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
                         }
                     }
 
                     val bowlingPlayerIds = innBalls.map { it.bowlerId }.distinct()
                     if (bowlingPlayerIds.isEmpty()) {
                         item {
-                            Text("No bowling records yet for this innings.", color = Color.Gray, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
+                            Text("No bowling records yet for this innings.", color = textSub, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
                         }
                     } else {
                         items(bowlingPlayerIds) { bId ->
@@ -1888,14 +2043,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(b?.name ?: bId, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(2.3f), maxLines = 1)
-                                Text(bOvers, color = Color.White, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
-                                Text("$bMaidens", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                Text("$bRuns", color = Color.White, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                Text(b?.name ?: bId, color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(2.3f), maxLines = 1)
+                                Text(bOvers, color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                Text("$bMaidens", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
+                                Text("$bRuns", color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
                                 Text("$bWkts", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
                                 Text(bEcon, color = NeonBlue, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
                             }
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 2.dp))
+                            HorizontalDivider(color = textMain.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 2.dp))
                         }
                     }
 
@@ -1914,11 +2069,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             }.joinToString(", ")
 
                             Surface(
-                                color = StadiumDark,
+                                color = surfaceBg,
                                 shape = RoundedCornerShape(6.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(fowString, color = Color.LightGray, fontSize = 10.sp, modifier = Modifier.padding(8.dp))
+                                Text(fowString, color = textSub, fontSize = 10.sp, modifier = Modifier.padding(8.dp))
                             }
                         }
                     }
@@ -1932,7 +2087,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     Text("Close", fontWeight = FontWeight.Bold)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 }
@@ -2141,14 +2296,36 @@ fun DropdownPlayerPicker(
     selectedPlayer: Player?,
     players: List<Player>,
     title: String = "Select Player",
+    isCompact: Boolean = false,
+    isDarkTheme: Boolean = true,
     onPlayerSelected: (Player) -> Unit
 ) {
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
     var showDialog by remember { mutableStateOf(false) }
 
+    if (isCompact) {
+        Surface(
+            onClick = { showDialog = true },
+            color = surfaceBg,
+            shape = RoundedCornerShape(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Change", color = themeAccent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
+            }
+        }
+    } else {
     Surface(
         onClick = { showDialog = true },
-        color = StadiumSurface,
-        shape = RoundedCornerShape(10.dp)
+        color = surfaceBg,
+        shape = RoundedCornerShape(8.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -2169,12 +2346,13 @@ fun DropdownPlayerPicker(
 
             Text(
                 text = selectedPlayer?.name ?: "Select Player",
-                color = Color.White,
-                fontSize = 12.sp,
+                color = textMain,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
-            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = IplGold)
+            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = themeAccent, modifier = Modifier.size(14.dp))
         }
+    }
     }
 
     if (showDialog) {
@@ -2244,15 +2422,21 @@ fun DropdownPlayerPicker(
 fun DropdownTeamPicker(
     selectedTeamId: String,
     teams: List<Team>,
+    isDarkTheme: Boolean = true,
     onTeamSelected: (Team) -> Unit
 ) {
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
     var expanded by remember { mutableStateOf(false) }
     val selectedTeam = teams.find { it.id == selectedTeamId }
 
     Box {
         Surface(
             onClick = { expanded = true },
-            color = StadiumSurface,
+            color = surfaceBg,
             shape = RoundedCornerShape(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -2275,7 +2459,7 @@ fun DropdownTeamPicker(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(StadiumCardDark)
+            modifier = Modifier.background(cardBg)
         ) {
             teams.forEach { team ->
                 DropdownMenuItem(

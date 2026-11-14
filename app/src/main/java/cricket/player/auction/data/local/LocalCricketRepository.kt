@@ -614,6 +614,21 @@ class LocalCricketRepository(context: Context) {
         }
     }
 
+    fun resumeMatch(matchId: String) {
+        val match = _matches.value.find { it.id == matchId } ?: return
+        val matchBalls = _ballRecords.value.filter { it.matchId == matchId }
+        val hasInn2 = matchBalls.any { it.innings == 2 } || match.teamBOversBatted > 0.0 || match.teamBRuns > 0 || match.currentInnings == 2
+        val updated = match.copy(
+            currentInnings = if (hasInn2) 2 else 1,
+            status = if (hasInn2) MatchStatus.LIVE_INNINGS_2 else MatchStatus.LIVE_INNINGS_1,
+            winnerTeamId = null,
+            resultSummary = ""
+        )
+        _matches.value = _matches.value.map { if (it.id == matchId) updated else it }
+        _activeMatchId.value = matchId
+        persistAsync()
+    }
+
     // --- Captain Invites ---
     fun generateCaptainInvite(teamId: String): CaptainInvite {
         val code = UUID.randomUUID().toString().take(6).uppercase()
