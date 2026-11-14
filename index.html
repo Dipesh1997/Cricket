@@ -29,6 +29,7 @@
       <div class="role-badge" id="currentRoleBadge">
         <span>👑 Admin Auctioneer</span>
       </div>
+      <button id="themeToggleBtn" class="btn btn-sm btn-secondary" onclick="toggleWebTheme()" title="Toggle Light/Dark Theme">☀️ Light</button>
       <button class="btn btn-sm btn-secondary" onclick="openModal('claimCodeModal')">🔑 Redeem Code</button>
       <select id="userRoleSelect" class="form-control" style="width: auto; padding: 4px 8px; font-size: 0.75rem;">
         <option value="ADMIN_AUCTIONEER">Admin / Auctioneer</option>
@@ -89,6 +90,9 @@
           </div>
         </div>
       </div>
+
+      <!-- CAPTAINS READINESS CHECK BANNER -->
+      <div id="auctionReadinessCard" style="margin-bottom: 16px;"></div>
 
       <!-- Hero Stage Container -->
       <div class="stage-container" id="stageContainer">
@@ -511,6 +515,7 @@
 
   <!-- Firebase Web SDK JS (v10 compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <script src="app.js"></script>
 </body>

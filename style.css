@@ -23,6 +23,22 @@
   --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+body.light-theme {
+  --bg-stadium: #F8FAFC;
+  --bg-surface: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F8FAFC;
+  --color-gold: #B45309;
+  --color-gold-glow: rgba(180, 83, 9, 0.2);
+  --color-blue: #1D4ED8;
+  --color-green: #15803D;
+  --color-red: #DC2626;
+  --color-text-main: #0F172A;
+  --color-text-sub: #475569;
+  --color-border: #E2E8F0;
+  --shadow-card: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -367,7 +383,7 @@ body {
   font-size: 2rem;
   font-weight: 900;
   margin-bottom: 6px;
-  color: #FFF;
+  color: var(--color-text-main);
 }
 
 .stage-container.fullscreen-active .player-name {
@@ -605,7 +621,7 @@ body {
   background-color: var(--bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  color: #FFF;
+  color: var(--color-text-main);
   font-size: 0.9rem;
   font-family: inherit;
 }

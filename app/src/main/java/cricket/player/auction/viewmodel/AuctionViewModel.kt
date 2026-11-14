@@ -14,8 +14,13 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
 
     val localRepository = LocalCricketRepository(application)
 
-    val tournaments: StateFlow<List<Tournament>> = localRepository.tournaments
+    // Scoped only to tournaments this device created or joined!
+    val tournaments: StateFlow<List<Tournament>> = localRepository.userTournaments
+    val allTournaments: StateFlow<List<Tournament>> = localRepository.tournaments
     val activeTournamentId: StateFlow<String> = localRepository.activeTournamentId
+
+    val captainReadyMap: StateFlow<Map<String, Boolean>> = localRepository.captainReadyMap
+    val isBiddingStarted: StateFlow<Boolean> = localRepository.isBiddingStarted
 
     val activeTournament: StateFlow<Tournament?> = combine(tournaments, activeTournamentId) { list, id ->
         list.find { it.id == id }
@@ -82,6 +87,32 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     // Bidding Countdown Timer
     private val _timerSeconds = MutableStateFlow(15)
     val timerSeconds: StateFlow<Int> = _timerSeconds.asStateFlow()
+
+    // Joined Captain Teams in Active Tournament
+    val joinedCaptainTeams: StateFlow<List<Team>> = combine(teams, captainInvites) { teamList, invites ->
+        teamList.filter { team ->
+            !team.captainEmail.isNullOrBlank() || invites.any { it.teamId == team.id && it.isClaimed }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // Are all joined captains ready? (If no captains joined, true for solo admin mode)
+    val areAllCaptainsReady: StateFlow<Boolean> = combine(joinedCaptainTeams, captainReadyMap) { captains, readyMap ->
+        if (captains.isEmpty()) true
+        else captains.all { readyMap[it.id] == true }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    fun setMyCaptainReady(isReady: Boolean) {
+        val myTeamId = _currentUser.value.assignedTeamId ?: return
+        localRepository.setCaptainReady(myTeamId, isReady)
+    }
+
+    fun startBidding() {
+        localRepository.setBiddingStarted(true)
+    }
+
+    fun resetBiddingState() {
+        localRepository.setBiddingStarted(false)
+    }
 
     private var timerJob: Job? = null
 

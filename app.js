@@ -9,9 +9,17 @@ const firebaseConfig = {
   storageBucket: "cricket-auction-app-24750.firebasestorage.app"
 };
 
-// Initialize Firebase App & Realtime Database
+// Initialize Firebase App, Auth & Realtime Database
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.database();
+
+// Authenticate anonymously so Firebase rules with auth != null pass without email warnings
+auth.signInAnonymously().then(() => {
+  console.log("Firebase Anonymous Auth connected successfully.");
+}).catch(err => {
+  console.warn("Firebase Anonymous Auth warning:", err);
+});
 
 // --- STATE STORE ---
 let state = {
@@ -21,17 +29,44 @@ let state = {
   bids: [],
   matches: [],
   ballRecords: [],
-  activeTournamentId: "t1",
+  activeTournamentId: null,
   activePlayerId: null,
   activeMatchId: null,
   currentUser: {
     role: "ADMIN_AUCTIONEER", // ADMIN_AUCTIONEER, TEAM_CAPTAIN, SCORER, SPECTATOR
     assignedTeamId: null
   },
-  timerSeconds: 15
+  timerSeconds: 15,
+  auctionState: {}
 };
 
-// --- BROWSER DEVICE ID & PERSISTENCE ENGINE ---
+// --- THEME ENGINE ---
+function toggleWebTheme() {
+  const isLight = document.body.classList.toggle("light-theme");
+  const btn = document.getElementById("themeToggleBtn");
+  if (btn) {
+    btn.innerText = isLight ? "🌙 Dark" : "☀️ Light";
+  }
+  try {
+    localStorage.setItem("cricket_web_theme", isLight ? "light" : "dark");
+  } catch (_e) {}
+}
+
+function initWebTheme() {
+  try {
+    const saved = localStorage.getItem("cricket_web_theme");
+    const btn = document.getElementById("themeToggleBtn");
+    if (saved === "light") {
+      document.body.classList.add("light-theme");
+      if (btn) btn.innerText = "🌙 Dark";
+    } else {
+      document.body.classList.remove("light-theme");
+      if (btn) btn.innerText = "☀️ Light";
+    }
+  } catch (_e) {}
+}
+
+// --- BROWSER DEVICE ID & TOURNAMENT ISOLATION ENGINE ---
 function getBrowserDeviceId() {
   let id = localStorage.getItem("cricket_browser_device_id");
   if (!id) {
@@ -41,8 +76,40 @@ function getBrowserDeviceId() {
   return id;
 }
 
+function getMyTournamentIds() {
+  try {
+    const raw = localStorage.getItem("cricket_my_tournaments");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (_e) {}
+  return [];
+}
+
+function registerMyTournament(tourneyId) {
+  if (!tourneyId) return;
+  const list = getMyTournamentIds();
+  if (!list.includes(tourneyId)) {
+    list.push(tourneyId);
+    try {
+      localStorage.setItem("cricket_my_tournaments", JSON.stringify(list));
+    } catch (_e) {}
+  }
+  const deviceId = getBrowserDeviceId();
+  try {
+    db.ref("devices/" + deviceId + "/myTournaments/" + tourneyId).set(true);
+  } catch (_e) {}
+}
+
+function isMyTournament(tourneyId) {
+  const list = getMyTournamentIds();
+  return list.includes(tourneyId);
+}
+
 function registerBrowserDevice() {
   const deviceId = getBrowserDeviceId();
+  const dateFormat = new Date().toISOString();
   const deviceInfo = {
     deviceId: deviceId,
     platform: "Web Browser",
@@ -50,11 +117,11 @@ function registerBrowserDevice() {
     language: navigator.language || "en",
     screenWidth: window.screen ? window.screen.width : 0,
     screenHeight: window.screen ? window.screen.height : 0,
-    lastSeenDate: new Date().toISOString(),
+    lastSeenDate: dateFormat,
     lastSeenTimestamp: Date.now()
   };
   try {
-    db.ref("devices/" + deviceId).set(deviceInfo);
+    db.ref("devices/" + deviceId + "/device_info").set(deviceInfo);
   } catch (e) {
     console.error("Device registration error:", e);
   }
@@ -74,10 +141,7 @@ function loadLocalCacheFirst() {
 function setupOfflineSyncListeners() {
   window.addEventListener("online", () => {
     showToast("Internet restored! Syncing data with cloud...");
-    const cached = localStorage.getItem("cricket_local_schema");
-    if (cached) {
-      saveToFirebase();
-    }
+    saveToFirebase();
   });
 
   window.addEventListener("offline", () => {
@@ -87,6 +151,7 @@ function setupOfflineSyncListeners() {
 
 // --- INITIALIZATION & REALTIME DB LISTENERS ---
 document.addEventListener("DOMContentLoaded", () => {
+  initWebTheme();
   setupNavigation();
   setupRoleSelector();
   registerBrowserDevice();
@@ -103,19 +168,6 @@ function ensureArray(val) {
   return [];
 }
 
-function isSchemaEmptyWeb(data) {
-  if (!data) return true;
-  let parsed = data;
-  if (typeof data === 'string') {
-    try { parsed = JSON.parse(data); } catch (_e) { return true; }
-  }
-  if (!parsed || typeof parsed !== 'object') return true;
-  const tourneys = ensureArray(parsed.tournaments);
-  const teams = ensureArray(parsed.teams);
-  const players = ensureArray(parsed.players);
-  return tourneys.length === 0 && teams.length === 0 && players.length === 0;
-}
-
 function applySchemaData(data) {
   if (!data) return false;
   let parsed = data;
@@ -123,48 +175,20 @@ function applySchemaData(data) {
     try {
       parsed = JSON.parse(data);
     } catch (e) {
-      console.error(e);
+      return false;
     }
   }
   if (parsed && typeof parsed === 'object') {
-    let incomingTourneys = ensureArray(parsed.tournaments);
-    let localSavedTourneys = [];
-    try {
-      localSavedTourneys = JSON.parse(localStorage.getItem("saved_web_tournaments") || "[]");
-    } catch (_e) {}
-
-    // Merge locally claimed/saved tournaments so they never disappear from registered list
-    const combinedTourneys = [...incomingTourneys];
-    [...(state.tournaments || []), ...localSavedTourneys].forEach(lt => {
-      if (lt && lt.id && !combinedTourneys.some(t => t.id === lt.id)) {
-        combinedTourneys.push(lt);
-      }
-    });
-
-    state.tournaments = combinedTourneys;
+    state.tournaments = ensureArray(parsed.tournaments);
     state.teams = ensureArray(parsed.teams);
     state.players = ensureArray(parsed.players);
     state.bids = ensureArray(parsed.bids);
     state.matches = ensureArray(parsed.matches);
     state.ballRecords = ensureArray(parsed.ballRecords);
-    state.activeTournamentId = parsed.activeTournamentId || (state.tournaments[0] ? state.tournaments[0].id : "t1");
+    state.auctionState = parsed.auctionState || {};
+    state.activeTournamentId = parsed.activeTournamentId || (state.tournaments[0] ? state.tournaments[0].id : null);
     state.activePlayerId = parsed.activePlayerId || (state.players[0] ? state.players[0].id : null);
     state.activeMatchId = parsed.activeMatchId || (state.matches[0] ? state.matches[0].id : null);
-
-    try {
-      localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
-      localStorage.setItem("cricket_local_schema", JSON.stringify({
-        tournaments: state.tournaments,
-        teams: state.teams,
-        players: state.players,
-        bids: state.bids,
-        matches: state.matches,
-        ballRecords: state.ballRecords,
-        activeTournamentId: state.activeTournamentId,
-        activePlayerId: state.activePlayerId,
-        activeMatchId: state.activeMatchId
-      }));
-    } catch (_e) {}
 
     renderAll();
     return true;
@@ -172,71 +196,427 @@ function applySchemaData(data) {
   return false;
 }
 
+// --- REALTIME LISTENER FOR VERTICAL FIREBASE STRUCTURE ---
 function listenToFirebase() {
-  const rootRef = db.ref("database_schema");
+  const tourneysRef = db.ref("tournaments");
 
-  rootRef.on("value", (snapshot) => {
-    const val = snapshot.val();
-    if (val && !isSchemaEmptyWeb(val)) {
-      applySchemaData(val);
+  tourneysRef.on("value", (snapshot) => {
+    const data = snapshot.val();
+    if (data && typeof data === 'object') {
+      applyStructuredFirebaseData(data);
     } else {
-      // If cloud is empty, check local cache:
-      const cached = localStorage.getItem("cricket_local_schema");
-      if (cached && !isSchemaEmptyWeb(cached)) {
-        applySchemaData(cached);
-        saveToFirebase();
-      } else if (state.tournaments.length === 0) {
-        seedDefaultData();
-      }
+      // Cloud is empty. Clean up legacy flat data if present
+      cleanLegacyFirebaseNodes();
     }
   });
+
+  // Also clean legacy flat nodes immediately
+  cleanLegacyFirebaseNodes();
 }
 
-function saveToFirebase() {
-  const payload = {
-    tournaments: state.tournaments,
-    teams: state.teams,
-    players: state.players,
-    bids: state.bids,
-    matches: state.matches,
-    ballRecords: state.ballRecords,
-    activeTournamentId: state.activeTournamentId,
-    activePlayerId: state.activePlayerId,
-    activeMatchId: state.activeMatchId
-  };
-  const jsonStr = JSON.stringify(payload);
-
-  // 1. ALWAYS SAVE LOCALLY FIRST (Immediate local durability on weak or no internet)
+function cleanLegacyFirebaseNodes() {
+  const deviceId = getBrowserDeviceId();
   try {
-    localStorage.setItem("cricket_local_schema", jsonStr);
-    localStorage.setItem("saved_web_tournaments", JSON.stringify(state.tournaments));
+    db.ref("database_schema").remove();
+    db.ref("active_devices").remove();
+    db.ref("users").remove();
+    db.ref("devices/" + deviceId + "/database_schema").remove();
+  } catch (_e) {}
+}
+
+function applyStructuredFirebaseData(data) {
+  if (!data || typeof data !== 'object') return;
+
+  const tourneysList = [];
+  const teamsList = [];
+  const playersList = [];
+  const matchesList = [];
+  const ballsList = [];
+  const bidsList = [];
+  const auctionStateMap = {};
+
+  const myTourneyIds = getMyTournamentIds();
+
+  Object.keys(data).forEach(tId => {
+    const tObj = data[tId];
+    if (!tObj) return;
+
+    // Tournament Info
+    const info = tObj.info || tObj;
+    tourneysList.push({
+      id: tId,
+      name: info.name || "Tournament",
+      adminCode: info.adminCode || "ADM2026",
+      scorerInviteCode: info.scorerInviteCode || "SC8K2M",
+      defaultPurse: parseFloat(info.defaultPurse) || 100.0,
+      maxSlots: parseInt(info.maxSlots) || 25,
+      maxOverseas: parseInt(info.maxOverseas) || 8,
+      createdAt: info.createdAt || Date.now(),
+      creatorDeviceId: info.creatorDeviceId || ""
+    });
+
+    // Teams
+    if (tObj.teams && typeof tObj.teams === 'object') {
+      Object.values(tObj.teams).forEach(tm => {
+        if (tm && tm.id) {
+          teamsList.push({
+            id: tm.id,
+            tournamentId: tm.tournamentId || tId,
+            name: tm.name || "Team",
+            shortCode: tm.shortCode || "TM",
+            primaryColorHex: tm.primaryColorHex || "#FFD700",
+            totalPurse: parseFloat(tm.totalPurse) || 100.0,
+            spentPurse: parseFloat(tm.spentPurse) || 0.0,
+            inviteCode: tm.inviteCode || "",
+            captainEmail: tm.captainEmail || ""
+          });
+        }
+      });
+    }
+
+    // Players
+    if (tObj.players && typeof tObj.players === 'object') {
+      Object.values(tObj.players).forEach(p => {
+        if (p && p.id) {
+          playersList.push({
+            id: p.id,
+            tournamentId: p.tournamentId || tId,
+            name: p.name || "Player",
+            role: p.role || "BATSMAN",
+            country: p.country || "India",
+            isOverseas: !!p.isOverseas,
+            basePrice: parseFloat(p.basePrice) || 2.0,
+            currentBid: parseFloat(p.currentBid) || parseFloat(p.basePrice) || 2.0,
+            highestBidderTeamId: p.highestBidderTeamId || null,
+            status: p.status || "UP_NEXT",
+            soldToTeamId: p.soldToTeamId || null,
+            soldPrice: p.soldPrice ? parseFloat(p.soldPrice) : null,
+            imageUrl: p.imageUrl || "",
+            stats: p.stats || "",
+            setName: p.setName || "Set 1",
+            isFixedSet: !!p.isFixedSet
+          });
+        }
+      });
+    }
+
+    // Matches
+    if (tObj.matches && typeof tObj.matches === 'object') {
+      Object.values(tObj.matches).forEach(m => {
+        if (m && m.id) {
+          matchesList.push({
+            id: m.id,
+            tournamentId: m.tournamentId || tId,
+            teamAId: m.teamAId || "",
+            teamBId: m.teamBId || "",
+            totalOvers: parseInt(m.totalOvers) || 20,
+            teamARuns: parseInt(m.teamARuns) || 0,
+            teamAWickets: parseInt(m.teamAWickets) || 0,
+            teamAOversBatted: parseFloat(m.teamAOversBatted) || 0.0,
+            teamBRuns: parseInt(m.teamBRuns) || 0,
+            teamBWickets: parseInt(m.teamBWickets) || 0,
+            teamBOversBatted: parseFloat(m.teamBOversBatted) || 0.0,
+            currentInnings: parseInt(m.currentInnings) || 1,
+            status: m.status || "UPCOMING",
+            winnerTeamId: m.winnerTeamId || null,
+            resultSummary: m.resultSummary || ""
+          });
+        }
+      });
+    }
+
+    // Ball Records
+    if (tObj.ballRecords && typeof tObj.ballRecords === 'object') {
+      Object.values(tObj.ballRecords).forEach(b => {
+        if (b && b.id) ballsList.push(b);
+      });
+    }
+
+    // Bids
+    if (tObj.bids && typeof tObj.bids === 'object') {
+      Object.values(tObj.bids).forEach(b => {
+        if (b && b.id) bidsList.push(b);
+      });
+    }
+
+    // Auction State
+    if (tObj.auctionState && typeof tObj.auctionState === 'object') {
+      auctionStateMap[tId] = {
+        isBiddingStarted: !!tObj.auctionState.isBiddingStarted,
+        readyCaptains: tObj.auctionState.readyCaptains || {}
+      };
+    }
+  });
+
+  state.tournaments = tourneysList;
+  state.teams = teamsList;
+  state.players = playersList;
+  state.matches = matchesList;
+  state.ballRecords = ballsList;
+  state.bids = bidsList;
+  state.auctionState = auctionStateMap;
+
+  // Active tournament selection scoped to my tournaments
+  const myTourneys = tourneysList.filter(t => myTourneyIds.includes(t.id));
+  if (myTourneys.length > 0) {
+    if (!myTourneys.some(t => t.id === state.activeTournamentId)) {
+      state.activeTournamentId = myTourneys[0].id;
+    }
+  } else if (tourneysList.length > 0 && !tourneysList.some(t => t.id === state.activeTournamentId)) {
+    state.activeTournamentId = tourneysList[0].id;
+  }
+
+  // Active player selection
+  const currentTourneyPlayers = state.players.filter(p => p.tournamentId === state.activeTournamentId);
+  if (!currentTourneyPlayers.some(p => p.id === state.activePlayerId)) {
+    state.activePlayerId = currentTourneyPlayers[0] ? currentTourneyPlayers[0].id : null;
+  }
+
+  // Active match selection
+  const currentTourneyMatches = state.matches.filter(m => m.tournamentId === state.activeTournamentId);
+  if (!currentTourneyMatches.some(m => m.id === state.activeMatchId)) {
+    state.activeMatchId = currentTourneyMatches[0] ? currentTourneyMatches[0].id : null;
+  }
+
+  // Save to local cache
+  try {
+    localStorage.setItem("cricket_local_schema", JSON.stringify(state));
   } catch (_e) {}
 
-  // 2. SYNC TO FIREBASE (Single canonical location: database_schema)
-  const deviceId = getBrowserDeviceId();
-  db.ref("database_schema").set(jsonStr).catch(err => {
-    console.warn("Firebase sync delayed / offline:", err);
-  });
-  db.ref("devices/" + deviceId + "/lastSyncedTimestamp").set(Date.now()).catch(() => {});
+  renderAll();
 }
 
-function seedDefaultData() {
-  state.tournaments = [
-    { id: "t1", name: "IPL 2026 Mega Auction", defaultPurse: 100.0, maxSlots: 25, maxOverseas: 8, scorerInviteCode: "SC8K2M", adminCode: "ADM2026" }
-  ];
-  state.teams = [
-    { id: "team_rcb", tournamentId: "t1", name: "Royal Challengers Bengaluru", shortCode: "RCB", primaryColorHex: "#EC1C24", totalPurse: 100.0, spentPurse: 0.0, inviteCode: "RCB2026" },
-    { id: "team_csk", tournamentId: "t1", name: "Chennai Super Kings", shortCode: "CSK", primaryColorHex: "#FFD700", totalPurse: 100.0, spentPurse: 0.0, inviteCode: "CSK2026" },
-    { id: "team_mi", tournamentId: "t1", name: "Mumbai Indians", shortCode: "MI", primaryColorHex: "#004BA0", totalPurse: 100.0, spentPurse: 0.0, inviteCode: "MI2026" }
-  ];
-  state.players = [
-    { id: "p1", tournamentId: "t1", name: "Virat Kohli", role: "BATSMAN", country: "India", isOverseas: false, basePrice: 2.0, currentBid: 2.0, highestBidderTeamId: null, status: "UP_NEXT", imageUrl: "https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=500&auto=format&fit=crop&q=60", stats: "IPL Matches: 237 | Runs: 7263 | SR: 130.0", setName: "Set 1", isFixedSet: true },
-    { id: "p2", tournamentId: "t1", name: "MS Dhoni", role: "WICKET_KEEPER", country: "India", isOverseas: false, basePrice: 2.0, currentBid: 2.0, highestBidderTeamId: null, status: "UP_NEXT", imageUrl: "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=500&auto=format&fit=crop&q=60", stats: "IPL Matches: 250 | Runs: 5082 | SR: 135.9", setName: "Set 1", isFixedSet: true },
-    { id: "p3", tournamentId: "t1", name: "Pat Cummins", role: "ALL_ROUNDER", country: "Australia", isOverseas: true, basePrice: 2.0, currentBid: 2.0, highestBidderTeamId: null, status: "UP_NEXT", imageUrl: "https://images.unsplash.com/photo-1508801932684-8777e504c356?w=500&auto=format&fit=crop&q=60", stats: "IPL Wickets: 60 | Runs: 520", setName: "Set 1", isFixedSet: false }
-  ];
-  state.activeTournamentId = "t1";
-  state.activePlayerId = "p1";
-  saveToFirebase();
+// --- SYNC TO FIREBASE (VERTICAL SUB-NODES, NO HORIZONTAL SCROLL) ---
+function saveToFirebase() {
+  // 1. Durability in localStorage first
+  try {
+    localStorage.setItem("cricket_local_schema", JSON.stringify(state));
+  } catch (_e) {}
+
+  // 2. Clean legacy nodes
+  cleanLegacyFirebaseNodes();
+
+  const deviceId = getBrowserDeviceId();
+
+  // 3. Vertical tournament objects
+  state.tournaments.forEach(tourney => {
+    const tRef = db.ref("tournaments/" + tourney.id);
+
+    // Info node
+    tRef.child("info").set({
+      id: tourney.id,
+      name: tourney.name,
+      adminCode: tourney.adminCode || "ADM2026",
+      scorerInviteCode: tourney.scorerInviteCode || "SC8K2M",
+      defaultPurse: tourney.defaultPurse || 100.0,
+      maxSlots: tourney.maxSlots || 25,
+      maxOverseas: tourney.maxOverseas || 8,
+      createdAt: tourney.createdAt || Date.now(),
+      creatorDeviceId: deviceId
+    });
+
+    // Teams node
+    const tourneyTeams = state.teams.filter(t => t.tournamentId === tourney.id);
+    if (tourneyTeams.length > 0) {
+      const teamsObj = {};
+      tourneyTeams.forEach(t => {
+        teamsObj[t.id] = {
+          id: t.id,
+          tournamentId: t.tournamentId,
+          name: t.name,
+          shortCode: t.shortCode,
+          primaryColorHex: t.primaryColorHex || "#FFD700",
+          totalPurse: t.totalPurse || 100.0,
+          spentPurse: t.spentPurse || 0.0,
+          inviteCode: t.inviteCode || "",
+          captainEmail: t.captainEmail || ""
+        };
+      });
+      tRef.child("teams").set(teamsObj);
+    }
+
+    // Players node
+    const tourneyPlayers = state.players.filter(p => p.tournamentId === tourney.id);
+    if (tourneyPlayers.length > 0) {
+      const playersObj = {};
+      tourneyPlayers.forEach(p => {
+        playersObj[p.id] = {
+          id: p.id,
+          tournamentId: p.tournamentId,
+          name: p.name,
+          role: p.role || "BATSMAN",
+          country: p.country || "India",
+          isOverseas: !!p.isOverseas,
+          basePrice: p.basePrice || 2.0,
+          currentBid: p.currentBid || p.basePrice || 2.0,
+          highestBidderTeamId: p.highestBidderTeamId || "",
+          status: p.status || "UP_NEXT",
+          soldToTeamId: p.soldToTeamId || "",
+          soldPrice: p.soldPrice || 0.0,
+          imageUrl: p.imageUrl || "",
+          stats: p.stats || "",
+          setName: p.setName || "Set 1",
+          isFixedSet: !!p.isFixedSet
+        };
+      });
+      tRef.child("players").set(playersObj);
+    }
+
+    // Matches node
+    const tourneyMatches = state.matches.filter(m => m.tournamentId === tourney.id);
+    if (tourneyMatches.length > 0) {
+      const matchesObj = {};
+      tourneyMatches.forEach(m => {
+        matchesObj[m.id] = {
+          id: m.id,
+          tournamentId: m.tournamentId,
+          teamAId: m.teamAId || "",
+          teamBId: m.teamBId || "",
+          totalOvers: m.totalOvers || 20,
+          teamARuns: m.teamARuns || 0,
+          teamAWickets: m.teamAWickets || 0,
+          teamAOversBatted: m.teamAOversBatted || 0.0,
+          teamBRuns: m.teamBRuns || 0,
+          teamBWickets: m.teamBWickets || 0,
+          teamBOversBatted: m.teamBOversBatted || 0.0,
+          currentInnings: m.currentInnings || 1,
+          status: m.status || "UPCOMING",
+          winnerTeamId: m.winnerTeamId || "",
+          resultSummary: m.resultSummary || ""
+        };
+      });
+      tRef.child("matches").set(matchesObj);
+    }
+
+    // BallRecords node
+    const tourneyBalls = state.ballRecords.filter(b => b.tournamentId === tourney.id);
+    if (tourneyBalls.length > 0) {
+      const ballsObj = {};
+      tourneyBalls.forEach(b => {
+        ballsObj[b.id] = {
+          id: b.id,
+          matchId: b.matchId || "",
+          tournamentId: b.tournamentId || tourney.id,
+          innings: b.innings || 1,
+          overNumber: b.overNumber || 0,
+          ballInOver: b.ballInOver || 1,
+          runsScored: b.runsScored || 0,
+          extraRuns: b.extraRuns || 0,
+          extraType: b.extraType || "NONE",
+          isWicket: !!b.isWicket,
+          batsmanName: b.batsmanName || "",
+          bowlerName: b.bowlerName || "",
+          timestamp: b.timestamp || Date.now()
+        };
+      });
+      tRef.child("ballRecords").set(ballsObj);
+    }
+
+    // Bids node
+    const tourneyBids = state.bids.filter(b => b.tournamentId === tourney.id);
+    if (tourneyBids.length > 0) {
+      const bidsObj = {};
+      tourneyBids.forEach(b => {
+        bidsObj[b.id] = {
+          id: b.id,
+          playerId: b.playerId || "",
+          teamId: b.teamId || "",
+          amount: b.amount || 0.0,
+          timestamp: b.timestamp || Date.now(),
+          tournamentId: b.tournamentId || tourney.id
+        };
+      });
+      tRef.child("bids").set(bidsObj);
+    }
+  });
+
+  // Device heartbeat
+  try {
+    db.ref("devices/" + deviceId + "/lastSeenTimestamp").set(Date.now());
+  } catch (_e) {}
+}
+
+// --- AUCTION READINESS ENGINE ---
+function getActiveAuctionState() {
+  const tId = state.activeTournamentId;
+  if (!tId) return { isBiddingStarted: false, readyCaptains: {} };
+  if (!state.auctionState) state.auctionState = {};
+  if (!state.auctionState[tId]) {
+    state.auctionState[tId] = { isBiddingStarted: false, readyCaptains: {} };
+  }
+  return state.auctionState[tId];
+}
+
+function getJoinedCaptainTeams() {
+  const auctionState = getActiveAuctionState();
+  const readyKeys = Object.keys(auctionState.readyCaptains || {});
+  const activeTeams = state.teams.filter(t => t.tournamentId === state.activeTournamentId);
+  const joinedTeamIds = new Set(readyKeys);
+  if (state.currentUser.role === "TEAM_CAPTAIN" && state.currentUser.assignedTeamId) {
+    joinedTeamIds.add(state.currentUser.assignedTeamId);
+  }
+  return activeTeams.filter(t => joinedTeamIds.has(t.id));
+}
+
+function areAllCaptainsReady() {
+  const joinedTeams = getJoinedCaptainTeams();
+  if (joinedTeams.length === 0) return true; // Solo admin mode
+  const auctionState = getActiveAuctionState();
+  const readyMap = auctionState.readyCaptains || {};
+  return joinedTeams.every(t => readyMap[t.id] === true);
+}
+
+function toggleCaptainReady() {
+  if (state.currentUser.role !== "TEAM_CAPTAIN" || !state.currentUser.assignedTeamId) {
+    showToast("Please claim or switch to your Captain role first!");
+    return;
+  }
+  const myTeamId = state.currentUser.assignedTeamId;
+  const auctionState = getActiveAuctionState();
+  const currentReady = !!(auctionState.readyCaptains && auctionState.readyCaptains[myTeamId]);
+  const newReady = !currentReady;
+
+  if (!auctionState.readyCaptains) auctionState.readyCaptains = {};
+  auctionState.readyCaptains[myTeamId] = newReady;
+
+  const tId = state.activeTournamentId;
+  if (tId) {
+    db.ref("tournaments/" + tId + "/auctionState/readyCaptains/" + myTeamId).set(newReady);
+  }
+  renderAuctionArena();
+  showToast(newReady ? "✅ You are marked as READY!" : "⏳ Marked as NOT READY");
+}
+
+function startAuctionBidding(force = false) {
+  if (state.currentUser.role !== "ADMIN_AUCTIONEER") {
+    showToast("Only Admin can start the auction bidding!");
+    return;
+  }
+  if (!force && !areAllCaptainsReady()) {
+    showToast("Cannot start bidding: Not all captains are ready!");
+    return;
+  }
+  const tId = state.activeTournamentId;
+  if (!tId) return;
+  const auctionState = getActiveAuctionState();
+  auctionState.isBiddingStarted = true;
+  db.ref("tournaments/" + tId + "/auctionState/isBiddingStarted").set(true);
+  renderAuctionArena();
+  showToast("🚀 Auction Bidding has STARTED! Bids are now open!");
+}
+
+function resetAuctionBidding() {
+  const tId = state.activeTournamentId;
+  if (!tId) return;
+  const auctionState = getActiveAuctionState();
+  auctionState.isBiddingStarted = false;
+  auctionState.readyCaptains = {};
+  db.ref("tournaments/" + tId + "/auctionState").set({
+    isBiddingStarted: false,
+    readyCaptains: {}
+  });
+  renderAuctionArena();
+  showToast("🔄 Auction readiness reset for next round");
 }
 
 // --- RENDER ROUTINER ---
@@ -303,10 +683,120 @@ function renderHeaderRole() {
   badge.innerHTML = `<span>${text}</span>`;
 }
 
+function renderAuctionReadinessCard() {
+  const card = document.getElementById("auctionReadinessCard");
+  if (!card) return;
+
+  const auctionState = getActiveAuctionState();
+  const isStarted = !!auctionState.isBiddingStarted;
+  const joinedTeams = getJoinedCaptainTeams();
+  const isSolo = joinedTeams.length === 0;
+  const allReady = areAllCaptainsReady();
+  const role = state.currentUser.role;
+
+  if (isStarted) {
+    card.innerHTML = `
+      <div class="card" style="margin-bottom: 0; background: linear-gradient(135deg, rgba(0,230,118,0.1) 0%, rgba(0,210,255,0.05) 100%); border-color: var(--color-green); display: flex; justify-content: space-between; align-items: center; padding: 12px 18px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.3rem;">🚀</span>
+          <div>
+            <div style="font-weight: 800; color: var(--color-green); font-size: 0.95rem;">BIDDING ACTIVE &amp; LIVE</div>
+            <div style="font-size: 0.75rem; color: var(--color-text-sub);">Captains are connected and live bids are being accepted.</div>
+          </div>
+        </div>
+        ${role === "ADMIN_AUCTIONEER" ? `
+          <button class="btn btn-sm btn-secondary" onclick="resetAuctionBidding()" style="font-size: 0.75rem;">Reset Ready Check</button>
+        ` : ''}
+      </div>
+    `;
+    return;
+  }
+
+  // Not started yet
+  if (role === "TEAM_CAPTAIN") {
+    const myTeam = state.teams.find(t => t.id === state.currentUser.assignedTeamId);
+    const myReady = !!(myTeam && auctionState.readyCaptains && auctionState.readyCaptains[myTeam.id]);
+    card.innerHTML = `
+      <div class="card" style="margin-bottom: 0; background: rgba(0,210,255,0.06); border-color: ${myReady ? 'var(--color-green)' : 'var(--color-gold)'}; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div style="font-size: 0.75rem; font-weight: 800; color: var(--color-gold); letter-spacing: 1px;">🛡️ CAPTAIN READINESS CHECK</div>
+            <h4 style="color: var(--color-text-main); margin-top: 2px;">
+              Team: <strong>${myTeam ? myTeam.name : 'Unknown Team'}</strong> &mdash; 
+              Status: <span style="color: ${myReady ? 'var(--color-green)' : 'var(--color-red)'}; font-weight: 800;">${myReady ? '✅ READY' : '⏳ NOT READY'}</span>
+            </h4>
+            <p style="color: var(--color-text-sub); font-size: 0.8rem; margin-top: 4px;">
+              ${myReady ? 'You are ready! Waiting for Admin to start bidding.' : 'Click the button below when your team is ready to begin bidding.'}
+            </p>
+          </div>
+          <button class="btn ${myReady ? 'btn-secondary' : 'btn-success'}" onclick="toggleCaptainReady()" style="padding: 10px 20px; font-weight: 800;">
+            ${myReady ? 'READY ✅ (Click to change)' : 'I AM READY 👍'}
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (role === "ADMIN_AUCTIONEER") {
+    if (isSolo) {
+      card.innerHTML = `
+        <div class="card" style="margin-bottom: 0; background: rgba(255,215,0,0.05); border-color: rgba(255,215,0,0.3); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.2rem;">👤</span>
+            <div>
+              <div style="font-weight: 800; color: var(--color-gold); font-size: 0.9rem;">SOLO ADMIN MODE ACTIVE</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-sub);">No captains joined via invite codes yet. Direct bidding is enabled!</div>
+            </div>
+          </div>
+          <span class="chip" style="background: rgba(0,230,118,0.15); color: var(--color-green); font-size: 0.75rem;">Open Bidding</span>
+        </div>
+      `;
+    } else {
+      const readyPills = joinedTeams.map(t => {
+        const isR = !!(auctionState.readyCaptains && auctionState.readyCaptains[t.id]);
+        return `<span class="chip" style="background: ${isR ? 'rgba(0,230,118,0.2)' : 'rgba(255,23,68,0.2)'}; color: ${isR ? 'var(--color-green)' : 'var(--color-red)'}; font-size: 0.75rem; font-weight: 800;">${t.shortCode}: ${isR ? '✅ Ready' : '⏳ Waiting'}</span>`;
+      }).join(" ");
+
+      card.innerHTML = `
+        <div class="card" style="margin-bottom: 0; background: rgba(0,210,255,0.06); border-color: var(--color-blue); padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 800; color: var(--color-blue); letter-spacing: 1px;">👑 AUCTION READINESS MONITOR</div>
+              <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">${readyPills}</div>
+              <p style="color: var(--color-text-sub); font-size: 0.8rem; margin-top: 6px;">
+                ${allReady ? '🎉 All joined captains are READY! You can now start the auction.' : 'Waiting for all joined captains to mark themselves Ready.'}
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-gold" onclick="startAuctionBidding(false)" ${allReady ? '' : 'disabled style="opacity: 0.5; cursor: not-allowed;"'}>
+                START BIDDING 🚀
+              </button>
+              ${!allReady ? `<button class="btn btn-sm btn-secondary" onclick="startAuctionBidding(true)" title="Force start without waiting">Override ⚠️</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  } else {
+    // Scorer / Spectator
+    card.innerHTML = `
+      <div class="card" style="margin-bottom: 0; background: rgba(255,255,255,0.03); border-color: var(--color-border); padding: 10px 16px;">
+        <span style="font-size: 0.8rem; color: var(--color-text-sub);">⏳ Waiting for captains &amp; admin to start bidding...</span>
+      </div>
+    `;
+  }
+}
+
 // --- AUCTION ARENA ENGINE ---
 function renderAuctionArena() {
+  renderAuctionReadinessCard();
+
   const player = state.players.find(p => p.id === state.activePlayerId);
-  if (!player) return;
+  if (!player) {
+    const nameEl = document.getElementById("stagePlayerName");
+    if (nameEl) nameEl.innerText = "No Player Staged";
+    const bidEl = document.getElementById("stageCurrentBid");
+    if (bidEl) bidEl.innerText = "₹0.00 Cr";
+    return;
+  }
 
   document.getElementById("stagePlayerName").innerText = player.name;
   document.getElementById("stageSetTag").innerText = player.setName || "Set 1";
@@ -369,6 +859,15 @@ function renderBidsLog(playerId) {
 }
 
 function placeBid(increment) {
+  const auctionState = getActiveAuctionState();
+  const joinedTeams = getJoinedCaptainTeams();
+
+  // If captains have joined and auction bidding is not started, block bidding
+  if (!auctionState.isBiddingStarted && joinedTeams.length > 0) {
+    showToast("⚠️ Bidding is locked! All captains must click READY and Admin must start the bidding.");
+    return;
+  }
+
   const player = state.players.find(p => p.id === state.activePlayerId);
   if (!player || player.status === "SOLD") return;
 
@@ -397,7 +896,8 @@ function placeBid(increment) {
     teamId: team.id,
     teamName: team.name,
     amount: newBidVal,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    tournamentId: player.tournamentId || state.activeTournamentId
   });
 
   state.timerSeconds = 15;
@@ -1236,12 +1736,15 @@ function submitClaimCode() {
       maxSlots: 25,
       maxOverseas: 8,
       scorerInviteCode: "SC" + Math.floor(1000 + Math.random() * 9000),
-      adminCode: code
+      adminCode: code,
+      createdAt: Date.now(),
+      creatorDeviceId: getBrowserDeviceId()
     };
     state.tournaments.push(adminTourney);
   }
 
   if (adminTourney) {
+    registerMyTournament(adminTourney.id);
     state.activeTournamentId = adminTourney.id;
     state.currentUser.role = "ADMIN_AUCTIONEER";
     state.currentUser.assignedTeamId = null;
@@ -1249,7 +1752,7 @@ function submitClaimCode() {
     saveToFirebase();
     closeModal("claimCodeModal");
     renderAll();
-    showToast(`👑 Admin Access Granted for "${adminTourney.name}"! Registered in tournaments list.`);
+    showToast(`👑 Admin Access Granted for "${adminTourney.name}"! Registered on this device.`);
     return;
   }
 
@@ -1265,10 +1768,13 @@ function submitClaimCode() {
         maxSlots: 25,
         maxOverseas: 8,
         scorerInviteCode: "SC" + Math.floor(1000 + Math.random() * 9000),
-        adminCode: "ADM" + Math.floor(1000 + Math.random() * 9000)
+        adminCode: "ADM" + Math.floor(1000 + Math.random() * 9000),
+        createdAt: Date.now(),
+        creatorDeviceId: getBrowserDeviceId()
       };
       state.tournaments.push(parentTourney);
     }
+    registerMyTournament(parentTourney.id);
     state.activeTournamentId = parentTourney.id;
     state.currentUser.role = "TEAM_CAPTAIN";
     state.currentUser.assignedTeamId = matchedTeam.id;
@@ -1277,7 +1783,7 @@ function submitClaimCode() {
     closeModal("claimCodeModal");
     renderAll();
     document.querySelector('[data-tab="tab-auction"]').click();
-    showToast(`🎉 Claimed ${matchedTeam.name}! Bidding locked to your team.`);
+    showToast(`🎉 Claimed Captain for ${matchedTeam.name}! Bidding locked to your team.`);
     return;
   }
 
@@ -1291,12 +1797,15 @@ function submitClaimCode() {
       maxSlots: 25,
       maxOverseas: 8,
       scorerInviteCode: code,
-      adminCode: "ADM" + Math.floor(1000 + Math.random() * 9000)
+      adminCode: "ADM" + Math.floor(1000 + Math.random() * 9000),
+      createdAt: Date.now(),
+      creatorDeviceId: getBrowserDeviceId()
     };
     state.tournaments.push(tourney);
   }
 
   if (tourney) {
+    registerMyTournament(tourney.id);
     state.activeTournamentId = tourney.id;
     state.currentUser.role = "SCORER";
     state.currentUser.assignedTeamId = null;
@@ -1305,7 +1814,7 @@ function submitClaimCode() {
     closeModal("claimCodeModal");
     renderAll();
     document.querySelector('[data-tab="tab-scorer"]').click();
-    showToast(`🏆 Scorer Access Granted for "${tourney.name}"! Registered in tournaments list.`);
+    showToast(`🏆 Scorer Access Granted for "${tourney.name}"! Registered on this device.`);
     return;
   }
 
@@ -1318,9 +1827,12 @@ function submitClaimCode() {
       maxSlots: 25,
       maxOverseas: 8,
       scorerInviteCode: "SC" + Math.floor(1000 + Math.random() * 9000),
-      adminCode: code
+      adminCode: code,
+      createdAt: Date.now(),
+      creatorDeviceId: getBrowserDeviceId()
     };
     state.tournaments.push(genTourney);
+    registerMyTournament(genTourney.id);
     state.activeTournamentId = genTourney.id;
     state.currentUser.role = "ADMIN_AUCTIONEER";
     state.currentUser.assignedTeamId = null;
@@ -1328,7 +1840,7 @@ function submitClaimCode() {
     saveToFirebase();
     closeModal("claimCodeModal");
     renderAll();
-    showToast(`👑 Access Granted for "${genTourney.name}"! Registered in tournaments list.`);
+    showToast(`👑 Access Granted for "${genTourney.name}"! Registered on this device.`);
     return;
   }
 
@@ -1340,20 +1852,34 @@ function renderTournaments() {
   const listEl = document.getElementById("tournamentsList");
   if (!listEl) return;
 
-  const active = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+  const myTourneyIds = getMyTournamentIds();
+  // Filter tournaments so this device ONLY shows tournaments it created or joined
+  const myTournaments = state.tournaments.filter(t => myTourneyIds.includes(t.id));
+
+  const active = myTournaments.find(t => t.id === state.activeTournamentId) || myTournaments[0];
   if (active) {
     const titleEl = document.getElementById("activeTourneyTitle");
     if (titleEl) titleEl.innerText = active.name;
     const codeEl = document.getElementById("tourneyScorerCode");
     if (codeEl) codeEl.innerText = active.scorerInviteCode || "SC8K2M";
+  } else {
+    const titleEl = document.getElementById("activeTourneyTitle");
+    if (titleEl) titleEl.innerText = "No Tournament Selected";
   }
 
-  if (state.tournaments.length === 0) {
-    listEl.innerHTML = `<p style="color: var(--color-text-sub);">No tournaments registered yet.</p>`;
+  if (myTournaments.length === 0) {
+    listEl.innerHTML = `
+      <div class="card" style="text-align: center; padding: 24px; background: var(--bg-surface); border: 1px dashed var(--color-border);">
+        <p style="color: var(--color-gold); font-weight: 700; margin-bottom: 6px;">No tournaments joined on this device yet</p>
+        <p style="color: var(--color-text-sub); font-size: 0.85rem; max-width: 450px; margin: 0 auto 12px auto;">
+          Click <strong>"+ New Tournament"</strong> to create your first tournament, or click <strong>"ENTER TOURNAMENT / ADMIN CODE"</strong> above to join an existing tournament.
+        </p>
+      </div>
+    `;
     return;
   }
 
-  listEl.innerHTML = state.tournaments.map(t => `
+  listEl.innerHTML = myTournaments.map(t => `
     <div class="card" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface);">
       <div>
         <h4 style="color: var(--color-gold); font-size: 1.1rem; margin-bottom: 4px;">${t.name} ${t.id === state.activeTournamentId ? '⭐ (Active)' : ''}</h4>
@@ -1394,9 +1920,12 @@ function submitCreateTourney() {
     maxSlots: maxSlots,
     maxOverseas: maxOverseas,
     scorerInviteCode: scorerInviteCode,
-    adminCode: adminCode
+    adminCode: adminCode,
+    createdAt: Date.now(),
+    creatorDeviceId: getBrowserDeviceId()
   };
 
+  registerMyTournament(newId);
   state.tournaments.push(tourney);
   state.activeTournamentId = newId;
   saveToFirebase();

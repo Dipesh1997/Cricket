@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.Tournament
@@ -269,13 +270,13 @@ fun TournamentScreen(
 
                         Column {
                             Text(
-                                text = if (isDarkTheme) "Dark Stadium Mode" else "Light Green Grass Mode 🌿",
+                                text = if (isDarkTheme) "Dark Stadium Mode" else "Clean Light Mode ☀️",
                                 color = if (isDarkTheme) Color.White else LightPitchText,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "Use fresh light green pitch colors across app",
+                                text = if (isDarkTheme) "Deep stadium floodlight look" else "Crisp high-contrast white & slate theme",
                                 color = if (isDarkTheme) Color.Gray else LightPitchSecondary,
                                 fontSize = 11.sp
                             )
@@ -309,14 +310,22 @@ fun TournamentScreen(
                     ) {
                         Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = IplGold, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "No Tournaments Created Yet", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Click '+ New Tournament' to create your first tournament", color = Color.Gray, fontSize = 12.sp)
+                        Text(text = "No Tournaments Joined Yet", color = if (isDarkTheme) Color.White else LightPitchText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Create your own tournament or join an existing tournament using an Admin/Invite code.", color = if (isDarkTheme) Color.Gray else LightPitchSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { showCreateDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black)
-                        ) {
-                            Text("CREATE FIRST TOURNAMENT", fontWeight = FontWeight.ExtraBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(
+                                onClick = { showCreateDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black)
+                            ) {
+                                Text("+ CREATE NEW", fontWeight = FontWeight.ExtraBold)
+                            }
+                            OutlinedButton(
+                                onClick = { showInviteCodeDialog = true },
+                                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold)
+                            ) {
+                                Text("🔑 JOIN CODE", color = if (isDarkTheme) Color.White else LightPitchText, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }

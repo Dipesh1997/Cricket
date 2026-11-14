@@ -6,8 +6,11 @@ import cricket.player.auction.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -17,8 +20,23 @@ class LocalCricketRepository(context: Context) {
     private val firebaseRepo = FirebaseCricketRepository(context, dbManager)
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    val deviceTourneyManager = DeviceTournamentManager(context)
+    private val _myTournamentIds = MutableStateFlow<Set<String>>(deviceTourneyManager.getMyTournamentIds())
+    val myTournamentIds: StateFlow<Set<String>> = _myTournamentIds.asStateFlow()
+
     private val _tournaments = MutableStateFlow<List<Tournament>>(emptyList())
     val tournaments: StateFlow<List<Tournament>> = _tournaments.asStateFlow()
+
+    // Expose only tournaments that this device created or joined!
+    val userTournaments: StateFlow<List<Tournament>> = combine(_tournaments, _myTournamentIds) { all, myIds ->
+        all.filter { it.id in myIds }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    private val _captainReadyMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val captainReadyMap: StateFlow<Map<String, Boolean>> = _captainReadyMap.asStateFlow()
+
+    private val _isBiddingStarted = MutableStateFlow(false)
+    val isBiddingStarted: StateFlow<Boolean> = _isBiddingStarted.asStateFlow()
 
     private val _teams = MutableStateFlow<List<Team>>(emptyList())
     val teams: StateFlow<List<Team>> = _teams.asStateFlow()
@@ -53,6 +71,12 @@ class LocalCricketRepository(context: Context) {
     init {
         firebaseRepo.onSchemaRemoteUpdated = { remoteSchema ->
             mergeRemoteSchema(remoteSchema)
+        }
+        firebaseRepo.onAuctionStateRemoteUpdated = { tId, readyMap, isStarted ->
+            if (tId == _activeTournamentId.value) {
+                _captainReadyMap.value = readyMap
+                _isBiddingStarted.value = isStarted
+            }
         }
         scope.launch {
             val schema = dbManager.loadDatabase().sanitized()
@@ -227,8 +251,23 @@ class LocalCricketRepository(context: Context) {
         )
         _tournaments.value = _tournaments.value + newTourney
         _activeTournamentId.value = newTourney.id
+        deviceTourneyManager.addTournament(newTourney.id, "ADMIN")
+        _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+        firebaseRepo.registerDeviceTournament(newTourney.id, "ADMIN", newTourney.name)
         persistAsync()
         return newTourney
+    }
+
+    fun setCaptainReady(teamId: String, isReady: Boolean) {
+        val updated = _captainReadyMap.value.toMutableMap()
+        updated[teamId] = isReady
+        _captainReadyMap.value = updated
+        firebaseRepo.setCaptainReady(_activeTournamentId.value, teamId, isReady)
+    }
+
+    fun setBiddingStarted(started: Boolean) {
+        _isBiddingStarted.value = started
+        firebaseRepo.setBiddingStarted(_activeTournamentId.value, started)
     }
 
     fun joinTournamentWithCode(inputCode: String): Pair<Tournament?, UserRole?> {
@@ -239,6 +278,9 @@ class LocalCricketRepository(context: Context) {
         val adminTourney = _tournaments.value.find { it.adminCode.equals(cleanCode, ignoreCase = true) }
         if (adminTourney != null) {
             _activeTournamentId.value = adminTourney.id
+            deviceTourneyManager.addTournament(adminTourney.id, "ADMIN")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(adminTourney.id, "ADMIN", adminTourney.name)
             persistAsync()
             return Pair(adminTourney, UserRole.ADMIN_AUCTIONEER)
         }
@@ -247,6 +289,9 @@ class LocalCricketRepository(context: Context) {
         val scorerTourney = _tournaments.value.find { it.scorerInviteCode.equals(cleanCode, ignoreCase = true) }
         if (scorerTourney != null) {
             _activeTournamentId.value = scorerTourney.id
+            deviceTourneyManager.addTournament(scorerTourney.id, "SCORER")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(scorerTourney.id, "SCORER", scorerTourney.name)
             persistAsync()
             return Pair(scorerTourney, UserRole.SCORER)
         }
@@ -268,6 +313,9 @@ class LocalCricketRepository(context: Context) {
                 _tournaments.value = _tournaments.value + parentTourney
             }
             _activeTournamentId.value = parentTourney.id
+            deviceTourneyManager.addTournament(parentTourney.id, "CAPTAIN")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(parentTourney.id, "CAPTAIN", parentTourney.name)
             persistAsync()
             return Pair(parentTourney, UserRole.TEAM_CAPTAIN)
         }
@@ -336,8 +384,10 @@ class LocalCricketRepository(context: Context) {
         _teams.value = _teams.value.filterNot { it.tournamentId == tournamentId }
         _players.value = _players.value.filterNot { it.tournamentId == tournamentId }
         _matches.value = _matches.value.filterNot { it.tournamentId == tournamentId }
+        deviceTourneyManager.removeTournament(tournamentId)
+        _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
         if (_activeTournamentId.value == tournamentId) {
-            _activeTournamentId.value = _tournaments.value.firstOrNull()?.id ?: ""
+            _activeTournamentId.value = userTournaments.value.firstOrNull()?.id ?: ""
         }
         persistAsync()
     }
@@ -581,6 +631,9 @@ class LocalCricketRepository(context: Context) {
                 if (it.id == targetTeam.id) it.copy(captainEmail = email) else it
             }
             _activeTournamentId.value = targetTeam.tournamentId
+            deviceTourneyManager.addTournament(targetTeam.tournamentId, "CAPTAIN")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(targetTeam.tournamentId, "CAPTAIN", "")
             persistAsync()
             return targetTeam
         }
@@ -599,6 +652,9 @@ class LocalCricketRepository(context: Context) {
         val team = _teams.value.find { it.id == invite.teamId }
         if (team != null) {
             _activeTournamentId.value = team.tournamentId
+            deviceTourneyManager.addTournament(team.tournamentId, "CAPTAIN")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(team.tournamentId, "CAPTAIN", "")
         }
 
         persistAsync()
@@ -615,6 +671,9 @@ class LocalCricketRepository(context: Context) {
 
         if (targetTourney != null) {
             _activeTournamentId.value = targetTourney.id
+            deviceTourneyManager.addTournament(targetTourney.id, "SCORER")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(targetTourney.id, "SCORER", targetTourney.name)
             persistAsync()
             return targetTourney
         }

@@ -12,14 +12,14 @@ val NeonBlue = Color(0xFF00D2FF)
 val BidGreen = Color(0xFF00E676)
 val UnsoldRed = Color(0xFFFF5252)
 
-// Lush Light Green Stadium Theme Palette
-val LightPitchBackground = Color(0xFFF1F8E9) // Fresh Light Grass Green Tint
-val LightPitchSurface = Color(0xFFDCEDC8)    // Soft Mint Surface
-val LightPitchCard = Color(0xFFFFFFFF)       // Crisp White Card
-val LightPitchPrimary = Color(0xFF2E7D32)    // Stadium Emerald Green
-val LightPitchSecondary = Color(0xFF1B5E20)  // Deep Forest Green
-val LightPitchText = Color(0xFF1B2E1B)       // Dark Forest Green Text
-val LightPitchContainer = Color(0xFFA5D6A7)  // Mint Container
+// Proper Clean Light Theme Palette (Clean White & Slate, No Grass Tint)
+val LightPitchBackground = Color(0xFFF8FAFC) // Crisp Off-White / Soft Slate 50
+val LightPitchSurface = Color(0xFFF1F5F9)    // Soft Neutral Slate 100 Surface
+val LightPitchCard = Color(0xFFFFFFFF)       // Crisp Pure White Card
+val LightPitchPrimary = Color(0xFF1E3A8A)    // Stadium Royal Navy Blue
+val LightPitchSecondary = Color(0xFF475569)  // Slate 600 Secondary Text & Icons
+val LightPitchText = Color(0xFF0F172A)       // Rich Slate 900 High-Contrast Text
+val LightPitchContainer = Color(0xFFE2E8F0)  // Clean Border & Divider (Slate 200)
 
 // IPL Team Colors
 val TeamCSK = Color(0xFFF9CD05)

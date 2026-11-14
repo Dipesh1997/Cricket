@@ -36,6 +36,10 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     val timerSeconds by viewModel.timerSeconds.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val players by viewModel.players.collectAsState()
+    val joinedCaptainTeams by viewModel.joinedCaptainTeams.collectAsState()
+    val captainReadyMap by viewModel.captainReadyMap.collectAsState()
+    val areAllCaptainsReady by viewModel.areAllCaptainsReady.collectAsState()
+    val isBiddingStarted by viewModel.isBiddingStarted.collectAsState()
 
     var selectedBiddingTeamId by remember { mutableStateOf<String?>(null) }
     var showTeamSelectorDialog by remember { mutableStateOf(false) }
@@ -310,6 +314,125 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             }
         }
 
+        // --- Captain Readiness Check Banner ---
+        item {
+            if (currentUser?.role == UserRole.TEAM_CAPTAIN) {
+                val myTeamId = currentUser?.assignedTeamId
+                val isMyCaptainReady = myTeamId != null && (captainReadyMap[myTeamId] == true)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = if (isMyCaptainReady) BidGreen.copy(alpha = 0.15f) else StadiumSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isMyCaptainReady) BidGreen else IplGold.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = if (isMyCaptainReady) Icons.Default.CheckCircle else Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = if (isMyCaptainReady) BidGreen else IplGold
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (isMyCaptainReady) "YOU ARE READY FOR AUCTION ✅" else "CAPTAIN READINESS CHECK",
+                                    color = if (isMyCaptainReady) BidGreen else Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = if (isMyCaptainReady) "Waiting for other captains & auctioneer to begin..." else "Click ready so auctioneer can begin bidding!",
+                                    color = Color.LightGray,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = { viewModel.setMyCaptainReady(!isMyCaptainReady) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isMyCaptainReady) Color.DarkGray else BidGreen,
+                                contentColor = if (isMyCaptainReady) Color.White else Color.Black
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(if (isMyCaptainReady) "UNREADY" else "I AM READY 👍", fontWeight = FontWeight.Black, fontSize = 12.sp)
+                        }
+                    }
+                }
+            } else if (currentUser?.role == UserRole.ADMIN_AUCTIONEER && joinedCaptainTeams.isNotEmpty()) {
+                val readyCount = joinedCaptainTeams.count { captainReadyMap[it.id] == true }
+                val allReady = readyCount == joinedCaptainTeams.size
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = StadiumSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (allReady || isBiddingStarted) BidGreen else IplGold.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (allReady || isBiddingStarted) Icons.Default.CheckCircle else Icons.Default.HourglassTop,
+                                    contentDescription = null,
+                                    tint = if (allReady || isBiddingStarted) BidGreen else IplGold
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (allReady || isBiddingStarted) "ALL CAPTAINS READY ($readyCount/${joinedCaptainTeams.size}) 🚀" else "WAITING FOR CAPTAINS ($readyCount/${joinedCaptainTeams.size} READY)",
+                                    color = if (allReady || isBiddingStarted) BidGreen else IplGold,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            if (allReady && !isBiddingStarted) {
+                                Button(
+                                    onClick = { viewModel.startBidding() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.Black),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("START BIDDING 🚀", fontWeight = FontWeight.Black, fontSize = 11.sp)
+                                }
+                            } else if (!isBiddingStarted) {
+                                TextButton(onClick = { viewModel.startBidding() }) {
+                                    Text("Force Start (Override)", color = Color.Gray, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            joinedCaptainTeams.forEach { team ->
+                                val isReady = captainReadyMap[team.id] == true
+                                Surface(
+                                    color = if (isReady) BidGreen.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isReady) BidGreen else Color.Gray.copy(alpha = 0.4f)),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "${team.shortCode}: ${if (isReady) "READY ✅" else "WAITING ⏳"}",
+                                        color = if (isReady) BidGreen else Color.LightGray,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // --- Bidding Controls Section ---
         item {
             Card(
@@ -369,8 +492,26 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     val activeP = activePlayer
-                    val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD && currentBiddingTeam != null
+                    val isAuctionReady = joinedCaptainTeams.isEmpty() || isBiddingStarted || areAllCaptainsReady
+                    val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD && currentBiddingTeam != null && isAuctionReady
                     val availablePurse = currentBiddingTeam?.remainingPurse ?: 0.0
+
+                    if (!isAuctionReady) {
+                        Surface(
+                            color = IplGold.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = "⏳ Bidding is locked until all joined captains click READY",
+                                color = IplGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(8.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
