@@ -113,17 +113,6 @@ class FirebaseCricketRepository(
 
         registerDeviceInfo()
 
-        // Clean up legacy flat/monolithic nodes
-        scope.launch {
-            try {
-                database.reference.child("active_devices").removeValue()
-                database.reference.child("users").removeValue()
-                database.reference.child("database_schema").removeValue()
-                database.reference.child("devices").child(deviceId).child("database_schema").removeValue()
-                database.reference.child("devices").child(deviceId).child("device_info").removeValue()
-            } catch (_: Exception) {}
-        }
-
         // Listen to structured vertical "tournaments" branch
         val tourneysRef = database.reference.child("tournaments")
         activeRef = tourneysRef
@@ -448,7 +437,6 @@ class FirebaseCricketRepository(
         scope.launch {
             try {
                 database.reference.child("tournaments").removeValue()
-                database.reference.child("database_schema").removeValue()
             } catch (e: Exception) {
                 e.printStackTrace()
             }

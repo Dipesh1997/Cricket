@@ -236,16 +236,7 @@ function listenToFirebase() {
 }
 
 function cleanLegacyFirebaseNodes() {
-  if (!db) return;
-  const deviceId = getBrowserDeviceId();
-  try {
-    if (db.ref) {
-      db.ref("database_schema").remove().catch(() => {});
-      db.ref("active_devices").remove().catch(() => {});
-      db.ref("users").remove().catch(() => {});
-      db.ref("devices/" + deviceId + "/database_schema").remove().catch(() => {});
-    }
-  } catch (_e) {}
+  // Legacy nodes are removed; keep no-op for backward compatibility
 }
 
 function applyStructuredFirebaseData(data) {
