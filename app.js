@@ -4,22 +4,36 @@
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
+  apiKey: "AIzaSyB4pVlLo8m9qQdnuMabs_a_HJim4VhcOQY",
+  authDomain: "cricket-auction-app-24750.firebaseapp.com",
   databaseURL: "https://cricket-auction-app-24750-default-rtdb.firebaseio.com",
   projectId: "cricket-auction-app-24750",
-  storageBucket: "cricket-auction-app-24750.firebasestorage.app"
+  storageBucket: "cricket-auction-app-24750.firebasestorage.app",
+  appId: "1:5995891908:web:6a73cc27676422bdbe8d91"
 };
 
-// Initialize Firebase App, Auth & Realtime Database
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.database();
+// Initialize Firebase App, Auth & Realtime Database safely
+try {
+  if (typeof firebase !== 'undefined' && firebase.initializeApp) {
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+  }
+} catch (e) {
+  console.warn("Firebase initialization warning:", e);
+}
+
+const auth = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth() : null;
+const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : null;
 
 // Authenticate anonymously so Firebase rules with auth != null pass without email warnings
-auth.signInAnonymously().then(() => {
-  console.log("Firebase Anonymous Auth connected successfully.");
-}).catch(err => {
-  console.warn("Firebase Anonymous Auth warning:", err);
-});
+if (auth) {
+  auth.signInAnonymously().then(() => {
+    console.log("Firebase Anonymous Auth connected successfully.");
+  }).catch(err => {
+    console.warn("Firebase Anonymous Auth notice:", err);
+  });
+}
 
 // --- STATE STORE ---
 let state = {
@@ -198,29 +212,39 @@ function applySchemaData(data) {
 
 // --- REALTIME LISTENER FOR VERTICAL FIREBASE STRUCTURE ---
 function listenToFirebase() {
-  const tourneysRef = db.ref("tournaments");
+  if (!db) return;
+  try {
+    const tourneysRef = db.ref("tournaments");
 
-  tourneysRef.on("value", (snapshot) => {
-    const data = snapshot.val();
-    if (data && typeof data === 'object') {
-      applyStructuredFirebaseData(data);
-    } else {
-      // Cloud is empty. Clean up legacy flat data if present
-      cleanLegacyFirebaseNodes();
-    }
-  });
+    tourneysRef.on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data && typeof data === 'object') {
+        applyStructuredFirebaseData(data);
+      } else {
+        // Cloud is empty. Clean up legacy flat data if present
+        cleanLegacyFirebaseNodes();
+      }
+    }, (err) => {
+      console.warn("Firebase tournaments listener notice:", err);
+    });
 
-  // Also clean legacy flat nodes immediately
-  cleanLegacyFirebaseNodes();
+    // Also clean legacy flat nodes immediately
+    cleanLegacyFirebaseNodes();
+  } catch (err) {
+    console.warn("listenToFirebase notice:", err);
+  }
 }
 
 function cleanLegacyFirebaseNodes() {
+  if (!db) return;
   const deviceId = getBrowserDeviceId();
   try {
-    db.ref("database_schema").remove();
-    db.ref("active_devices").remove();
-    db.ref("users").remove();
-    db.ref("devices/" + deviceId + "/database_schema").remove();
+    if (db.ref) {
+      db.ref("database_schema").remove().catch(() => {});
+      db.ref("active_devices").remove().catch(() => {});
+      db.ref("users").remove().catch(() => {});
+      db.ref("devices/" + deviceId + "/database_schema").remove().catch(() => {});
+    }
   } catch (_e) {}
 }
 
@@ -393,14 +417,17 @@ function saveToFirebase() {
     localStorage.setItem("cricket_local_schema", JSON.stringify(state));
   } catch (_e) {}
 
+  if (!db) return;
+
   // 2. Clean legacy nodes
   cleanLegacyFirebaseNodes();
 
   const deviceId = getBrowserDeviceId();
 
-  // 3. Vertical tournament objects
-  state.tournaments.forEach(tourney => {
-    const tRef = db.ref("tournaments/" + tourney.id);
+  try {
+    // 3. Vertical tournament objects
+    state.tournaments.forEach(tourney => {
+      const tRef = db.ref("tournaments/" + tourney.id);
 
     // Info node
     tRef.child("info").set({
@@ -529,6 +556,9 @@ function saveToFirebase() {
       tRef.child("bids").set(bidsObj);
     }
   });
+  } catch (err) {
+    console.warn("saveToFirebase vertical tournament sync warning:", err);
+  }
 
   // Device heartbeat
   try {
@@ -1870,10 +1900,11 @@ function renderTournaments() {
   if (myTournaments.length === 0) {
     listEl.innerHTML = `
       <div class="card" style="text-align: center; padding: 24px; background: var(--bg-surface); border: 1px dashed var(--color-border);">
-        <p style="color: var(--color-gold); font-weight: 700; margin-bottom: 6px;">No tournaments joined on this device yet</p>
-        <p style="color: var(--color-text-sub); font-size: 0.85rem; max-width: 450px; margin: 0 auto 12px auto;">
-          Click <strong>"+ New Tournament"</strong> to create your first tournament, or click <strong>"ENTER TOURNAMENT / ADMIN CODE"</strong> above to join an existing tournament.
+        <p style="color: var(--color-gold); font-weight: 700; margin-bottom: 6px; font-size: 1.1rem;">No tournaments joined on this device yet</p>
+        <p style="color: var(--color-text-sub); font-size: 0.85rem; max-width: 450px; margin: 0 auto 16px auto;">
+          Click <strong>"+ CREATE NEW TOURNAMENT"</strong> below to create your tournament, or enter an Admin / Scorer code above to join an existing tournament.
         </p>
+        <button class="btn btn-gold" onclick="openModal('createTourneyModal')" style="font-size: 0.95rem; font-weight: 700; padding: 10px 24px;">+ CREATE NEW TOURNAMENT 🏆</button>
       </div>
     `;
     return;
@@ -1904,11 +1935,19 @@ function switchActiveTournament(tourneyId) {
 }
 
 function submitCreateTourney() {
-  const name = document.getElementById("newTourneyName").value.trim();
+  const nameEl = document.getElementById("newTourneyName");
+  const name = nameEl ? nameEl.value.trim() : "";
   if (!name) { showToast("Please enter a tournament name"); return; }
-  const purse = parseFloat(document.getElementById("newTourneyPurse").value) || 100.0;
-  const maxSlots = parseInt(document.getElementById("newTourneyMaxSlots").value) || 25;
-  const maxOverseas = parseInt(document.getElementById("newTourneyMaxOverseas").value) || 8;
+
+  const purseEl = document.getElementById("newTourneyPurse");
+  const purse = purseEl ? (parseFloat(purseEl.value) || 100.0) : 100.0;
+
+  const maxSlotsEl = document.getElementById("newTourneyMaxSlots");
+  const maxSlots = maxSlotsEl ? (parseInt(maxSlotsEl.value) || 25) : 25;
+
+  const maxOverseasEl = document.getElementById("newTourneyMaxOverseas");
+  const maxOverseas = maxOverseasEl ? (parseInt(maxOverseasEl.value) || 8) : 8;
+
   const scorerInviteCode = "SC" + Math.floor(1000 + Math.random() * 9000).toString();
   const adminCode = "ADM" + Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -1926,11 +1965,18 @@ function submitCreateTourney() {
   };
 
   registerMyTournament(newId);
+  if (!state.tournaments) state.tournaments = [];
   state.tournaments.push(tourney);
   state.activeTournamentId = newId;
-  saveToFirebase();
+
+  try {
+    saveToFirebase();
+  } catch (err) {
+    console.warn("saveToFirebase error during tournament creation:", err);
+  }
+
   closeModal("createTourneyModal");
-  document.getElementById("newTourneyName").value = "";
+  if (nameEl) nameEl.value = "";
   renderAll();
   showToast(`🏆 Created Tournament "${name}"! Admin Code: ${adminCode}`);
 }
@@ -2207,4 +2253,17 @@ function showToast(msg) {
   toast.innerText = msg;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3500);
+}
+
+// Global window exposure for inline event handlers
+if (typeof window !== 'undefined') {
+  window.openModal = openModal;
+  window.closeModal = closeModal;
+  window.submitCreateTourney = submitCreateTourney;
+  window.submitCreateTeam = submitCreateTeam;
+  window.submitCreatePlayer = submitCreatePlayer;
+  window.submitCreateMatch = submitCreateMatch;
+  window.copyText = copyText;
+  window.switchActiveTournament = switchActiveTournament;
+  window.showToast = showToast;
 }

@@ -205,9 +205,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         ) {
                             val tA = teams.find { it.id == activeMatch?.teamAId }
                             val tB = teams.find { it.id == activeMatch?.teamBId }
-                            val mIdx = tourneyMatches.indexOfFirst { it.id == activeMatch?.id }
+                            val allTourneyList = if (tourneyMatches.isNotEmpty()) tourneyMatches else matches
+                            val mIdx = allTourneyList.indexOfFirst { it.id == activeMatch?.id }
+                            val matchNumStr = if (mIdx >= 0) "Match ${mIdx + 1}" else if (activeMatch != null) "Match" else "Select Match"
                             val mLabel = if (activeMatch != null) {
-                                "M${mIdx + 1}: ${tA?.shortCode ?: "A"} v ${tB?.shortCode ?: "B"}"
+                                "$matchNumStr: ${tA?.shortCode ?: "A"} v ${tB?.shortCode ?: "B"}"
                             } else {
                                 "Select Match"
                             }
@@ -232,6 +234,31 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         onDismissRequest = { showMatchDropdown = false },
                         modifier = Modifier.background(cardBg)
                     ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AddCircle,
+                                        contentDescription = null,
+                                        tint = themeAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "+ Create New Match",
+                                        color = themeAccent,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            },
+                            onClick = {
+                                showMatchDropdown = false
+                                showCreateMatchModal = true
+                            }
+                        )
+                        HorizontalDivider(color = surfaceBg, thickness = 1.dp)
+
                         if (tourneyMatches.isEmpty()) {
                             DropdownMenuItem(
                                 text = { Text("No matches created yet", color = textSub, fontSize = 11.sp) },
@@ -319,8 +346,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text("New", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("New Match", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                         }
                     }
 
@@ -564,6 +591,44 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
+                                    }
+                                }
+
+                                if (match.status == MatchStatus.COMPLETED) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { showCreateMatchModal = true },
+                                            colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                            modifier = Modifier.weight(1f).height(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("+ CREATE NEXT MATCH 🏏", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                                        }
+
+                                        if (isEditable) {
+                                            Button(
+                                                onClick = {
+                                                    viewModel.resumeMatch(match.id)
+                                                    Toast.makeText(context, "✏️ Match reopened for editing!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = surfaceBg, contentColor = themeAccent),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                                modifier = Modifier.height(36.dp)
+                                            ) {
+                                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                Text("Edit Match ✏️", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            }
+                                        }
                                     }
                                 }
                             }
