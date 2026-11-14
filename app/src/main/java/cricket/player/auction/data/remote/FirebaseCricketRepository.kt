@@ -96,7 +96,7 @@ class FirebaseCricketRepository(
                     "model" to Build.MODEL,
                     "androidVersion" to Build.VERSION.RELEASE,
                     "sdkInt" to Build.VERSION.SDK_INT,
-                    "appVersion" to "2.2",
+                    "appVersion" to "2.4",
                     "lastSeenTimestamp" to System.currentTimeMillis(),
                     "lastSeenDate" to dateFormat.format(Date())
                 )
