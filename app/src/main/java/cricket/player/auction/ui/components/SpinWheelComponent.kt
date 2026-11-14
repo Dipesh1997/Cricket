@@ -31,11 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.Player
 import cricket.player.auction.model.PlayerStatus
-import cricket.player.auction.ui.theme.IplGold
-import cricket.player.auction.ui.theme.NeonBlue
-import cricket.player.auction.ui.theme.StadiumCardDark
-import cricket.player.auction.ui.theme.StadiumDark
-import cricket.player.auction.ui.theme.StadiumSurface
+import cricket.player.auction.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
@@ -56,9 +52,13 @@ val WheelColors = listOf(
 @Composable
 fun SpinWheelModal(
     players: List<Player>,
+    isDarkTheme: Boolean = true,
     onDismiss: () -> Unit,
     onPlayerSelected: (Player) -> Unit
 ) {
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
     var isSpinning by remember { mutableStateOf(false) }
     var selectedPlayer by remember { mutableStateOf<Player?>(null) }
     val rotationAnim = remember { Animatable(0f) }
@@ -331,9 +331,9 @@ fun SpinWheelModal(
                 onClick = { onDismiss() },
                 enabled = !isSpinning
             ) {
-                Text("Close", color = Color.Gray)
+                Text("Close", color = textSub)
             }
         },
-        containerColor = StadiumCardDark
+        containerColor = cardBg
     )
 }

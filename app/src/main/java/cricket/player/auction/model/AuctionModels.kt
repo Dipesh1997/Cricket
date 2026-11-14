@@ -60,7 +60,7 @@ data class Tournament(
 
 data class Player(
     val id: String,
-    val tournamentId: String = "t1",
+    val tournamentId: String = "",
     val name: String,
     val role: PlayerRole,
     val country: String,
@@ -79,7 +79,7 @@ data class Player(
 
 data class Team(
     val id: String,
-    val tournamentId: String = "t1",
+    val tournamentId: String = "",
     val name: String,
     val shortCode: String,
     val primaryColorHex: String,
@@ -317,7 +317,7 @@ fun Tournament.sanitized(): Tournament {
 fun Player.sanitized(): Player {
     return this.copy(
         id = id ?: "p_${System.currentTimeMillis()}",
-        tournamentId = tournamentId ?: "t1",
+        tournamentId = tournamentId ?: "",
         name = name ?: "Player",
         role = role ?: PlayerRole.BATSMAN,
         country = country ?: "India",
@@ -331,7 +331,7 @@ fun Player.sanitized(): Player {
 fun Team.sanitized(): Team {
     return this.copy(
         id = id ?: "team_${System.currentTimeMillis()}",
-        tournamentId = tournamentId ?: "t1",
+        tournamentId = tournamentId ?: "",
         name = name ?: "Team",
         shortCode = shortCode ?: "TM",
         primaryColorHex = primaryColorHex ?: "#1976D2",
@@ -359,7 +359,7 @@ fun CaptainInvite.sanitized(): CaptainInvite {
 fun Match.sanitized(): Match {
     return this.copy(
         id = id ?: "m_${System.currentTimeMillis()}",
-        tournamentId = tournamentId ?: "t1",
+        tournamentId = tournamentId ?: "",
         teamAId = teamAId ?: "",
         teamBId = teamBId ?: "",
         status = status ?: MatchStatus.SCHEDULED

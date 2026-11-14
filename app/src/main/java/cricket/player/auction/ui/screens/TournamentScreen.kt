@@ -64,6 +64,13 @@ fun TournamentScreen(
     var deletingTournament by remember { mutableStateOf<Tournament?>(null) }
 
     val currentUser by viewModel.currentUser.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
 
     // Export Backup File Launcher
     val exportLauncher = rememberLauncherForActivityResult(
@@ -127,7 +134,7 @@ fun TournamentScreen(
                 Icon(imageVector = Icons.Default.Add, contentDescription = "New Tournament")
             }
         },
-        containerColor = StadiumDark
+        containerColor = screenBg
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -135,10 +142,6 @@ fun TournamentScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            val isDarkTheme by viewModel.isDarkTheme.collectAsState()
-            val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
-            val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -155,7 +158,7 @@ fun TournamentScreen(
                     )
                     Text(
                         text = "Click a tournament card to enter its workspace dashboard",
-                        color = if (isDarkTheme) Color.Gray else LightPitchText.copy(alpha = 0.7f),
+                        color = textSub,
                         fontSize = 12.sp
                     )
                 }
@@ -298,7 +301,7 @@ fun TournamentScreen(
 
             if (tournaments.isEmpty()) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -310,8 +313,8 @@ fun TournamentScreen(
                     ) {
                         Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = IplGold, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "No Tournaments Joined Yet", color = if (isDarkTheme) Color.White else LightPitchText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Create your own tournament or join an existing tournament using an Admin/Invite code.", color = if (isDarkTheme) Color.Gray else LightPitchSecondary, fontSize = 12.sp, textAlign = TextAlign.Center)
+                        Text(text = "No Tournaments Joined Yet", color = textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Create your own tournament or join an existing tournament using an Admin/Invite code.", color = textSub, fontSize = 12.sp, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(
@@ -324,7 +327,7 @@ fun TournamentScreen(
                                 onClick = { showInviteCodeDialog = true },
                                 border = androidx.compose.foundation.BorderStroke(1.dp, IplGold)
                             ) {
-                                Text("🔑 JOIN CODE", color = if (isDarkTheme) Color.White else LightPitchText, fontWeight = FontWeight.Bold)
+                                Text("🔑 JOIN CODE", color = textMain, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -332,7 +335,7 @@ fun TournamentScreen(
             } else {
                 Text(
                     text = "SELECT TOURNAMENT WORKSPACE",
-                    color = Color.Gray,
+                    color = textSub,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -344,7 +347,7 @@ fun TournamentScreen(
                         val isActive = tourney.id == activeTournamentId
 
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                            colors = CardDefaults.cardColors(containerColor = cardBg),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -352,7 +355,7 @@ fun TournamentScreen(
                                     viewModel.selectTournament(tourney.id)
                                     onTournamentClick(tourney)
                                 },
-                            border = if (isActive) androidx.compose.foundation.BorderStroke(1.5.dp, IplGold) else null
+                            border = if (isActive) androidx.compose.foundation.BorderStroke(1.5.dp, IplGold) else androidx.compose.foundation.BorderStroke(1.dp, surfaceBg)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
@@ -365,7 +368,7 @@ fun TournamentScreen(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = tourney.name,
-                                            color = Color.White,
+                                            color = textMain,
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 17.sp
                                         )
@@ -387,7 +390,7 @@ fun TournamentScreen(
                                             Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Tournament", tint = UnsoldRed, modifier = Modifier.size(18.dp))
                                         }
 
-                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, tint = textSub, modifier = Modifier.size(18.dp))
                                     }
                                 }
 
@@ -397,9 +400,9 @@ fun TournamentScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    StatChip(text = "Purse: ${tourney.defaultPurse.formatIplCurrency()}", backgroundColor = StadiumSurface, textColor = Color.LightGray)
-                                    StatChip(text = "Teams: ${teams.count { it.tournamentId == tourney.id }}", backgroundColor = StadiumSurface, textColor = NeonBlue)
-                                    StatChip(text = "Players: ${players.count { it.tournamentId == tourney.id }}", backgroundColor = StadiumSurface, textColor = IplGold)
+                                    StatChip(text = "Purse: ${tourney.defaultPurse.formatIplCurrency()}", backgroundColor = surfaceBg, textColor = textSub)
+                                    StatChip(text = "Teams: ${teams.count { it.tournamentId == tourney.id }}", backgroundColor = surfaceBg, textColor = NeonBlue)
+                                    StatChip(text = "Players: ${players.count { it.tournamentId == tourney.id }}", backgroundColor = surfaceBg, textColor = IplGold)
                                 }
 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -538,7 +541,7 @@ fun TournamentScreen(
                     Text("Cancel", color = Color.Gray)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -552,7 +555,7 @@ fun TournamentScreen(
 
         AlertDialog(
             onDismissRequest = { editingTournament = null },
-            title = { Text("Edit Tournament", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Edit Tournament", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -611,10 +614,10 @@ fun TournamentScreen(
             },
             dismissButton = {
                 TextButton(onClick = { editingTournament = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -625,7 +628,7 @@ fun TournamentScreen(
             onDismissRequest = { deletingTournament = null },
             title = { Text("Delete Tournament?", color = UnsoldRed, fontWeight = FontWeight.Bold) },
             text = {
-                Text("Are you sure you want to delete '${target.name}' and all associated teams and players?", color = Color.LightGray)
+                Text("Are you sure you want to delete '${target.name}' and all associated teams and players?", color = textSub)
             },
             confirmButton = {
                 Button(
@@ -640,10 +643,10 @@ fun TournamentScreen(
             },
             dismissButton = {
                 TextButton(onClick = { deletingTournament = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -652,12 +655,12 @@ fun TournamentScreen(
         var inviteCodeInput by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showInviteCodeDialog = false },
-            title = { Text("Enter Admin Code or Invite Code 🔑", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Enter Admin Code or Invite Code 🔑", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = "Enter the autogenerated Admin joining code (e.g. ADM1234), Team Captain code, or Scorer code to claim your access and sync live.",
-                        color = Color.LightGray,
+                        color = textSub,
                         fontSize = 12.sp
                     )
                     OutlinedTextField(
@@ -695,10 +698,10 @@ fun TournamentScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showInviteCodeDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 }

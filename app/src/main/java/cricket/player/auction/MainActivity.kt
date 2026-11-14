@@ -1,6 +1,7 @@
 package cricket.player.auction
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import cricket.player.auction.ui.components.HelpGuideDialog
 import cricket.player.auction.ui.screens.*
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
@@ -70,8 +73,10 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
 
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val isHomeScreen = currentRoute == Screen.Tournament.route
+    var showHelpDialog by remember { mutableStateOf(false) }
     var exportTrigger by remember { mutableStateOf(0) }
     var importTrigger by remember { mutableStateOf(0) }
+    val context = LocalContext.current
 
     val subPageScreens = listOf(
         Screen.Dashboard,
@@ -82,8 +87,15 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
     )
 
     val accentColor = if (isDarkTheme) IplGold else LightPitchPrimary
-    val topBarContainer = if (isDarkTheme) StadiumCardDark else LightPitchSurface
+    val topBarContainer = if (isDarkTheme) StadiumCardDark else LightPitchCard
     val mainBackground = if (isDarkTheme) StadiumDark else LightPitchBackground
+
+    if (showHelpDialog) {
+        HelpGuideDialog(
+            isDarkTheme = isDarkTheme,
+            onDismiss = { showHelpDialog = false }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -139,11 +151,20 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                     }
                 },
                 actions = {
-                    // Theme Toggle Button for Quick Switching!
+                    // Help Guide Button
+                    IconButton(onClick = { showHelpDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.HelpOutline,
+                            contentDescription = "Help Guide",
+                            tint = accentColor
+                        )
+                    }
+
+                    // Theme Toggle Button
                     IconButton(onClick = { viewModel.toggleTheme() }) {
                         Icon(
                             imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = "Toggle Light/Dark Theme",
+                            contentDescription = "Toggle Theme",
                             tint = accentColor
                         )
                     }
@@ -153,7 +174,7 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
                                 Icon(
-                                    imageVector = Icons.Default.ImportExport,
+                                    imageVector = Icons.Default.Storage,
                                     contentDescription = "Backup Options",
                                     tint = accentColor
                                 )
@@ -164,19 +185,33 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                                 modifier = Modifier.background(if (isDarkTheme) StadiumCardDark else LightPitchCard)
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Export Backup JSON", color = if (isDarkTheme) Color.White else LightPitchText, fontWeight = FontWeight.Bold, fontSize = 13.sp) },
+                                    text = { Text("Backup", color = if (isDarkTheme) Color.White else LightPitchText, fontWeight = FontWeight.Bold, fontSize = 14.sp) },
                                     leadingIcon = { Icon(Icons.Default.Download, contentDescription = null, tint = accentColor) },
                                     onClick = {
                                         menuExpanded = false
-                                        exportTrigger++
+                                        viewModel.backupToCricketFolder().fold(
+                                            onSuccess = { file ->
+                                                Toast.makeText(context, "✅ Database backed up to Cricket folder in File Manager!", Toast.LENGTH_LONG).show()
+                                            },
+                                            onFailure = { err ->
+                                                Toast.makeText(context, "❌ Backup failed: ${err.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Import Backup JSON", color = if (isDarkTheme) Color.White else LightPitchText, fontWeight = FontWeight.Bold, fontSize = 13.sp) },
+                                    text = { Text("Restore", color = if (isDarkTheme) Color.White else LightPitchText, fontWeight = FontWeight.Bold, fontSize = 14.sp) },
                                     leadingIcon = { Icon(Icons.Default.Upload, contentDescription = null, tint = NeonBlue) },
                                     onClick = {
                                         menuExpanded = false
-                                        importTrigger++
+                                        viewModel.restoreFromCricketFolder().fold(
+                                            onSuccess = {
+                                                Toast.makeText(context, "✅ Database restored from Cricket folder!", Toast.LENGTH_LONG).show()
+                                            },
+                                            onFailure = { err ->
+                                                Toast.makeText(context, "❌ ${err.message}", Toast.LENGTH_LONG).show()
+                                            }
+                                        )
                                     }
                                 )
                             }

@@ -1,0 +1,212 @@
+package cricket.player.auction.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import cricket.player.auction.ui.theme.*
+
+@Composable
+fun HelpGuideDialog(
+    isDarkTheme: Boolean,
+    onDismiss: () -> Unit
+) {
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textColor = if (isDarkTheme) Color.White else LightPitchText
+    val subTextColor = if (isDarkTheme) Color.LightGray else LightPitchSecondary
+    val accentColor = if (isDarkTheme) IplGold else LightPitchPrimary
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MenuBook,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "CRICKET HUB GUIDE",
+                    color = accentColor,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Complete guide to every feature and workflow in the app:",
+                    color = subTextColor,
+                    fontSize = 12.sp
+                )
+
+                // 1. Tournaments
+                HelpGuideSection(
+                    icon = Icons.Default.EmojiEvents,
+                    iconColor = IplGold,
+                    title = "1. Creating & Managing Tournaments",
+                    description = "• Tap '+ CREATE NEW' on the Home screen.\n• Enter Tournament Name, Total Purse (e.g. ₹100 Cr), Max Slots (e.g. 25), and Max Overseas Limit.\n• The app automatically generates unique Admin and Scorer Codes for live multi-device sharing.",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+
+                // 2. Joining & Role Codes
+                HelpGuideSection(
+                    icon = Icons.Default.VpnKey,
+                    iconColor = NeonBlue,
+                    title = "2. Multi-Device Joining & Role Codes",
+                    description = "• Other devices tap 'ENTER CODE 🔑' on Home to join.\n• ADMIN CODE: Grants full tournament admin, staging, and bidding controls.\n• TEAM CAPTAIN CODE: Binds the device to their team with dedicated bidding.\n• SCORER CODE: Unlocks live scoring and ball-by-ball updates.",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+
+                // 3. Teams & Squads
+                HelpGuideSection(
+                    icon = Icons.Default.Shield,
+                    iconColor = IplGold,
+                    title = "3. Teams & Squads Dashboard",
+                    description = "• In 'Teams & Squads', tap '+' to create custom teams with team colors and initial budget.\n• Copy and share the 6-digit Invite Code with the team captain.\n• Tap any team card to inspect acquired players, slot counts, and remaining purse.",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+
+                // 4. Player Roster & Spin Wheel
+                HelpGuideSection(
+                    icon = Icons.Default.Casino,
+                    iconColor = BidGreen,
+                    title = "4. Player Roster & Spin Wheel",
+                    description = "• Add players with their role (Batsman, Bowler, All-Rounder, Wicket Keeper), country, overseas status, and base price.\n• In Auction Arena, use the 'SPIN WHEEL' to pick players with exciting live animations!",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+
+                // 5. Live Auction & Captain Ready Check
+                HelpGuideSection(
+                    icon = Icons.Default.Gavel,
+                    iconColor = IplGold,
+                    title = "5. Live Auction Arena & Captain Readiness",
+                    description = "• Captains must tap 'I AM READY 👍' before bidding starts.\n• Admin monitors captain readiness in real-time and taps 'START BIDDING 🚀'.\n• (If playing solo with only Admin, bidding is instantly enabled without waiting!).\n• Bid increments: +₹20L, +₹50L, +₹1.00Cr, +₹2.00Cr.\n• Admin options: 'SELL BID', 'SELL BASE PRICE', or 'MARK UNSOLD'.",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+
+                // 6. Live Scorer & Matches
+                HelpGuideSection(
+                    icon = Icons.Default.SportsCricket,
+                    iconColor = NeonBlue,
+                    title = "6. Live Scorer & Scorecard",
+                    description = "• Create matches, enter total overs, and score ball-by-ball (0, 1, 2, 3, 4, 6, Wides, No Balls, Byes, Leg Byes).\n• Tap 'WICKET!' to record batsman dismissals.\n• When all out, innings automatically ends.\n• Tap 'END INNINGS' with full 'UNDO INNINGS' protection if pressed accidentally!",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+
+                // 7. Points Table & MVP Leaderboard
+                HelpGuideSection(
+                    icon = Icons.Default.Assessment,
+                    iconColor = IplGold,
+                    title = "7. Points Table & MVP Leaderboard",
+                    description = "• Automatic Net Run Rate (NRR) calculation after every match.\n• MVP points awarded for runs, boundaries, strike rates, wickets, and economy.\n• Track top batsmen, top bowlers, and boundary leaders.",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+
+                // 8. Auto Backup & Restore
+                HelpGuideSection(
+                    icon = Icons.Default.Storage,
+                    iconColor = BidGreen,
+                    title = "8. Automatic Backup & Restore",
+                    description = "• Tap 'Backup' in the top menu to save your full database directly to the 'Cricket' folder in File Manager.\n• Tap 'Restore' to automatically reload and restore from 'Cricket/cricket_backup.json' anytime without manual file selection!",
+                    surfaceBg = surfaceBg,
+                    textColor = textColor,
+                    subTextColor = subTextColor
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor, contentColor = if (isDarkTheme) Color.Black else Color.White),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("GOT IT 👍", fontWeight = FontWeight.ExtraBold)
+            }
+        },
+        containerColor = cardBg,
+        shape = RoundedCornerShape(18.dp)
+    )
+}
+
+@Composable
+private fun HelpGuideSection(
+    icon: ImageVector,
+    iconColor: Color,
+    title: String,
+    description: String,
+    surfaceBg: Color,
+    textColor: Color,
+    subTextColor: Color
+) {
+    Surface(
+        color = surfaceBg,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = description,
+                color = subTextColor,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+            )
+        }
+    }
+}
+

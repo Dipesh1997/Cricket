@@ -119,7 +119,7 @@ fun StatChip(
     Surface(
         color = backgroundColor,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, textColor.copy(alpha = 0.2f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -357,11 +357,7 @@ fun PhotoUploaderField(
                     shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = IplGold,
-                        unfocusedBorderColor = Color.DarkGray,
-                        focusedContainerColor = StadiumSurface,
-                        unfocusedContainerColor = StadiumSurface,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f)
                     )
                 )
             }

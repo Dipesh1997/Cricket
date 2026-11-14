@@ -42,6 +42,14 @@ fun TournamentDashboardScreen(
     val teams by viewModel.teams.collectAsState()
     val players by viewModel.players.collectAsState()
     val matches by viewModel.matches.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     val subPages = listOf(
         DashboardSubPageItem("Auction Arena", "Live Bidding & Spin Wheel", "auction", Icons.Default.Gavel, IplGold),
@@ -56,17 +64,17 @@ fun TournamentDashboardScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(StadiumDark)
+            .background(screenBg)
             .padding(16.dp)
     ) {
         // --- Tournament Stats Summary Banner ---
         val tourney = activeTournament
         if (tourney != null) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth(),
-                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.5f))
+                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.5f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -75,9 +83,9 @@ fun TournamentDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = IplGold)
+                            Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = themeAccent)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = tourney.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(text = tourney.name, color = textMain, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                         StatChip(text = "ACTIVE WORKSPACE", backgroundColor = BidGreen.copy(alpha = 0.2f), textColor = BidGreen)
                     }
@@ -88,16 +96,16 @@ fun TournamentDashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        StatChip(text = "Budget: ${tourney.defaultPurse.formatIplCurrency()}", backgroundColor = StadiumSurface, textColor = Color.LightGray)
-                        StatChip(text = "Teams: ${teams.size}", backgroundColor = StadiumSurface, textColor = NeonBlue)
-                        StatChip(text = "Players: ${players.size}", backgroundColor = StadiumSurface, textColor = IplGold)
-                        StatChip(text = "Matches: ${matches.size}", backgroundColor = StadiumSurface, textColor = BidGreen)
+                        StatChip(text = "Budget: ${tourney.defaultPurse.formatIplCurrency()}", backgroundColor = surfaceBg, textColor = textSub)
+                        StatChip(text = "Teams: ${teams.size}", backgroundColor = surfaceBg, textColor = NeonBlue)
+                        StatChip(text = "Players: ${players.size}", backgroundColor = surfaceBg, textColor = themeAccent)
+                        StatChip(text = "Matches: ${matches.size}", backgroundColor = surfaceBg, textColor = BidGreen)
                     }
                 }
             }
         } else {
             Card(
-                colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -105,11 +113,11 @@ fun TournamentDashboardScreen(
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = "No Active Tournament Selected", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = "No Active Tournament Selected", color = textMain, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onBackToHome,
-                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black)
+                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black)
                     ) {
                         Text("Select Tournament From Home", fontWeight = FontWeight.Bold)
                     }
@@ -117,12 +125,11 @@ fun TournamentDashboardScreen(
             }
         }
 
-
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = "TOURNAMENT SUB-PAGES & WORKSPACE",
-            color = Color.Gray,
+            color = textSub,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
@@ -139,7 +146,7 @@ fun TournamentDashboardScreen(
             items(subPages.size) { index ->
                 val page = subPages[index]
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -168,12 +175,12 @@ fun TournamentDashboardScreen(
                                 }
                             }
 
-                            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
+                            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = textSub)
                         }
 
                         Column {
-                            Text(text = page.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(text = page.subtitle, color = Color.Gray, fontSize = 10.sp)
+                            Text(text = page.title, color = textMain, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(text = page.subtitle, color = textSub, fontSize = 10.sp)
                         }
                     }
                 }

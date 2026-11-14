@@ -36,6 +36,14 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
     val players by viewModel.players.collectAsState()
     val teams by viewModel.teams.collectAsState()
     val activePlayerId by viewModel.activePlayerId.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilterRole by remember { mutableStateOf<PlayerRole?>(null) }
@@ -57,13 +65,13 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddPlayerDialog = true },
-                containerColor = IplGold,
+                containerColor = themeAccent,
                 contentColor = Color.Black
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = "Add Player")
             }
         },
-        containerColor = StadiumDark
+        containerColor = screenBg
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -73,13 +81,13 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
         ) {
             Text(
                 text = "PLAYER ROSTER",
-                color = IplGold,
+                color = themeAccent,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
                 text = "Manage auction set list, player details & photos",
-                color = Color.Gray,
+                color = textSub,
                 fontSize = 12.sp
             )
 
@@ -89,17 +97,17 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search by name or country...", color = Color.Gray) },
-                leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = IplGold) },
+                placeholder = { Text("Search by name or country...", color = textSub) },
+                leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = themeAccent) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = IplGold,
-                    unfocusedBorderColor = Color.DarkGray,
-                    focusedContainerColor = StadiumCardDark,
-                    unfocusedContainerColor = StadiumCardDark,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedBorderColor = themeAccent,
+                    unfocusedBorderColor = if (isDarkTheme) Color.DarkGray else LightPitchContainer,
+                    focusedContainerColor = cardBg,
+                    unfocusedContainerColor = cardBg,
+                    focusedTextColor = textMain,
+                    unfocusedTextColor = textMain
                 ),
                 singleLine = true
             )
@@ -117,10 +125,10 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         },
                         label = { Text("All Players") },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = IplGold,
+                            selectedContainerColor = themeAccent,
                             selectedLabelColor = Color.Black,
-                            containerColor = StadiumSurface,
-                            labelColor = Color.White
+                            containerColor = surfaceBg,
+                            labelColor = textMain
                         )
                     )
                 }
@@ -165,9 +173,9 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                     val soldTeam = teams.find { it.id == player.soldToTeamId }
 
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
                         shape = RoundedCornerShape(14.dp),
-                        border = if (isActive) androidx.compose.foundation.BorderStroke(2.dp, IplGold) else null,
+                        border = if (isActive) androidx.compose.foundation.BorderStroke(2.dp, themeAccent) else null,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -194,21 +202,21 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = player.name,
-                                    color = Color.White,
+                                    color = textMain,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp
                                 )
                                 Text(
                                     text = "${player.role.label} • ${player.country}",
-                                    color = Color.Gray,
+                                    color = textSub,
                                     fontSize = 12.sp
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     StatChip(
                                         text = "Base: ${player.basePrice.formatIplCurrency()}",
-                                        backgroundColor = StadiumSurface,
-                                        textColor = Color.LightGray
+                                        backgroundColor = surfaceBg,
+                                        textColor = textSub
                                     )
                                     if (player.status == PlayerStatus.SOLD && soldTeam != null) {
                                         StatChip(
@@ -231,7 +239,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Player",
-                                    tint = IplGold,
+                                    tint = themeAccent,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -252,7 +260,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                                     Icon(
                                         imageVector = Icons.Default.Gavel,
                                         contentDescription = "Bring to Stage",
-                                        tint = if (isActive) IplGold else Color.Gray,
+                                        tint = if (isActive) themeAccent else textSub,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -343,7 +351,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         )
                         showAddPlayerDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                     enabled = name.isNotBlank()
                 ) {
                     Text("Add Player", fontWeight = FontWeight.Bold)
@@ -351,10 +359,10 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showAddPlayerDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -373,7 +381,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
 
         AlertDialog(
             onDismissRequest = { editingPlayer = null },
-            title = { Text("Edit Player Details", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Edit Player Details", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -399,7 +407,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                             onCheckedChange = { editIsOverseas = it },
                             colors = CheckboxDefaults.colors(checkedColor = NeonBlue)
                         )
-                        Text("Overseas Player", color = Color.White, fontSize = 13.sp)
+                        Text("Overseas Player", color = textMain, fontSize = 13.sp)
                     }
 
                     OutlinedTextField(
@@ -450,7 +458,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         viewModel.updatePlayer(updated)
                         editingPlayer = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                     enabled = editName.isNotBlank()
                 ) {
                     Text("SAVE CHANGES", fontWeight = FontWeight.Bold)
@@ -458,10 +466,10 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { editingPlayer = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -472,7 +480,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
             onDismissRequest = { deletingPlayer = null },
             title = { Text("Delete Player?", color = UnsoldRed, fontWeight = FontWeight.Bold) },
             text = {
-                Text("Are you sure you want to delete '${target.name}' from the tournament roster?", color = Color.LightGray)
+                Text("Are you sure you want to delete '${target.name}' from the tournament roster?", color = textSub)
             },
             confirmButton = {
                 Button(
@@ -487,10 +495,10 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { deletingPlayer = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -500,7 +508,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
 
         AlertDialog(
             onDismissRequest = { editingPhotoPlayer = null },
-            title = { Text("Update Photo for ${editingPhotoPlayer?.name}", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Update Photo for ${editingPhotoPlayer?.name}", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 PhotoUploaderField(
                     imageUrl = newPhotoUrl,
@@ -516,17 +524,17 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         }
                         editingPhotoPlayer = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black)
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black)
                 ) {
                     Text("SAVE PHOTO", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { editingPhotoPlayer = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 }

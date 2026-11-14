@@ -31,6 +31,14 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
     val teams by viewModel.teams.collectAsState()
     val invites by viewModel.captainInvites.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     var inviteCodeInput by remember { mutableStateOf("") }
     var selectedTeamToInvite by remember { mutableStateOf<String?>(null) }
@@ -41,18 +49,18 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(StadiumDark)
+            .background(screenBg)
             .padding(16.dp)
     ) {
         Text(
             text = "CAPTAIN INVITATION SYSTEM",
-            color = IplGold,
+            color = themeAccent,
             fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold
         )
         Text(
             text = "Invite team captains & grant bidding permissions",
-            color = Color.Gray,
+            color = textSub,
             fontSize = 12.sp
         )
 
@@ -60,20 +68,20 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
 
         // --- Current User Status Card ---
         Card(
-            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "YOUR ACTIVE ACCOUNT", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(text = "YOUR ACTIVE ACCOUNT", color = textSub, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = currentUser?.displayName ?: "Spectator", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(text = currentUser?.email ?: "", color = Color.LightGray, fontSize = 12.sp)
+                Text(text = currentUser?.displayName ?: "Spectator", color = textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(text = currentUser?.email ?: "", color = textSub, fontSize = 12.sp)
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatChip(text = currentUser?.role?.label ?: "Spectator", backgroundColor = IplGold.copy(alpha = 0.2f), textColor = IplGold)
+                    StatChip(text = currentUser?.role?.label ?: "Spectator", backgroundColor = themeAccent.copy(alpha = 0.2f), textColor = themeAccent)
                     if (currentUser?.assignedTeamId != null) {
                         val assignedTeam = teams.find { it.id == currentUser?.assignedTeamId }
                         if (assignedTeam != null) {
@@ -88,15 +96,15 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
 
         // --- Claim Team with Invite Code Section ---
         Card(
-            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold)
+                    Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = themeAccent)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "CLAIM TEAM AS CAPTAIN", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = "CLAIM TEAM AS CAPTAIN", color = textMain, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -104,16 +112,16 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
                 OutlinedTextField(
                     value = inviteCodeInput,
                     onValueChange = { inviteCodeInput = it },
-                    placeholder = { Text("Enter Invite Code (e.g., CSK2026)", color = Color.Gray) },
+                    placeholder = { Text("Enter Invite Code (e.g., CSK2026)", color = textSub) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = IplGold,
-                        unfocusedBorderColor = Color.DarkGray,
-                        focusedContainerColor = StadiumSurface,
-                        unfocusedContainerColor = StadiumSurface,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedBorderColor = themeAccent,
+                        unfocusedBorderColor = if (isDarkTheme) Color.DarkGray else LightPitchContainer,
+                        focusedContainerColor = surfaceBg,
+                        unfocusedContainerColor = surfaceBg,
+                        focusedTextColor = textMain,
+                        unfocusedTextColor = textMain
                     ),
                     singleLine = true
                 )
@@ -135,7 +143,7 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                     modifier = Modifier.fillMaxWidth(),
                     enabled = inviteCodeInput.isNotBlank()
                 ) {
@@ -159,7 +167,7 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
         // --- Generate Invite Code (Admin Section) ---
         if (currentUser?.role == UserRole.ADMIN_AUCTIONEER) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = StadiumSurface),
+                colors = CardDefaults.cardColors(containerColor = surfaceBg),
                 shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f))
             ) {
@@ -168,7 +176,7 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(text = "Select Team to Invite Captain:", color = Color.LightGray, fontSize = 12.sp)
+                    Text(text = "Select Team to Invite Captain:", color = textSub, fontSize = 12.sp)
 
                     LazyColumn(
                         modifier = Modifier.height(150.dp),
@@ -176,7 +184,7 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
                     ) {
                         items(teams) { team ->
                             Surface(
-                                color = StadiumCardDark,
+                                color = cardBg,
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -189,8 +197,8 @@ fun CaptainInviteScreen(viewModel: AuctionViewModel) {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(text = team.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    Text(text = "Default Code: ${team.inviteCode}", color = IplGold, fontSize = 12.sp)
+                                    Text(text = team.name, color = textMain, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(text = "Default Code: ${team.inviteCode}", color = themeAccent, fontSize = 12.sp)
                                 }
                             }
                         }

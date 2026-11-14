@@ -40,6 +40,14 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     val captainReadyMap by viewModel.captainReadyMap.collectAsState()
     val areAllCaptainsReady by viewModel.areAllCaptainsReady.collectAsState()
     val isBiddingStarted by viewModel.isBiddingStarted.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     var selectedBiddingTeamId by remember { mutableStateOf<String?>(null) }
     var showTeamSelectorDialog by remember { mutableStateOf(false) }
@@ -59,16 +67,16 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(StadiumDark)
+            .background(screenBg)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // --- Header Status Bar & Spin Wheel Trigger ---
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
                 shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.3f))
+                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.3f))
             ) {
                 Row(
                     modifier = Modifier
@@ -143,10 +151,10 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             val player = activePlayer
             if (player != null) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
                     shape = RoundedCornerShape(20.dp),
                     elevation = CardDefaults.cardElevation(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, IplGold)
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, themeAccent)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -159,7 +167,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                StatChip(text = player.setName, backgroundColor = StadiumSurface, textColor = IplGold)
+                                StatChip(text = player.setName, backgroundColor = surfaceBg, textColor = themeAccent)
 
                                 FilterChip(
                                     selected = player.isFixedSet,
@@ -170,10 +178,10 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     },
                                     label = { Text(if (player.isFixedSet) "⭐ Fixed Set" else "+ Fix Set", fontSize = 10.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = IplGold,
+                                        selectedContainerColor = themeAccent,
                                         selectedLabelColor = Color.Black,
-                                        containerColor = StadiumSurface,
-                                        labelColor = Color.White
+                                        containerColor = surfaceBg,
+                                        labelColor = textMain
                                     )
                                 )
                             }
@@ -193,7 +201,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     }
                                 )
                             } else {
-                                StatChip(text = player.country, backgroundColor = StadiumSurface, textColor = Color.LightGray)
+                                StatChip(text = player.country, backgroundColor = surfaceBg, textColor = textSub)
                             }
                         }
 
@@ -204,7 +212,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             modifier = Modifier
                                 .size(160.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .border(2.dp, IplGold, RoundedCornerShape(16.dp))
+                                .border(2.dp, themeAccent, RoundedCornerShape(16.dp))
                         ) {
                             DriveImage(
                                 url = player.imageUrl,
@@ -218,7 +226,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                         // Player Name & Role
                         Text(
                             text = player.name,
-                            color = Color.White,
+                            color = textMain,
                             fontSize = 24.sp,
                             fontWeight = FontWeight.ExtraBold,
                             textAlign = TextAlign.Center
@@ -227,15 +235,15 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatChip(text = player.role.label, backgroundColor = IplGold.copy(alpha = 0.2f), textColor = IplGold)
-                            StatChip(text = "Base: ${player.basePrice.formatIplCurrency()}", backgroundColor = StadiumSurface, textColor = Color.White)
+                            StatChip(text = player.role.label, backgroundColor = themeAccent.copy(alpha = 0.2f), textColor = themeAccent)
+                            StatChip(text = "Base: ${player.basePrice.formatIplCurrency()}", backgroundColor = surfaceBg, textColor = textMain)
                         }
 
                         if (player.stats.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = player.stats,
-                                color = Color.Gray,
+                                color = textSub,
                                 fontSize = 12.sp,
                                 textAlign = TextAlign.Center
                             )
@@ -243,7 +251,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                         Divider(
                             modifier = Modifier.padding(vertical = 14.dp),
-                            color = Color.White.copy(alpha = 0.1f)
+                            color = textSub.copy(alpha = 0.2f)
                         )
 
                         // --- Live Bid Dashboard ---
@@ -253,7 +261,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                         ) {
                             Text(
                                 text = if (player.status == PlayerStatus.SOLD) "SOLD PRICE" else "CURRENT BID",
-                                color = Color.Gray,
+                                color = textSub,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp
@@ -265,7 +273,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             ) { bidVal ->
                                 Text(
                                     text = bidVal.formatIplCurrency(),
-                                    color = if (player.status == PlayerStatus.SOLD) BidGreen else IplGold,
+                                    color = if (player.status == PlayerStatus.SOLD) BidGreen else themeAccent,
                                     fontSize = 32.sp,
                                     fontWeight = FontWeight.Black
                                 )
@@ -279,12 +287,12 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                 TeamBadge(team = bidderTeam, showPurse = true)
                             } else {
                                 Surface(
-                                    color = StadiumSurface,
+                                    color = surfaceBg,
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text(
                                         text = "No Bids Placed Yet",
-                                        color = Color.LightGray,
+                                        color = textSub,
                                         fontSize = 12.sp,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                     )
@@ -297,7 +305,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                 // No active player state
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -305,10 +313,10 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                         modifier = Modifier.padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = IplGold, modifier = Modifier.size(48.dp))
+                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = themeAccent, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "Auction Stage Empty", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Select a player from the roster to start bidding", color = Color.Gray, fontSize = 13.sp)
+                        Text(text = "Auction Stage Empty", color = textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Select a player from the roster to start bidding", color = textSub, fontSize = 13.sp)
                     }
                 }
             }
@@ -320,8 +328,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                 val myTeamId = currentUser?.assignedTeamId
                 val isMyCaptainReady = myTeamId != null && (captainReadyMap[myTeamId] == true)
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = if (isMyCaptainReady) BidGreen.copy(alpha = 0.15f) else StadiumSurface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isMyCaptainReady) BidGreen else IplGold.copy(alpha = 0.5f)),
+                    colors = CardDefaults.cardColors(containerColor = if (isMyCaptainReady) BidGreen.copy(alpha = 0.15f) else surfaceBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isMyCaptainReady) BidGreen else themeAccent.copy(alpha = 0.5f)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -334,19 +342,19 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             Icon(
                                 imageVector = if (isMyCaptainReady) Icons.Default.CheckCircle else Icons.Default.Bolt,
                                 contentDescription = null,
-                                tint = if (isMyCaptainReady) BidGreen else IplGold
+                                tint = if (isMyCaptainReady) BidGreen else themeAccent
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
                                     text = if (isMyCaptainReady) "YOU ARE READY FOR AUCTION ✅" else "CAPTAIN READINESS CHECK",
-                                    color = if (isMyCaptainReady) BidGreen else Color.White,
+                                    color = if (isMyCaptainReady) BidGreen else textMain,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
                                 Text(
                                     text = if (isMyCaptainReady) "Waiting for other captains & auctioneer to begin..." else "Click ready so auctioneer can begin bidding!",
-                                    color = Color.LightGray,
+                                    color = textSub,
                                     fontSize = 11.sp
                                 )
                             }
@@ -367,8 +375,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                 val readyCount = joinedCaptainTeams.count { captainReadyMap[it.id] == true }
                 val allReady = readyCount == joinedCaptainTeams.size
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumSurface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, if (allReady || isBiddingStarted) BidGreen else IplGold.copy(alpha = 0.5f)),
+                    colors = CardDefaults.cardColors(containerColor = surfaceBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (allReady || isBiddingStarted) BidGreen else themeAccent.copy(alpha = 0.5f)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -382,12 +390,12 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                 Icon(
                                     imageVector = if (allReady || isBiddingStarted) Icons.Default.CheckCircle else Icons.Default.HourglassTop,
                                     contentDescription = null,
-                                    tint = if (allReady || isBiddingStarted) BidGreen else IplGold
+                                    tint = if (allReady || isBiddingStarted) BidGreen else themeAccent
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = if (allReady || isBiddingStarted) "ALL CAPTAINS READY ($readyCount/${joinedCaptainTeams.size}) 🚀" else "WAITING FOR CAPTAINS ($readyCount/${joinedCaptainTeams.size} READY)",
-                                    color = if (allReady || isBiddingStarted) BidGreen else IplGold,
+                                    color = if (allReady || isBiddingStarted) BidGreen else themeAccent,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp
                                 )
@@ -402,7 +410,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                 }
                             } else if (!isBiddingStarted) {
                                 TextButton(onClick = { viewModel.startBidding() }) {
-                                    Text("Force Start (Override)", color = Color.Gray, fontSize = 10.sp)
+                                    Text("Force Start (Override)", color = textSub, fontSize = 10.sp)
                                 }
                             }
                         }
@@ -414,13 +422,13 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             joinedCaptainTeams.forEach { team ->
                                 val isReady = captainReadyMap[team.id] == true
                                 Surface(
-                                    color = if (isReady) BidGreen.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isReady) BidGreen else Color.Gray.copy(alpha = 0.4f)),
+                                    color = if (isReady) BidGreen.copy(alpha = 0.15f) else textMain.copy(alpha = 0.05f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isReady) BidGreen else textSub.copy(alpha = 0.4f)),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
                                         text = "${team.shortCode}: ${if (isReady) "READY ✅" else "WAITING ⏳"}",
-                                        color = if (isReady) BidGreen else Color.LightGray,
+                                        color = if (isReady) BidGreen else textSub,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
@@ -436,7 +444,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
         // --- Bidding Controls Section ---
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -447,7 +455,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                     ) {
                         Text(
                             text = "BIDDING TEAM",
-                            color = Color.Gray,
+                            color = textSub,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -463,11 +471,11 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                         ) {
                             Text(
                                 text = if (isTeamLocked) "🔒 ${currentBiddingTeam?.name ?: "My Team"}" else (currentBiddingTeam?.name ?: "Select Team"),
-                                color = IplGold,
+                                color = themeAccent,
                                 fontWeight = FontWeight.Bold
                             )
                             if (!isTeamLocked) {
-                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = IplGold)
+                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = themeAccent)
                             }
                         }
                     }
@@ -484,7 +492,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                     Text(
                         text = "QUICK BID INCREMENTS",
-                        color = Color.Gray,
+                        color = textSub,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -498,13 +506,13 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                     if (!isAuctionReady) {
                         Surface(
-                            color = IplGold.copy(alpha = 0.1f),
+                            color = themeAccent.copy(alpha = 0.1f),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                         ) {
                             Text(
                                 text = "⏳ Bidding is locked until all joined captains click READY",
-                                color = IplGold,
+                                color = themeAccent,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(8.dp),
@@ -565,7 +573,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
         if (currentUser?.role == UserRole.ADMIN_AUCTIONEER) {
             item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumSurface),
+                    colors = CardDefaults.cardColors(containerColor = surfaceBg),
                     shape = RoundedCornerShape(16.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f))
                 ) {
@@ -601,7 +609,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                             viewModel.sellActivePlayerAtBasePrice(currentBiddingTeam.id)
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                                     modifier = Modifier.weight(1f),
                                     enabled = activePlayer != null && currentBiddingTeam != null && activePlayer?.status != PlayerStatus.SOLD
                                 ) {
@@ -629,7 +637,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
         item {
             Text(
                 text = "LIVE BIDDING LOG",
-                color = Color.Gray,
+                color = textSub,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -640,7 +648,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             item {
                 Text(
                     text = "No bids recorded for this player yet",
-                    color = Color.DarkGray,
+                    color = textSub,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
@@ -648,7 +656,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
         } else {
             items(activeBids) { bid ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -661,13 +669,13 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                     ) {
                         Text(
                             text = bid.teamName,
-                            color = Color.White,
+                            color = textMain,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
                         Text(
                             text = bid.amount.formatIplCurrency(),
-                            color = IplGold,
+                            color = themeAccent,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 14.sp
                         )
@@ -681,7 +689,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     if (showTeamSelectorDialog) {
         AlertDialog(
             onDismissRequest = { showTeamSelectorDialog = false },
-            title = { Text("Select Bidding Team", color = Color.White) },
+            title = { Text("Select Bidding Team", color = textMain) },
             text = {
                 Column {
                     teams.forEach { team ->
@@ -696,15 +704,15 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = team.name, color = Color.White, fontWeight = FontWeight.Bold)
-                            Text(text = team.remainingPurse.formatIplCurrency(), color = IplGold)
+                            Text(text = team.name, color = textMain, fontWeight = FontWeight.Bold)
+                            Text(text = team.remainingPurse.formatIplCurrency(), color = themeAccent)
                         }
-                        Divider(color = Color.DarkGray)
+                        Divider(color = textSub.copy(alpha = 0.3f))
                     }
                 }
             },
             confirmButton = {},
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -712,6 +720,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     if (showSpinWheelModal) {
         SpinWheelModal(
             players = players,
+            isDarkTheme = isDarkTheme,
             onDismiss = { showSpinWheelModal = false },
             onPlayerSelected = { selectedPlayer ->
                 viewModel.selectActivePlayer(selectedPlayer.id)

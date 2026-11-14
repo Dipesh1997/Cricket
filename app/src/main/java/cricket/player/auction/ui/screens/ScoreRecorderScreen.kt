@@ -46,6 +46,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val activeMatchState by viewModel.activeMatch.collectAsState()
     val activeMatch = activeMatchState
     val ballRecords by viewModel.ballRecords.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     var showCreateMatchModal by remember { mutableStateOf(false) }
     var showCoinTossModal by remember { mutableStateOf(false) }
@@ -156,7 +164,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     }
 
     Scaffold(
-        containerColor = StadiumDark
+        containerColor = screenBg
     ) { innerPadding ->
         Column(
             modifier = Modifier

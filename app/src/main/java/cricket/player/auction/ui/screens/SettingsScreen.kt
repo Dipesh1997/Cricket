@@ -36,6 +36,14 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
     val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
     val activeTournament by viewModel.activeTournament.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     var selectedRole by remember { mutableStateOf(currentUser?.role ?: UserRole.ADMIN_AUCTIONEER) }
     var emailInput by remember { mutableStateOf(currentUser?.email ?: "admin@cricket.com") }
@@ -43,84 +51,45 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
     var avatarUrl by remember { mutableStateOf(currentUser?.photoUrl ?: "") }
     var showResetConfirmModal by remember { mutableStateOf(false) }
 
-    // Export Backup File Launcher
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val json = viewModel.exportDatabaseJson()
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(json.toByteArray())
-                }
-                Toast.makeText(context, "Database exported & saved to file!", Toast.LENGTH_LONG).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(context, "Failed to export: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    // Import Backup File Launcher
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val json = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    inputStream.bufferedReader().use { it.readText() }
-                }
-                if (json != null && viewModel.importDatabaseJson(json)) {
-                    Toast.makeText(context, "Database restored successfully!", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(context, "Invalid JSON database backup file", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(context, "Failed to import: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(StadiumDark)
+            .background(screenBg)
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
             text = "APP SETTINGS & DATABASE",
-            color = IplGold,
+            color = themeAccent,
             fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold
         )
         Text(
-            text = "Manage local database backup export/import, storage & user roles",
-            color = Color.Gray,
+            text = "Manage local database backup/restore, storage & user roles",
+            color = textSub,
             fontSize = 12.sp
         )
 
         // --- Export & Import Backup Card ---
         Card(
-            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth(),
-            border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.5f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.5f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.Save, contentDescription = null, tint = IplGold)
+                    Icon(imageVector = Icons.Default.Save, contentDescription = null, tint = themeAccent)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "DATABASE EXPORT & IMPORT BACKUP", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = "BACKUP & RESTORE", color = textMain, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Save your entire database (tournaments, teams, players, scorecards) to a local JSON file or restore from a previous backup.",
-                    color = Color.LightGray,
+                    text = "Automatic one-click backup and restore directly to the 'Cricket' folder in your device's File Manager (Documents/Cricket/cricket_backup.json).",
+                    color = textSub,
                     fontSize = 12.sp
                 )
 
@@ -130,31 +99,46 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Export Button
+                    // Backup Button
                     Button(
                         onClick = {
-                            val fileName = "cricket_backup_${System.currentTimeMillis()}.json"
-                            exportLauncher.launch(fileName)
+                            viewModel.backupToCricketFolder().fold(
+                                onSuccess = { file ->
+                                    Toast.makeText(context, "✅ Backed up to Cricket folder in File Manager!", Toast.LENGTH_LONG).show()
+                                },
+                                onFailure = { err ->
+                                    Toast.makeText(context, "❌ Backup failed: ${err.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            )
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("EXPORT BACKUP", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("BACKUP", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
-                    // Import Button
+                    // Restore Button
                     Button(
-                        onClick = { importLauncher.launch("*/*") },
+                        onClick = {
+                            viewModel.restoreFromCricketFolder().fold(
+                                onSuccess = {
+                                    Toast.makeText(context, "✅ Restored successfully from Cricket folder!", Toast.LENGTH_LONG).show()
+                                },
+                                onFailure = { err ->
+                                    Toast.makeText(context, "❌ Restore failed: ${err.message}", Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(imageVector = Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("IMPORT BACKUP", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("RESTORE", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }
@@ -162,22 +146,22 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
 
         // --- Local Database Status Card ---
         Card(
-            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.Storage, contentDescription = null, tint = IplGold)
+                    Icon(imageVector = Icons.Default.Storage, contentDescription = null, tint = themeAccent)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "LOCAL OFFLINE DATABASE ENGINE", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = "LOCAL OFFLINE DATABASE ENGINE", color = textMain, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = "100% offline-first architecture. All tournament rosters, bids, live scorecards, and MVP leaderboards are stored locally on your device.",
-                    color = Color.LightGray,
+                    color = textSub,
                     fontSize = 12.sp
                 )
 
@@ -213,15 +197,15 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
 
         // --- User Profile & Role Settings Card ---
         Card(
-            colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+            colors = CardDefaults.cardColors(containerColor = cardBg),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = IplGold)
+                    Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = themeAccent)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "PROFILE & PERMISSION ROLE", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = "PROFILE & PERMISSION ROLE", color = textMain, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -254,7 +238,7 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Text(text = "Select Permission Role:", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Select Permission Role:", color = textSub, fontSize = 12.sp, fontWeight = FontWeight.Bold)
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     UserRole.values().forEach { role ->
@@ -268,9 +252,9 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
                                     selectedRole = role
                                     viewModel.switchUserRole(role)
                                 },
-                                colors = RadioButtonDefaults.colors(selectedColor = IplGold)
+                                colors = RadioButtonDefaults.colors(selectedColor = themeAccent)
                             )
-                            Text(text = role.label, color = Color.White, fontSize = 13.sp)
+                            Text(text = role.label, color = textMain, fontSize = 13.sp)
                         }
                     }
                 }
@@ -286,7 +270,7 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
             text = {
                 Text(
                     text = "This will permanently remove all tournaments, teams, players, bids, and match scorecards. The app will start completely fresh for new user entries.",
-                    color = Color.LightGray,
+                    color = textSub,
                     fontSize = 13.sp
                 )
             },
@@ -304,10 +288,10 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showResetConfirmModal = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 }

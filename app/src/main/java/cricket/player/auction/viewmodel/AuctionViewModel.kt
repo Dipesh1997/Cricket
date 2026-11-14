@@ -357,9 +357,20 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         return localRepository.exportDatabaseJson()
     }
 
-
     fun importDatabaseJson(jsonString: String): Boolean {
         return localRepository.importDatabaseJson(jsonString)
+    }
+
+    fun backupToCricketFolder(): Result<java.io.File> {
+        val json = localRepository.exportDatabaseJson()
+        return cricket.player.auction.data.local.CricketBackupManager.backupToCricketFolder(getApplication(), json)
+    }
+
+    fun restoreFromCricketFolder(): Result<Boolean> {
+        val result = cricket.player.auction.data.local.CricketBackupManager.restoreFromCricketFolder(getApplication())
+        return result.map { jsonString ->
+            localRepository.importDatabaseJson(jsonString)
+        }
     }
 
     fun clearAllData() {

@@ -30,9 +30,17 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 fun PointsTableScreen(viewModel: AuctionViewModel) {
     val pointsTable by viewModel.pointsTable.collectAsState()
     val activeTournament by viewModel.activeTournament.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     Scaffold(
-        containerColor = StadiumDark
+        containerColor = screenBg
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -41,14 +49,14 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
                 .padding(16.dp)
         ) {
             Text(
-                text = activeTournament?.name ?: "IPL Tournament",
-                color = Color.White,
+                text = activeTournament?.name ?: "Cricket Tournament",
+                color = textMain,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
                 text = "Automated Standings & Net Run Rate (NRR)",
-                color = Color.Gray,
+                color = textSub,
                 fontSize = 12.sp
             )
 
@@ -56,7 +64,7 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
 
             // Table Header Bar
             Surface(
-                color = StadiumCardDark,
+                color = cardBg,
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Row(
@@ -65,12 +73,12 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("#", color = IplGold, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(24.dp))
-                    Text("TEAM", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("P", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
-                    Text("W", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
-                    Text("L", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
-                    Text("PTS", color = IplGold, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(36.dp))
+                    Text("#", color = themeAccent, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(24.dp))
+                    Text("TEAM", color = textSub, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("P", color = textSub, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
+                    Text("W", color = textSub, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
+                    Text("L", color = textSub, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
+                    Text("PTS", color = themeAccent, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(36.dp))
                     Text("NRR", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(54.dp))
                 }
             }
@@ -85,16 +93,16 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
+                        Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = textSub, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("No match records found", color = Color.LightGray, fontSize = 14.sp)
-                        Text("Record live matches to update standings", color = Color.Gray, fontSize = 12.sp)
+                        Text("No match records found", color = textMain, fontSize = 14.sp)
+                        Text("Record live matches to update standings", color = textSub, fontSize = 12.sp)
                     }
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(pointsTable) { index, entry ->
-                        PointsTableRow(rank = index + 1, entry = entry)
+                        PointsTableRow(rank = index + 1, entry = entry, isDarkTheme = isDarkTheme)
                     }
                 }
             }
@@ -103,12 +111,17 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
 }
 
 @Composable
-fun PointsTableRow(rank: Int, entry: PointsTableEntry) {
+fun PointsTableRow(rank: Int, entry: PointsTableEntry, isDarkTheme: Boolean = true) {
     val teamColor = parseColorHex(entry.primaryColorHex)
     val nrrFormatted = if (entry.netRunRate >= 0) "+${String.format("%.3f", entry.netRunRate)}" else String.format("%.3f", entry.netRunRate)
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.LightGray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         shape = RoundedCornerShape(12.dp),
         border = if (rank <= 4) androidx.compose.foundation.BorderStroke(1.dp, teamColor) else null,
         modifier = Modifier.fillMaxWidth()
@@ -122,13 +135,13 @@ fun PointsTableRow(rank: Int, entry: PointsTableEntry) {
             // Rank Badge
             Surface(
                 shape = CircleShape,
-                color = if (rank <= 4) IplGold else StadiumSurface,
+                color = if (rank <= 4) themeAccent else surfaceBg,
                 modifier = Modifier.size(24.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = "$rank",
-                        color = if (rank <= 4) Color.Black else Color.White,
+                        color = if (rank <= 4) Color.Black else textMain,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp
                     )
@@ -154,16 +167,16 @@ fun PointsTableRow(rank: Int, entry: PointsTableEntry) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = entry.teamName,
-                    color = Color.White,
+                    color = textMain,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
             }
 
-            Text("${entry.matchesPlayed}", color = Color.LightGray, fontSize = 12.sp, modifier = Modifier.width(28.dp))
+            Text("${entry.matchesPlayed}", color = textSub, fontSize = 12.sp, modifier = Modifier.width(28.dp))
             Text("${entry.won}", color = BidGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(28.dp))
             Text("${entry.lost}", color = UnsoldRed, fontSize = 12.sp, modifier = Modifier.width(28.dp))
-            Text("${entry.points}", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, modifier = Modifier.width(36.dp))
+            Text("${entry.points}", color = themeAccent, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, modifier = Modifier.width(36.dp))
             Text(nrrFormatted, color = NeonBlue, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, modifier = Modifier.width(54.dp))
         }
     }

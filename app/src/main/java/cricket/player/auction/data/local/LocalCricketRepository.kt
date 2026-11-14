@@ -56,7 +56,7 @@ class LocalCricketRepository(context: Context) {
     private val _ballRecords = MutableStateFlow<List<BallRecord>>(emptyList())
     val ballRecords: StateFlow<List<BallRecord>> = _ballRecords.asStateFlow()
 
-    private val _activeTournamentId = MutableStateFlow("t1")
+    private val _activeTournamentId = MutableStateFlow("")
     val activeTournamentId: StateFlow<String> = _activeTournamentId.asStateFlow()
 
     private val _activePlayerId = MutableStateFlow<String?>(null)

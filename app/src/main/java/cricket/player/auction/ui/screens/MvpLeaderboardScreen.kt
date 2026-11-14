@@ -30,6 +30,14 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 @Composable
 fun MvpLeaderboardScreen(viewModel: AuctionViewModel) {
     val mvpLeaderboard by viewModel.mvpLeaderboard.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     var selectedTab by remember { mutableStateOf(0) } // 0: Overall MVP, 1: Orange Cap (Runs), 2: Purple Cap (Wkts)
 
@@ -42,7 +50,7 @@ fun MvpLeaderboardScreen(viewModel: AuctionViewModel) {
     }
 
     Scaffold(
-        containerColor = StadiumDark
+        containerColor = screenBg
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -52,13 +60,13 @@ fun MvpLeaderboardScreen(viewModel: AuctionViewModel) {
         ) {
             Text(
                 text = "Most Valuable Player Points & Career History",
-                color = Color.White,
+                color = textMain,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = "Points calculated for Runs, 4s, 6s, Wickets, Dots, Maidens & Catches",
-                color = Color.Gray,
+                color = textSub,
                 fontSize = 11.sp
             )
 
@@ -67,23 +75,23 @@ fun MvpLeaderboardScreen(viewModel: AuctionViewModel) {
             // Category Filter Tabs
             TabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = StadiumCardDark,
-                contentColor = IplGold
+                containerColor = cardBg,
+                contentColor = themeAccent
             ) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("⭐ Overall MVP", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                    text = { Text("⭐ Overall MVP", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (selectedTab == 0) themeAccent else textSub) }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("🏏 Orange Cap", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                    text = { Text("🏏 Orange Cap", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (selectedTab == 1) themeAccent else textSub) }
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    text = { Text("⚡ Purple Cap", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                    text = { Text("⚡ Purple Cap", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (selectedTab == 2) themeAccent else textSub) }
                 )
             }
 
@@ -94,12 +102,12 @@ fun MvpLeaderboardScreen(viewModel: AuctionViewModel) {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No player history available yet", color = Color.Gray)
+                    Text("No player history available yet", color = textSub)
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     itemsIndexed(displayedList) { index, playerStats ->
-                        MvpPlayerCard(rank = index + 1, stats = playerStats)
+                        MvpPlayerCard(rank = index + 1, stats = playerStats, isDarkTheme = isDarkTheme)
                     }
                 }
             }
@@ -108,11 +116,17 @@ fun MvpLeaderboardScreen(viewModel: AuctionViewModel) {
 }
 
 @Composable
-fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats) {
+fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats, isDarkTheme: Boolean = true) {
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
+
     Card(
-        colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         shape = RoundedCornerShape(16.dp),
-        border = if (rank == 1) androidx.compose.foundation.BorderStroke(2.dp, IplGold) else null,
+        border = if (rank == 1) androidx.compose.foundation.BorderStroke(2.dp, themeAccent) else null,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -123,13 +137,13 @@ fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats) {
                 // Rank Number / Badge
                 Surface(
                     shape = CircleShape,
-                    color = if (rank == 1) IplGold else if (rank <= 3) NeonBlue else StadiumSurface,
+                    color = if (rank == 1) themeAccent else if (rank <= 3) NeonBlue else surfaceBg,
                     modifier = Modifier.size(28.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = "#$rank",
-                            color = if (rank <= 3) Color.Black else Color.White,
+                            color = if (rank <= 3) Color.Black else textMain,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 11.sp
                         )
@@ -143,7 +157,7 @@ fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats) {
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape)
-                        .border(1.dp, IplGold, CircleShape)
+                        .border(1.dp, themeAccent, CircleShape)
                 ) {
                     DriveImage(url = stats.photoUrl, contentDescription = stats.playerName, modifier = Modifier.fillMaxSize())
                 }
@@ -153,31 +167,31 @@ fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stats.playerName,
-                        color = Color.White,
+                        color = textMain,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
                     Text(
                         text = "${stats.playerRole.label} • ${stats.matches} Matches",
-                        color = Color.Gray,
+                        color = textSub,
                         fontSize = 11.sp
                     )
                 }
 
                 // CricHeroes MVP Points Badge
                 Surface(
-                    color = IplGold.copy(alpha = 0.2f),
+                    color = themeAccent.copy(alpha = 0.2f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = IplGold, modifier = Modifier.size(14.dp))
+                        Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = themeAccent, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "${stats.mvpPoints.toInt()} pts",
-                            color = IplGold,
+                            color = themeAccent,
                             fontWeight = FontWeight.Black,
                             fontSize = 13.sp
                         )
@@ -192,9 +206,9 @@ fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                StatChip(text = "Runs: ${stats.runsScored} (SR: ${String.format("%.1f", stats.strikeRate)})", backgroundColor = StadiumSurface, textColor = Color.White)
-                StatChip(text = "Wkts: ${stats.wicketsTaken} (Econ: ${String.format("%.1f", stats.economyRate)})", backgroundColor = StadiumSurface, textColor = BidGreen)
-                StatChip(text = "Catches: ${stats.catches}", backgroundColor = StadiumSurface, textColor = NeonBlue)
+                StatChip(text = "Runs: ${stats.runsScored} (SR: ${String.format("%.1f", stats.strikeRate)})", backgroundColor = surfaceBg, textColor = textMain)
+                StatChip(text = "Wkts: ${stats.wicketsTaken} (Econ: ${String.format("%.1f", stats.economyRate)})", backgroundColor = surfaceBg, textColor = BidGreen)
+                StatChip(text = "Catches: ${stats.catches}", backgroundColor = surfaceBg, textColor = NeonBlue)
             }
         }
     }

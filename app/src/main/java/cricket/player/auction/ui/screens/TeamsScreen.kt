@@ -48,6 +48,14 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
     val teams by viewModel.teams.collectAsState()
     val players by viewModel.players.collectAsState()
     val activeTournament by viewModel.activeTournament.collectAsState()
+    val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val surfaceBg = if (isDarkTheme) StadiumSurface else LightPitchSurface
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
 
     var selectedTeamForRoster by remember { mutableStateOf<Team?>(null) }
     var showCreateTeamDialog by remember { mutableStateOf(false) }
@@ -65,7 +73,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = "Add Team")
             }
         },
-        containerColor = StadiumDark
+        containerColor = screenBg
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -73,33 +81,43 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // Top Header
+            // Top Header: Single row with title and team count chip
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "TEAMS & SQUADS",
+                            color = themeAccent,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        StatChip(
+                            text = "${teams.size} TEAMS",
+                            backgroundColor = surfaceBg,
+                            textColor = themeAccent
+                        )
+                    }
                     Text(
-                        text = "TEAMS & SQUAD DASHBOARD",
-                        color = IplGold,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "Click a team card to view squad, edit details or add players",
-                        color = Color.Gray,
-                        fontSize = 12.sp
+                        text = "Click a team card to view squad, edit or add players",
+                        color = textSub,
+                        fontSize = 12.sp,
+                        maxLines = 1
                     )
                 }
-                StatChip(text = "${teams.size} TEAMS", backgroundColor = StadiumSurface, textColor = IplGold)
             }
 
             if (teams.isEmpty()) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -107,8 +125,8 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         modifier = Modifier.padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(text = "No Teams Registered Yet", color = Color.White, fontWeight = FontWeight.Bold)
-                        Text(text = "Tap the + button to create a custom team", color = Color.Gray, fontSize = 12.sp)
+                        Text(text = "No Teams Registered Yet", color = textMain, fontWeight = FontWeight.Bold)
+                        Text(text = "Tap the + button to create a custom team", color = textSub, fontSize = 12.sp)
                     }
                 }
             } else {
@@ -122,6 +140,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                             team = team,
                             squadCount = squadCount,
                             overseasCount = overseasCount,
+                            isDarkTheme = isDarkTheme,
                             onClick = { selectedTeamForRoster = team },
                             onEditClick = { editingTeam = team },
                             onDeleteClick = { deletingTeam = team }
@@ -244,10 +263,10 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = { selectedTeamForRoster = null }) {
-                    Text("Close", color = Color.Gray)
+                    Text("Close", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -263,7 +282,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
 
         AlertDialog(
             onDismissRequest = { showAddPlayerForTeamDialog = null },
-            title = { Text("Add New Player to ${targetTeam.shortCode}", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Add New Player to ${targetTeam.shortCode}", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -289,7 +308,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                             onCheckedChange = { isOverseas = it },
                             colors = CheckboxDefaults.colors(checkedColor = NeonBlue)
                         )
-                        Text("Overseas Player", color = Color.White, fontSize = 13.sp)
+                        Text("Overseas Player", color = textMain, fontSize = 13.sp)
                     }
 
                     OutlinedTextField(
@@ -336,10 +355,10 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showAddPlayerForTeamDialog = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -354,7 +373,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
 
         AlertDialog(
             onDismissRequest = { showCreateTeamDialog = false },
-            title = { Text("Create Custom Team", color = Color.White) },
+            title = { Text("Create Custom Team", color = textMain) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -427,10 +446,10 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showCreateTeamDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -446,7 +465,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
 
         AlertDialog(
             onDismissRequest = { editingTeam = null },
-            title = { Text("Edit Team ${target.shortCode}", color = Color.White, fontWeight = FontWeight.Bold) },
+            title = { Text("Edit Team ${target.shortCode}", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -517,10 +536,10 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { editingTeam = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 
@@ -531,7 +550,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             onDismissRequest = { deletingTeam = null },
             title = { Text("Delete Team?", color = UnsoldRed, fontWeight = FontWeight.Bold) },
             text = {
-                Text("Are you sure you want to delete '${target.name}' (${target.shortCode})?", color = Color.LightGray)
+                Text("Are you sure you want to delete '${target.name}' (${target.shortCode})?", color = textSub)
             },
             confirmButton = {
                 Button(
@@ -546,10 +565,10 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { deletingTeam = null }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 }
@@ -559,6 +578,7 @@ fun TeamPurseCard(
     team: Team,
     squadCount: Int,
     overseasCount: Int,
+    isDarkTheme: Boolean = true,
     onClick: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
@@ -567,8 +587,12 @@ fun TeamPurseCard(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+
     Card(
-        colors = CardDefaults.cardColors(containerColor = StadiumCardDark),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -581,7 +605,10 @@ fun TeamPurseCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(42.dp)
@@ -595,16 +622,17 @@ fun TeamPurseCard(
                             fontSize = 14.sp
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = team.name,
-                            color = Color.White,
+                            color = textMain,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            fontSize = 15.sp,
+                            maxLines = 1
                         )
                         if (team.inviteCode.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(3.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Surface(
                                 color = IplGold.copy(alpha = 0.15f),
                                 shape = RoundedCornerShape(6.dp),
@@ -619,20 +647,22 @@ fun TeamPurseCard(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
                                     Text(
                                         text = "INVITE: ${team.inviteCode}",
                                         color = IplGold,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
                                     Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
                                 }
                             }
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatChip(
@@ -641,7 +671,7 @@ fun TeamPurseCard(
                         textColor = IplGold
                     )
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     IconButton(onClick = onEditClick) {
                         Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Team", tint = IplGold, modifier = Modifier.size(18.dp))
@@ -661,14 +691,15 @@ fun TeamPurseCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.Group, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(14.dp))
+                    Icon(imageVector = Icons.Default.Group, contentDescription = null, tint = textSub, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Squad: $squadCount/${team.maxSlots}",
-                        color = Color.LightGray,
+                        color = textMain,
                         fontSize = 12.sp
                     )
                 }
