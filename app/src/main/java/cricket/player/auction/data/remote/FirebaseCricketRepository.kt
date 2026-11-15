@@ -5,6 +5,7 @@ import android.os.Build
 import android.provider.Settings
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.*
+import cricket.player.auction.BuildConfig
 import cricket.player.auction.data.local.DatabaseSchema
 import cricket.player.auction.data.local.LocalDatabaseManager
 import cricket.player.auction.model.*
@@ -96,7 +97,7 @@ class FirebaseCricketRepository(
                     "model" to Build.MODEL,
                     "androidVersion" to Build.VERSION.RELEASE,
                     "sdkInt" to Build.VERSION.SDK_INT,
-                    "appVersion" to "2.5",
+                    "appVersion" to BuildConfig.VERSION_NAME,
                     "lastSeenTimestamp" to System.currentTimeMillis(),
                     "lastSeenDate" to dateFormat.format(Date())
                 )
