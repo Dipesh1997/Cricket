@@ -306,6 +306,14 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.togglePlayerFixedSet(playerId, isFixed)
     }
 
+    fun setMultiplePlayersFixedSet(playerIds: Set<String>, isFixed: Boolean) {
+        localRepository.setMultiplePlayersFixedSet(playerIds, isFixed)
+    }
+
+    fun clearAllFixedSets(tournamentId: String) {
+        localRepository.clearAllFixedSets(tournamentId)
+    }
+
     fun markActivePlayerUnsold() {
         val player = activePlayer.value ?: return
         localRepository.markUnsold(player.id)

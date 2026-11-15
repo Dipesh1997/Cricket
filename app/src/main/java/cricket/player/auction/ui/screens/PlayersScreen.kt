@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Gavel
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.components.DriveImage
+import cricket.player.auction.ui.components.FixedSetPlayerSelectorDialog
 import cricket.player.auction.ui.components.PhotoUploaderField
 import cricket.player.auction.ui.components.StatChip
 import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
@@ -66,6 +68,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
     var editingPlayer by remember { mutableStateOf<Player?>(null) }
     var deletingPlayer by remember { mutableStateOf<Player?>(null) }
     var editingPhotoPlayer by remember { mutableStateOf<Player?>(null) }
+    var showFixedSetSelectorModal by remember { mutableStateOf(false) }
 
     val filteredPlayers = players.filter { player ->
         val matchesSearch = player.name.contains(searchQuery, ignoreCase = true) ||
@@ -95,17 +98,43 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            Text(
-                text = "PLAYER ROSTER",
-                color = themeAccent,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Text(
-                text = "Manage auction set list, player details & photos",
-                color = textSub,
-                fontSize = 12.sp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "PLAYER ROSTER",
+                        color = themeAccent,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "Manage auction set list, player details & photos",
+                        color = textSub,
+                        fontSize = 12.sp
+                    )
+                }
+                if (isAdmin) {
+                    val fixedCount = players.count { it.status == PlayerStatus.UP_NEXT && it.isFixedSet }
+                    Surface(
+                        onClick = { showFixedSetSelectorModal = true },
+                        color = surfaceBg,
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistAddCheck, contentDescription = null, tint = themeAccent, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Fixed Set ($fixedCount) 📝", color = textMain, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
 
             if (isSpectator) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -725,6 +754,29 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                 }
             },
             containerColor = cardBg
+        )
+    }
+
+    // --- Fixed Set Multi-Player Checkbox Selector Dialog ---
+    if (showFixedSetSelectorModal) {
+        val tourneyTeams = remember(teams, activeTournament) {
+            teams.filter { it.tournamentId == activeTournament?.id }
+        }
+        FixedSetPlayerSelectorDialog(
+            players = players,
+            teams = tourneyTeams,
+            isDarkTheme = isDarkTheme,
+            onTogglePlayerFixedSet = { playerId, isFixed ->
+                viewModel.togglePlayerFixedSet(playerId, isFixed)
+            },
+            onSelectNextBatch = { count ->
+                val unselected = players.filter { it.tournamentId == activeTournament?.id && it.status == PlayerStatus.UP_NEXT && !it.isFixedSet }.take(count)
+                viewModel.setMultiplePlayersFixedSet(unselected.map { it.id }.toSet(), true)
+            },
+            onClearAllFixed = {
+                activeTournament?.id?.let { viewModel.clearAllFixedSets(it) }
+            },
+            onDismiss = { showFixedSetSelectorModal = false }
         )
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -56,6 +57,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     var selectedBiddingTeamId by remember { mutableStateOf<String?>(null) }
     var showTeamSelectorDialog by remember { mutableStateOf(false) }
     var showSpinWheelModal by remember { mutableStateOf(false) }
+    var showFixedSetSelectorModal by remember { mutableStateOf(false) }
 
     // Auto-select user assigned team if team captain
     LaunchedEffect(currentUser, teams) {
@@ -119,6 +121,26 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             Icon(imageVector = Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("SPIN WHEEL", fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        }
+
+                        // Fixed Set Multi-Select Checkboxes Trigger Button
+                        if (currentUser?.role == UserRole.ADMIN_AUCTIONEER) {
+                            val fixedCount = players.count { it.status == PlayerStatus.UP_NEXT && it.isFixedSet }
+                            Surface(
+                                onClick = { showFixedSetSelectorModal = true },
+                                color = surfaceBg,
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(imageVector = Icons.AutoMirrored.Filled.PlaylistAddCheck, contentDescription = null, tint = themeAccent, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("SET: $fixedCount 📝", color = textMain, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                }
+                            }
                         }
 
                         // Live Timer Badge
@@ -269,7 +291,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             )
                         }
 
-                        Divider(
+                        HorizontalDivider(
                             modifier = Modifier.padding(vertical = 14.dp),
                             color = textSub.copy(alpha = 0.2f)
                         )
@@ -765,7 +787,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             Text(text = team.name, color = textMain, fontWeight = FontWeight.Bold)
                             Text(text = team.remainingPurse.formatIplCurrency(), color = themeAccent)
                         }
-                        Divider(color = textSub.copy(alpha = 0.3f))
+                        HorizontalDivider(color = textSub.copy(alpha = 0.3f))
                     }
                 }
             },
@@ -783,11 +805,44 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             players = players,
             teams = tourneyTeams,
             isDarkTheme = isDarkTheme,
+            onTogglePlayerFixedSet = { playerId, isFixed ->
+                viewModel.togglePlayerFixedSet(playerId, isFixed)
+            },
+            onSelectNextBatch = { count ->
+                val unselected = players.filter { it.tournamentId == activeTournament?.id && it.status == PlayerStatus.UP_NEXT && !it.isFixedSet }.take(count)
+                viewModel.setMultiplePlayersFixedSet(unselected.map { it.id }.toSet(), true)
+            },
+            onClearAllFixed = {
+                activeTournament?.id?.let { viewModel.clearAllFixedSets(it) }
+            },
             onDismiss = { showSpinWheelModal = false },
             onPlayerSelected = { selectedPlayer ->
                 viewModel.selectActivePlayer(selectedPlayer.id)
                 showSpinWheelModal = false
             }
+        )
+    }
+
+    // --- Fixed Set Multi-Player Checkbox Selector Dialog ---
+    if (showFixedSetSelectorModal) {
+        val tourneyTeams = remember(teams, activeTournament) {
+            teams.filter { it.tournamentId == activeTournament?.id }
+        }
+        FixedSetPlayerSelectorDialog(
+            players = players,
+            teams = tourneyTeams,
+            isDarkTheme = isDarkTheme,
+            onTogglePlayerFixedSet = { playerId, isFixed ->
+                viewModel.togglePlayerFixedSet(playerId, isFixed)
+            },
+            onSelectNextBatch = { count ->
+                val unselected = players.filter { it.tournamentId == activeTournament?.id && it.status == PlayerStatus.UP_NEXT && !it.isFixedSet }.take(count)
+                viewModel.setMultiplePlayersFixedSet(unselected.map { it.id }.toSet(), true)
+            },
+            onClearAllFixed = {
+                activeTournament?.id?.let { viewModel.clearAllFixedSets(it) }
+            },
+            onDismiss = { showFixedSetSelectorModal = false }
         )
     }
 }

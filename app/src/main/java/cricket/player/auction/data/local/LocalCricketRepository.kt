@@ -723,6 +723,20 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
+    fun setMultiplePlayersFixedSet(playerIds: Set<String>, isFixed: Boolean) {
+        _players.value = _players.value.map { p ->
+            if (p.id in playerIds) p.copy(isFixedSet = isFixed) else p
+        }
+        persistAsync()
+    }
+
+    fun clearAllFixedSets(tournamentId: String) {
+        _players.value = _players.value.map { p ->
+            if (p.tournamentId == tournamentId) p.copy(isFixedSet = false) else p
+        }
+        persistAsync()
+    }
+
     fun markUnsold(playerId: String) {
         _players.value = _players.value.map { p ->
             if (p.id == playerId) {
