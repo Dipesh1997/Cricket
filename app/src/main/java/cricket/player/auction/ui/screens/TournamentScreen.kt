@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -348,6 +349,11 @@ fun TournamentScreen(
                                     }
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (tourney.isOfflineOnly || tourney.id.startsWith("demo_")) {
+                                            StatChip(text = "OFFLINE DEMO", backgroundColor = themeAccent.copy(alpha = 0.2f), textColor = themeAccent)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                        }
+
                                         if (isActive) {
                                             StatChip(text = "ACTIVE", backgroundColor = BidGreen.copy(alpha = 0.2f), textColor = if (isDarkTheme) BidGreen else LightPitchText)
                                             Spacer(modifier = Modifier.width(6.dp))
@@ -365,7 +371,7 @@ fun TournamentScreen(
                                             }
                                         }
 
-                                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, tint = textSub, modifier = Modifier.size(18.dp))
+                                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = textSub, modifier = Modifier.size(18.dp))
                                     }
                                 }
 

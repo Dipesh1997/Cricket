@@ -440,6 +440,7 @@ function saveToFirebase() {
   try {
     // 3. Vertical tournament objects
     state.tournaments.forEach(tourney => {
+      if (tourney.isOfflineOnly || (tourney.id && tourney.id.startsWith("demo_"))) return;
       const tRef = db.ref("tournaments/" + tourney.id);
 
     // Info node

@@ -123,8 +123,9 @@ class FirebaseCricketRepository(
                     // Check if local has data to sync
                     scope.launch {
                         val localSchema = dbManager.loadDatabase().sanitized()
-                        if (localSchema.tournaments.isNotEmpty()) {
-                            syncDatabaseToFirebase(localSchema)
+                        val validTourneys = localSchema.tournaments.filter { !it.isOfflineOnly && !it.id.startsWith("demo_") }
+                        if (validTourneys.isNotEmpty()) {
+                            syncDatabaseToFirebase(localSchema.copy(tournaments = validTourneys))
                         }
                     }
                     return
@@ -228,7 +229,7 @@ class FirebaseCricketRepository(
                 // Push each tournament as a vertical, expandable object hierarchy
                 for (tourney in schema.tournaments) {
                     // Skip offline-only / demo tournaments from Firebase Realtime Database
-                    if (tourney.isOfflineOnly) continue
+                    if (tourney.isOfflineOnly || tourney.id.startsWith("demo_")) continue
 
                     val tRef = database.reference.child("tournaments").child(tourney.id)
 

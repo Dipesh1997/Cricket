@@ -33,14 +33,20 @@ class LocalCricketRepository(context: Context) {
     private val _tournaments = MutableStateFlow<List<Tournament>>(emptyList())
     val tournaments: StateFlow<List<Tournament>> = _tournaments.asStateFlow()
 
+    fun isDemoOrOffline(tournamentId: String?): Boolean {
+        if (tournamentId.isNullOrBlank()) return false
+        if (tournamentId.startsWith("demo_")) return true
+        return _tournaments.value.find { it.id == tournamentId }?.isOfflineOnly == true
+    }
+
     // Expose all tournaments if Master Admin is active, or only tournaments this device created or joined!
     val userTournaments: StateFlow<List<Tournament>> = combine(_tournaments, _myTournamentIds, _isMasterAdminMode, _hideDemoData) { all, myIds, isMaster, hideDemo ->
         val base = if (isMaster) {
             all
         } else {
-            all.filter { it.id in myIds }
+            all.filter { it.id in myIds || (!it.isOfflineOnly && !it.id.startsWith("demo_")) }
         }
-        if (hideDemo) base.filter { !it.isOfflineOnly } else base
+        if (hideDemo) base.filter { !it.isOfflineOnly && !it.id.startsWith("demo_") } else base
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val _captainReadyMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -127,6 +133,13 @@ class LocalCricketRepository(context: Context) {
             _activeTournamentId.value = remoteSchema.activeTournamentId.ifEmpty { remoteTournaments.firstOrNull()?.id ?: "" }
             _activePlayerId.value = remoteSchema.activePlayerId ?: remoteSchema.players.firstOrNull()?.id
             _activeMatchId.value = remoteSchema.activeMatchId ?: remoteSchema.matches.firstOrNull()?.id
+
+            remoteTournaments.forEach { rTourney ->
+                if (!isDemoOrOffline(rTourney.id)) {
+                    deviceTourneyManager.addTournament(rTourney.id, "ADMIN")
+                }
+            }
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
         } else {
             // Merge: remote updates override matching IDs, local-only entities are preserved
             val mergedTourneys = (remoteTournaments + currentTournaments).distinctBy { it.id }
@@ -145,8 +158,16 @@ class LocalCricketRepository(context: Context) {
             _ballRecords.value = mergedBallRecords
             _captainInvites.value = mergedInvites
 
-            if (_activeTournamentId.value.isBlank() || !_tournaments.value.any { it.id == _activeTournamentId.value }) {
-                _activeTournamentId.value = remoteSchema.activeTournamentId.ifEmpty { _tournaments.value.firstOrNull()?.id ?: "" }
+            // Automatically register any remote cloud tournaments so they are always visible
+            remoteTournaments.forEach { rTourney ->
+                if (!isDemoOrOffline(rTourney.id)) {
+                    deviceTourneyManager.addTournament(rTourney.id, "ADMIN")
+                }
+            }
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+
+            if (_activeTournamentId.value.isBlank() || (!_tournaments.value.any { it.id == _activeTournamentId.value })) {
+                _activeTournamentId.value = remoteSchema.activeTournamentId.ifEmpty { _tournaments.value.firstOrNull { !isDemoOrOffline(it.id) }?.id ?: "" }
             }
         }
 
@@ -184,7 +205,38 @@ class LocalCricketRepository(context: Context) {
                 activeMatchId = _activeMatchId.value
             )
             dbManager.saveDatabase(schema)
-            firebaseRepo.syncDatabaseToFirebase(schema)
+
+            // CRITICAL: Filter out any offline-only / demo data before pushing to Firebase
+            // This guarantees Firebase Realtime Database is NEVER reset or corrupted by demo data!
+            val cloudTourneys = _tournaments.value.filter { !isDemoOrOffline(it.id) }
+            if (cloudTourneys.isNotEmpty()) {
+                val cloudTourneyIds = cloudTourneys.map { it.id }.toSet()
+                val cloudTeams = _teams.value.filter { it.tournamentId in cloudTourneyIds }
+                val cloudPlayers = _players.value.filter { it.tournamentId in cloudTourneyIds }
+                val cloudMatches = _matches.value.filter { it.tournamentId in cloudTourneyIds }
+                val cloudMatchIds = cloudMatches.map { it.id }.toSet()
+                val cloudBalls = _ballRecords.value.filter { it.matchId in cloudMatchIds }
+                val cloudBids = _bids.value.filter { bid -> cloudPlayers.any { it.id == bid.playerId } }
+                val cloudActiveId = if (isDemoOrOffline(_activeTournamentId.value)) {
+                    cloudTourneys.firstOrNull()?.id ?: ""
+                } else {
+                    _activeTournamentId.value
+                }
+
+                val cloudSchema = DatabaseSchema(
+                    tournaments = cloudTourneys,
+                    teams = cloudTeams,
+                    players = cloudPlayers,
+                    bids = cloudBids,
+                    captainInvites = _captainInvites.value,
+                    matches = cloudMatches,
+                    ballRecords = cloudBalls,
+                    activeTournamentId = cloudActiveId,
+                    activePlayerId = _activePlayerId.value,
+                    activeMatchId = _activeMatchId.value
+                )
+                firebaseRepo.syncDatabaseToFirebase(cloudSchema)
+            }
         }
     }
 
@@ -316,14 +368,38 @@ class LocalCricketRepository(context: Context) {
             Player(id = "p_${tourneyId}_20", tournamentId = tourneyId, name = "Bhuvneshwar Kumar", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 1.5, stats = "Wkts: 170, Econ: 7.39, 2x Purple Cap", setName = "Set 5 - Batters")
         )
 
-        _tournaments.value = _tournaments.value + demoTourney
-        _teams.value = _teams.value + demoTeams
-        _players.value = _players.value + demoPlayers
+        // Remove any old demo tournament if existing so only 1 demo tournament exists at a time
+        val oldDemoTourneyIds = _tournaments.value.filter { isDemoOrOffline(it.id) }.map { it.id }.toSet()
+        val nonDemoTourneys = _tournaments.value.filterNot { it.id in oldDemoTourneyIds }
+        val nonDemoTeams = _teams.value.filterNot { it.tournamentId in oldDemoTourneyIds }
+        val nonDemoPlayers = _players.value.filterNot { it.tournamentId in oldDemoTourneyIds }
+
+        _tournaments.value = nonDemoTourneys + demoTourney
+        _teams.value = nonDemoTeams + demoTeams
+        _players.value = nonDemoPlayers + demoPlayers
         _activeTournamentId.value = demoTourney.id
         _activePlayerId.value = demoPlayers.first().id
         deviceTourneyManager.addTournament(demoTourney.id, "ADMIN")
         _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
-        persistAsync()
+
+        // CRITICAL: Demo data is purely local and offline!
+        // DO NOT call firebaseRepo.syncDatabaseToFirebase or push to cloud!
+        // Save only locally to disk
+        scope.launch {
+            val schema = DatabaseSchema(
+                tournaments = _tournaments.value,
+                teams = _teams.value,
+                players = _players.value,
+                bids = _bids.value,
+                captainInvites = _captainInvites.value,
+                matches = _matches.value,
+                ballRecords = _ballRecords.value,
+                activeTournamentId = _activeTournamentId.value,
+                activePlayerId = _activePlayerId.value,
+                activeMatchId = _activeMatchId.value
+            )
+            dbManager.saveDatabase(schema)
+        }
         return demoTourney
     }
 
@@ -331,12 +407,16 @@ class LocalCricketRepository(context: Context) {
         val updated = _captainReadyMap.value.toMutableMap()
         updated[teamId] = isReady
         _captainReadyMap.value = updated
-        firebaseRepo.setCaptainReady(_activeTournamentId.value, teamId, isReady)
+        if (!isDemoOrOffline(_activeTournamentId.value)) {
+            firebaseRepo.setCaptainReady(_activeTournamentId.value, teamId, isReady)
+        }
     }
 
     fun setBiddingStarted(started: Boolean) {
         _isBiddingStarted.value = started
-        firebaseRepo.setBiddingStarted(_activeTournamentId.value, started)
+        if (!isDemoOrOffline(_activeTournamentId.value)) {
+            firebaseRepo.setBiddingStarted(_activeTournamentId.value, started)
+        }
     }
 
     fun joinTournamentWithCode(inputCode: String): Pair<Tournament?, UserRole?> {
@@ -499,6 +579,11 @@ class LocalCricketRepository(context: Context) {
     fun setHideDemoData(hide: Boolean) {
         deviceTourneyManager.setHideDemoData(hide)
         _hideDemoData.value = hide
+        val activeIsDemo = isDemoOrOffline(_activeTournamentId.value)
+        if (hide && activeIsDemo) {
+            val realTourney = _tournaments.value.firstOrNull { !isDemoOrOffline(it.id) }
+            setActiveTournament(realTourney?.id ?: "")
+        }
     }
 
     fun getTournamentRole(tournamentId: String): String {
@@ -560,6 +645,7 @@ class LocalCricketRepository(context: Context) {
     }
 
     fun deleteTournament(tournamentId: String) {
+        val isDemo = isDemoOrOffline(tournamentId)
         val tourneyMatchIds = _matches.value.filter { it.tournamentId == tournamentId }.map { it.id }.toSet()
         val tourneyPlayerIds = _players.value.filter { it.tournamentId == tournamentId }.map { it.id }.toSet()
         _tournaments.value = _tournaments.value.filterNot { it.id == tournamentId }
@@ -573,7 +659,9 @@ class LocalCricketRepository(context: Context) {
         if (_activeTournamentId.value == tournamentId) {
             _activeTournamentId.value = userTournaments.value.firstOrNull()?.id ?: ""
         }
-        firebaseRepo.deleteTournament(tournamentId)
+        if (!isDemo) {
+            firebaseRepo.deleteTournament(tournamentId)
+        }
         persistAsync()
     }
 
