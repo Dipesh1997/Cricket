@@ -1,6 +1,7 @@
 package cricket.player.auction.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 // IPL Signature Colors (Dark Stadium Theme)
 val IplGold = Color(0xFFFFD700)
@@ -20,6 +21,33 @@ val LightPitchPrimary = Color(0xFF1E3A8A)    // Stadium Royal Navy Blue
 val LightPitchSecondary = Color(0xFF475569)  // Slate 600 Secondary Text & Icons
 val LightPitchText = Color(0xFF0F172A)       // Rich Slate 900 High-Contrast Text
 val LightPitchContainer = Color(0xFFE2E8F0)  // Clean Border & Divider (Slate 200)
+
+// High-contrast Dark Colors for Light Mode (Clean & Highly Readable, replacing washed out yellow/blue)
+val LightModeText = Color(0xFF0F172A)        // Deep Rich Slate 900
+val LightModeMuted = Color(0xFF334155)       // Slate 700 (High-contrast secondary)
+val LightModeNavy = Color(0xFF1E3A8A)        // Deep Royal Navy Blue (instead of neon cyan)
+val LightModeGoldDark = Color(0xFF78350F)    // Deep Amber Brown / Dark Gold (high-contrast instead of yellow)
+val LightModeGreenDark = Color(0xFF14532D)   // Deep Emerald Green (instead of bright green)
+val LightModeRedDark = Color(0xFF991B1B)     // Deep Crimson Red (instead of light red)
+
+/**
+ * Returns a high-contrast dark color when in light mode so that text is never
+ * rendered in washed-out yellow or bright neon blue against light surfaces.
+ */
+fun Color.toAdaptiveText(isDark: Boolean): Color {
+    if (isDark) return this
+    return when (this) {
+        IplGold, IplGoldVariant -> Color(0xFF0F172A)
+        NeonBlue -> Color(0xFF1E3A8A)
+        BidGreen -> Color(0xFF14532D)
+        UnsoldRed -> Color(0xFF991B1B)
+        Color.White, Color.LightGray -> Color(0xFF0F172A)
+        Color.Yellow, Color.Cyan -> Color(0xFF0F172A)
+        else -> {
+            if (this.luminance() > 0.45f) Color(0xFF0F172A) else this
+        }
+    }
+}
 
 // IPL Team Colors
 val TeamCSK = Color(0xFFF9CD05)

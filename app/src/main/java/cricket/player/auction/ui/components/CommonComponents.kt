@@ -72,8 +72,30 @@ fun DriveImage(
     url: String,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    fallbackIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.Person,
+    fallbackTint: Color? = null
 ) {
+    val isLight = MaterialTheme.colorScheme.background == LightPitchBackground
+    val defaultTint = fallbackTint ?: if (isLight) LightPitchPrimary else IplGold
+    val placeholderBg = if (isLight) LightPitchSurface else StadiumSurface
+
+    if (url.isBlank()) {
+        Box(
+            modifier = modifier
+                .background(placeholderBg),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = fallbackIcon,
+                contentDescription = contentDescription,
+                tint = defaultTint,
+                modifier = Modifier.size(36.dp)
+            )
+        }
+        return
+    }
+
     val directUrl = GoogleDriveHelper.toDirectImageUrl(url)
 
     SubcomposeAsyncImage(
@@ -85,23 +107,23 @@ fun DriveImage(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(StadiumSurface),
+                    .background(placeholderBg),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = IplGold, modifier = Modifier.size(24.dp))
+                CircularProgressIndicator(color = defaultTint, modifier = Modifier.size(24.dp))
             }
         },
         error = {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(StadiumSurface),
+                    .background(placeholderBg),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    tint = IplGold,
+                    imageVector = fallbackIcon,
+                    contentDescription = contentDescription,
+                    tint = defaultTint,
                     modifier = Modifier.size(36.dp)
                 )
             }
@@ -116,10 +138,14 @@ fun StatChip(
     textColor: Color = Color.White,
     icon: (@Composable () -> Unit)? = null
 ) {
+    val isLight = MaterialTheme.colorScheme.background == LightPitchBackground
+    val effectiveTextColor = if (isLight) textColor.toAdaptiveText(isDark = false) else textColor
+    val effectiveBgColor = if (isLight && (backgroundColor == StadiumSurface || backgroundColor == StadiumCardDark)) LightPitchSurface else backgroundColor
+
     Surface(
-        color = backgroundColor,
+        color = effectiveBgColor,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, textColor.copy(alpha = 0.2f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, effectiveTextColor.copy(alpha = if (isLight) 0.35f else 0.2f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -132,7 +158,7 @@ fun StatChip(
             }
             Text(
                 text = text,
-                color = textColor,
+                color = effectiveTextColor,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -146,11 +172,13 @@ fun TeamBadge(
     modifier: Modifier = Modifier,
     showPurse: Boolean = false
 ) {
+    val isLight = MaterialTheme.colorScheme.background == LightPitchBackground
     val teamColor = parseColorHex(team.primaryColorHex)
+    val teamIcon = getTeamPlaceholderIcon(team.id, team.name)
 
     Surface(
         modifier = modifier,
-        color = teamColor.copy(alpha = 0.25f),
+        color = teamColor.copy(alpha = if (isLight) 0.15f else 0.25f),
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, teamColor)
     ) {
@@ -165,25 +193,34 @@ fun TeamBadge(
                     .background(teamColor),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = team.shortCode,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp
-                )
+                if (team.logoUrl.isNotBlank()) {
+                    DriveImage(
+                        url = team.logoUrl,
+                        contentDescription = team.name,
+                        modifier = Modifier.fillMaxSize(),
+                        fallbackIcon = teamIcon
+                    )
+                } else {
+                    Icon(
+                        imageVector = teamIcon,
+                        contentDescription = team.name,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
                     text = team.name,
-                    color = Color.White,
+                    color = if (isLight) LightPitchText else Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 )
                 if (showPurse) {
                     Text(
                         text = "Purse: ${team.remainingPurse.formatIplCurrency()}",
-                        color = IplGold,
+                        color = if (isLight) LightPitchText else IplGold,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -230,6 +267,7 @@ fun PurseProgressBar(
     total: Double,
     modifier: Modifier = Modifier
 ) {
+    val isLight = MaterialTheme.colorScheme.background == LightPitchBackground
     val remaining = (total - spent).coerceAtLeast(0.0)
     val fraction = if (total > 0) (spent / total).toFloat().coerceIn(0f, 1f) else 0f
 
@@ -240,12 +278,12 @@ fun PurseProgressBar(
         ) {
             Text(
                 text = "Spent: ${spent.formatIplCurrency()}",
-                color = Color.LightGray,
+                color = if (isLight) LightPitchSecondary else Color.LightGray,
                 fontSize = 12.sp
             )
             Text(
                 text = "Remaining: ${remaining.formatIplCurrency()}",
-                color = IplGold,
+                color = if (isLight) LightPitchText else IplGold,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -257,8 +295,8 @@ fun PurseProgressBar(
                 .fillMaxWidth()
                 .height(8.dp)
                 .clip(RoundedCornerShape(4.dp)),
-            color = if (fraction > 0.85f) UnsoldRed else NeonBlue,
-            trackColor = StadiumSurface
+            color = if (fraction > 0.85f) UnsoldRed else if (isLight) LightPitchPrimary else NeonBlue,
+            trackColor = if (isLight) LightPitchContainer else StadiumSurface
         )
     }
 }
@@ -282,8 +320,12 @@ fun PhotoUploaderField(
     imageUrl: String,
     onImageUrlChange: (String) -> Unit,
     label: String = "Photo / Logo Image",
+    placeholderIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.Person,
     modifier: Modifier = Modifier
 ) {
+    val isLight = MaterialTheme.colorScheme.background == LightPitchBackground
+    val accent = if (isLight) LightPitchPrimary else IplGold
+    val btnContentColor = if (isLight) Color.White else Color.Black
     val galleryLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri ->
@@ -296,7 +338,7 @@ fun PhotoUploaderField(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(text = label, color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(text = label, color = if (isLight) LightPitchText else Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
 
         // Photo Preview Box & Upload Trigger Button
         Row(
@@ -309,21 +351,22 @@ fun PhotoUploaderField(
                 modifier = Modifier
                     .size(72.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(StadiumSurface)
-                    .border(1.5.dp, IplGold, RoundedCornerShape(12.dp)),
+                    .background(if (isLight) LightPitchSurface else StadiumSurface)
+                    .border(1.5.dp, accent, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (imageUrl.isNotBlank()) {
                     DriveImage(
                         url = imageUrl,
                         contentDescription = "Preview",
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        fallbackIcon = placeholderIcon
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Person,
+                        imageVector = placeholderIcon,
                         contentDescription = null,
-                        tint = Color.Gray,
+                        tint = if (isLight) LightPitchPrimary else Color.Gray,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -335,7 +378,7 @@ fun PhotoUploaderField(
             ) {
                 Button(
                     onClick = { galleryLauncher.launch("image/*") },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = btnContentColor),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -356,8 +399,10 @@ fun PhotoUploaderField(
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = IplGold,
-                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f)
+                        focusedBorderColor = accent,
+                        unfocusedBorderColor = if (isLight) LightPitchContainer else Color.Gray.copy(alpha = 0.5f),
+                        focusedTextColor = if (isLight) LightPitchText else Color.White,
+                        unfocusedTextColor = if (isLight) LightPitchText else Color.White
                     )
                 )
             }

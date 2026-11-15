@@ -111,6 +111,14 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                     ).show()
                 }
             },
+            onStartDemoMode = {
+                val demo = viewModel.createDemoTournament()
+                Toast.makeText(
+                    context,
+                    "🎮 Demo Tournament '${demo.name}' created with 4 teams & 20 players (Offline Mode)!",
+                    Toast.LENGTH_LONG
+                ).show()
+            },
             onDismiss = { showHelpDialog = false }
         )
     }
@@ -220,7 +228,7 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Restore", color = if (isDarkTheme) Color.White else LightPitchText, fontWeight = FontWeight.Bold, fontSize = 14.sp) },
-                                    leadingIcon = { Icon(Icons.Default.Upload, contentDescription = null, tint = NeonBlue) },
+                                    leadingIcon = { Icon(Icons.Default.Upload, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary) },
                                     onClick = {
                                         menuExpanded = false
                                         viewModel.restoreFromCricketFolder().fold(

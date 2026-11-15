@@ -10,11 +10,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.foundation.border
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +33,7 @@ import cricket.player.auction.model.*
 import cricket.player.auction.ui.components.DriveImage
 import cricket.player.auction.ui.components.PhotoUploaderField
 import cricket.player.auction.ui.components.StatChip
+import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
@@ -105,20 +109,20 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
             if (isSpectator) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
-                    color = NeonBlue.copy(alpha = 0.15f),
+                    color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
                     shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier.padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Spectator Mode: Player roster is in read-only view.",
-                            color = NeonBlue,
+                            color = textMain,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -161,7 +165,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         label = { Text("All Players") },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = themeAccent,
-                            selectedLabelColor = Color.Black,
+                            selectedLabelColor = if (isDarkTheme) Color.Black else Color.White,
                             containerColor = surfaceBg,
                             labelColor = textMain
                         )
@@ -175,10 +179,10 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         },
                         label = { Text(role.label) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = IplGold,
-                            selectedLabelColor = Color.Black,
-                            containerColor = StadiumSurface,
-                            labelColor = Color.White
+                            selectedContainerColor = themeAccent,
+                            selectedLabelColor = if (isDarkTheme) Color.Black else Color.White,
+                            containerColor = surfaceBg,
+                            labelColor = textMain
                         )
                     )
                 }
@@ -190,10 +194,10 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         },
                         label = { Text(status.name) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = NeonBlue,
-                            selectedLabelColor = Color.Black,
-                            containerColor = StadiumSurface,
-                            labelColor = Color.White
+                            selectedContainerColor = if (isDarkTheme) NeonBlue else LightPitchPrimary,
+                            selectedLabelColor = if (isDarkTheme) Color.Black else Color.White,
+                            containerColor = surfaceBg,
+                            labelColor = textMain
                         )
                     )
                 }
@@ -228,7 +232,8 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                                 DriveImage(
                                     url = player.imageUrl,
                                     contentDescription = player.name,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier.fillMaxSize(),
+                                    fallbackIcon = getPlayerPlaceholderIcon(player.id, player.name)
                                 )
                             }
 
@@ -356,9 +361,11 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
         var stats by remember { mutableStateOf("") }
         var setName by remember { mutableStateOf("Set 1") }
 
+        var roleDropdownExpanded by remember { mutableStateOf(false) }
+
         AlertDialog(
             onDismissRequest = { showAddPlayerDialog = false },
-            title = { Text("Add New Player to Auction", color = Color.White) },
+            title = { Text("Add New Player to Auction", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -371,6 +378,57 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         singleLine = true
                     )
 
+                    // Role Dropdown (Batsman, Bowler, All-Rounder, Wicket Keeper)
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = role.label,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Player Role / Discipline") },
+                            trailingIcon = {
+                                IconButton(onClick = { roleDropdownExpanded = !roleDropdownExpanded }) {
+                                    Icon(
+                                        imageVector = if (roleDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select Role",
+                                        tint = themeAccent
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { roleDropdownExpanded = true }
+                        )
+
+                        DropdownMenu(
+                            expanded = roleDropdownExpanded,
+                            onDismissRequest = { roleDropdownExpanded = false },
+                            modifier = Modifier
+                                .background(cardBg)
+                                .border(1.dp, themeAccent.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        ) {
+                            listOf(
+                                PlayerRole.BATSMAN to "🏏 Batsman",
+                                PlayerRole.BOWLER to "🎯 Bowler",
+                                PlayerRole.ALL_ROUNDER to "⚡ All-Rounder",
+                                PlayerRole.WICKET_KEEPER to "🧤 Wicket Keeper"
+                            ).forEach { (r, labelWithIcon) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = labelWithIcon,
+                                            color = if (role == r) themeAccent else textMain,
+                                            fontWeight = if (role == r) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        role = r
+                                        roleDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = country,
                         onValueChange = { country = it },
@@ -382,9 +440,9 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         Checkbox(
                             checked = isOverseas,
                             onCheckedChange = { isOverseas = it },
-                            colors = CheckboxDefaults.colors(checkedColor = NeonBlue)
+                            colors = CheckboxDefaults.colors(checkedColor = if (isDarkTheme) NeonBlue else LightPitchPrimary)
                         )
-                        Text("Overseas Player", color = Color.White, fontSize = 13.sp)
+                        Text("Overseas Player", color = textMain, fontSize = 13.sp)
                     }
 
                     OutlinedTextField(
@@ -397,7 +455,8 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                     PhotoUploaderField(
                         imageUrl = driveUrl,
                         onImageUrlChange = { driveUrl = it },
-                        label = "Player Photo"
+                        label = "Player Photo",
+                        placeholderIcon = getPlayerPlaceholderIcon(name)
                     )
 
                     OutlinedTextField(
@@ -424,7 +483,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         )
                         showAddPlayerDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = name.isNotBlank()
                 ) {
                     Text("Add Player", fontWeight = FontWeight.Bold)
@@ -444,6 +503,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
         val target = editingPlayer!!
         var editName by remember(target) { mutableStateOf(target.name) }
         var editRole by remember(target) { mutableStateOf(target.role) }
+        var editRoleDropdownExpanded by remember { mutableStateOf(false) }
         var editCountry by remember(target) { mutableStateOf(target.country) }
         var editIsOverseas by remember(target) { mutableStateOf(target.isOverseas) }
         var editBasePriceStr by remember(target) { mutableStateOf(target.basePrice.toString()) }
@@ -467,6 +527,57 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         singleLine = true
                     )
 
+                    // Role Dropdown for editing
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editRole.label,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Player Role / Discipline") },
+                            trailingIcon = {
+                                IconButton(onClick = { editRoleDropdownExpanded = !editRoleDropdownExpanded }) {
+                                    Icon(
+                                        imageVector = if (editRoleDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select Role",
+                                        tint = themeAccent
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { editRoleDropdownExpanded = true }
+                        )
+
+                        DropdownMenu(
+                            expanded = editRoleDropdownExpanded,
+                            onDismissRequest = { editRoleDropdownExpanded = false },
+                            modifier = Modifier
+                                .background(cardBg)
+                                .border(1.dp, themeAccent.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        ) {
+                            listOf(
+                                PlayerRole.BATSMAN to "🏏 Batsman",
+                                PlayerRole.BOWLER to "🎯 Bowler",
+                                PlayerRole.ALL_ROUNDER to "⚡ All-Rounder",
+                                PlayerRole.WICKET_KEEPER to "🧤 Wicket Keeper"
+                            ).forEach { (r, labelWithIcon) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = labelWithIcon,
+                                            color = if (editRole == r) themeAccent else textMain,
+                                            fontWeight = if (editRole == r) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        editRole = r
+                                        editRoleDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = editCountry,
                         onValueChange = { editCountry = it },
@@ -478,7 +589,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         Checkbox(
                             checked = editIsOverseas,
                             onCheckedChange = { editIsOverseas = it },
-                            colors = CheckboxDefaults.colors(checkedColor = NeonBlue)
+                            colors = CheckboxDefaults.colors(checkedColor = if (isDarkTheme) NeonBlue else LightPitchPrimary)
                         )
                         Text("Overseas Player", color = textMain, fontSize = 13.sp)
                     }
@@ -507,7 +618,8 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                     PhotoUploaderField(
                         imageUrl = editPhotoUrl,
                         onImageUrlChange = { editPhotoUrl = it },
-                        label = "Player Photo"
+                        label = "Player Photo",
+                        placeholderIcon = getPlayerPlaceholderIcon(target.id, editName)
                     )
                 }
             },
@@ -531,7 +643,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         viewModel.updatePlayer(updated)
                         editingPlayer = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = editName.isNotBlank()
                 ) {
                     Text("SAVE CHANGES", fontWeight = FontWeight.Bold)

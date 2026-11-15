@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.PlayerCareerStats
 import cricket.player.auction.ui.components.DriveImage
 import cricket.player.auction.ui.components.StatChip
+import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
@@ -137,13 +138,13 @@ fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats, isDarkTheme: Boolean = tr
                 // Rank Number / Badge
                 Surface(
                     shape = CircleShape,
-                    color = if (rank == 1) themeAccent else if (rank <= 3) NeonBlue else surfaceBg,
+                    color = if (rank == 1) themeAccent else if (rank <= 3) (if (isDarkTheme) NeonBlue else LightPitchSecondary) else surfaceBg,
                     modifier = Modifier.size(28.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = "#$rank",
-                            color = if (rank <= 3) Color.Black else textMain,
+                            color = if (rank <= 3) (if (isDarkTheme) Color.Black else Color.White) else textMain,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 11.sp
                         )
@@ -159,7 +160,12 @@ fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats, isDarkTheme: Boolean = tr
                         .clip(CircleShape)
                         .border(1.dp, themeAccent, CircleShape)
                 ) {
-                    DriveImage(url = stats.photoUrl, contentDescription = stats.playerName, modifier = Modifier.fillMaxSize())
+                    DriveImage(
+                        url = stats.photoUrl,
+                        contentDescription = stats.playerName,
+                        fallbackIcon = getPlayerPlaceholderIcon(stats.playerId, stats.playerName),
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(10.dp))
@@ -207,8 +213,8 @@ fun MvpPlayerCard(rank: Int, stats: PlayerCareerStats, isDarkTheme: Boolean = tr
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 StatChip(text = "Runs: ${stats.runsScored} (SR: ${String.format("%.1f", stats.strikeRate)})", backgroundColor = surfaceBg, textColor = textMain)
-                StatChip(text = "Wkts: ${stats.wicketsTaken} (Econ: ${String.format("%.1f", stats.economyRate)})", backgroundColor = surfaceBg, textColor = BidGreen)
-                StatChip(text = "Catches: ${stats.catches}", backgroundColor = surfaceBg, textColor = NeonBlue)
+                StatChip(text = "Wkts: ${stats.wicketsTaken} (Econ: ${String.format("%.1f", stats.economyRate)})", backgroundColor = surfaceBg, textColor = if (isDarkTheme) BidGreen else LightModeGreenDark)
+                StatChip(text = "Catches: ${stats.catches}", backgroundColor = surfaceBg, textColor = if (isDarkTheme) NeonBlue else LightPitchText)
             }
         }
     }

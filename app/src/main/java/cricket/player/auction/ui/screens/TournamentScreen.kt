@@ -230,68 +230,6 @@ fun TournamentScreen(
                 }
             }
 
-            // --- Home Screen Light Theme Toggle Card ---
-            Card(
-                colors = CardDefaults.cardColors(containerColor = if (isDarkTheme) StadiumCardDark else LightPitchSurface),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 14.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.4f))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            color = if (isDarkTheme) StadiumSurface else LightPitchContainer,
-                            shape = CircleShape,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isDarkTheme) Icons.Default.DarkMode else Icons.Default.LightMode,
-                                    contentDescription = null,
-                                    tint = themeAccent,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column {
-                            Text(
-                                text = if (isDarkTheme) "Dark Stadium Mode" else "Clean Light Mode ☀️",
-                                color = if (isDarkTheme) Color.White else LightPitchText,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Text(
-                                text = if (isDarkTheme) "Deep stadium floodlight look" else "Crisp high-contrast white & slate theme",
-                                color = if (isDarkTheme) Color.Gray else LightPitchSecondary,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-
-                    Switch(
-                        checked = !isDarkTheme,
-                        onCheckedChange = { viewModel.toggleTheme() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = LightPitchPrimary,
-                            checkedTrackColor = LightPitchContainer,
-                            uncheckedThumbColor = IplGold,
-                            uncheckedTrackColor = StadiumSurface
-                        )
-                    )
-                }
-            }
-
             if (tournaments.isEmpty()) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -330,7 +268,7 @@ fun TournamentScreen(
                     Surface(
                         color = if (isDarkTheme) StadiumCardDark else LightPitchContainer,
                         shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, IplGold),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent),
                         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                     ) {
                         Row(
@@ -340,14 +278,14 @@ fun TournamentScreen(
                             Icon(
                                 imageVector = Icons.Default.Security,
                                 contentDescription = null,
-                                tint = IplGold,
+                                tint = themeAccent,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "👑 MASTER ADMIN UNLOCKED",
-                                    color = IplGold,
+                                    color = textMain,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Black
                                 )
@@ -383,7 +321,7 @@ fun TournamentScreen(
                                     viewModel.selectTournament(tourney.id)
                                     onTournamentClick(tourney)
                                 },
-                            border = if (isActive) androidx.compose.foundation.BorderStroke(1.5.dp, IplGold) else androidx.compose.foundation.BorderStroke(1.dp, surfaceBg)
+                            border = if (isActive) androidx.compose.foundation.BorderStroke(1.5.dp, themeAccent) else androidx.compose.foundation.BorderStroke(1.dp, surfaceBg)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
@@ -392,7 +330,7 @@ fun TournamentScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = IplGold)
+                                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = themeAccent)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = tourney.name,
@@ -404,14 +342,14 @@ fun TournamentScreen(
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         if (isActive) {
-                                            StatChip(text = "ACTIVE", backgroundColor = BidGreen.copy(alpha = 0.2f), textColor = BidGreen)
+                                            StatChip(text = "ACTIVE", backgroundColor = BidGreen.copy(alpha = 0.2f), textColor = if (isDarkTheme) BidGreen else LightPitchText)
                                             Spacer(modifier = Modifier.width(6.dp))
                                         }
 
                                         // Edit Button
                                         if (isMasterAdmin || !isSpectator) {
                                             IconButton(onClick = { editingTournament = tourney }) {
-                                                Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Tournament", tint = IplGold, modifier = Modifier.size(18.dp))
+                                                Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Tournament", tint = themeAccent, modifier = Modifier.size(18.dp))
                                             }
 
                                             // Delete Button
@@ -431,8 +369,8 @@ fun TournamentScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     StatChip(text = "Purse: ${tourney.defaultPurse.formatIplCurrency()}", backgroundColor = surfaceBg, textColor = textSub)
-                                    StatChip(text = "Teams: ${teams.count { it.tournamentId == tourney.id }}", backgroundColor = surfaceBg, textColor = NeonBlue)
-                                    StatChip(text = "Players: ${players.count { it.tournamentId == tourney.id }}", backgroundColor = surfaceBg, textColor = IplGold)
+                                    StatChip(text = "Teams: ${teams.count { it.tournamentId == tourney.id }}", backgroundColor = surfaceBg, textColor = textMain)
+                                    StatChip(text = "Players: ${players.count { it.tournamentId == tourney.id }}", backgroundColor = surfaceBg, textColor = textMain)
                                 }
 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -442,9 +380,9 @@ fun TournamentScreen(
                                 ) {
                                     if (tourney.adminCode.isNotBlank()) {
                                         Surface(
-                                            color = IplGold.copy(alpha = 0.15f),
+                                            color = if (isDarkTheme) IplGold.copy(alpha = 0.15f) else LightPitchSurface,
                                             shape = RoundedCornerShape(8.dp),
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.4f)),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.4f)),
                                             modifier = Modifier.clickable {
                                                 clipboardManager.setText(AnnotatedString(tourney.adminCode))
                                                 Toast.makeText(context, "🔑 Admin Code ${tourney.adminCode} copied!", Toast.LENGTH_SHORT).show()
@@ -454,25 +392,25 @@ fun TournamentScreen(
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold, modifier = Modifier.size(12.dp))
+                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
-                                                    text = "ADMIN CODE: ${tourney.adminCode}",
-                                                    color = IplGold,
+                                                    text = "ADMIN: ${tourney.adminCode}",
+                                                    color = textMain,
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))
-                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = IplGold, modifier = Modifier.size(12.dp))
+                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
                                             }
                                         }
                                     }
 
                                     if (tourney.scorerInviteCode.isNotBlank()) {
                                         Surface(
-                                            color = NeonBlue.copy(alpha = 0.15f),
+                                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
                                             shape = RoundedCornerShape(8.dp),
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f)),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.4f)),
                                             modifier = Modifier.clickable {
                                                 clipboardManager.setText(AnnotatedString(tourney.scorerInviteCode))
                                                 Toast.makeText(context, "🔑 Scorer Code ${tourney.scorerInviteCode} copied!", Toast.LENGTH_SHORT).show()
@@ -482,25 +420,25 @@ fun TournamentScreen(
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
                                                     text = "SCORER: ${tourney.scorerInviteCode}",
-                                                    color = NeonBlue,
+                                                    color = textMain,
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))
-                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
+                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
                                             }
                                         }
                                     }
 
                                     val specCode = tourney.spectatorInviteCode.ifBlank { "SPEC" + tourney.id.takeLast(4).uppercase() }
                                     Surface(
-                                        color = Color.LightGray.copy(alpha = 0.15f),
+                                        color = if (isDarkTheme) Color.LightGray.copy(alpha = 0.15f) else LightPitchSurface,
                                         shape = RoundedCornerShape(8.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.4f)),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) Color.LightGray else LightPitchContainer)),
                                         modifier = Modifier.clickable {
                                             clipboardManager.setText(AnnotatedString(specCode))
                                             Toast.makeText(context, "👁️ Spectator Code $specCode copied!", Toast.LENGTH_SHORT).show()
@@ -587,7 +525,7 @@ fun TournamentScreen(
                         showCreateDialog = false
                         onTournamentClick(tourney)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = tourneyName.isNotBlank()
                 ) {
                     Text("CREATE & ENTER DASHBOARD", fontWeight = FontWeight.Bold)
@@ -595,7 +533,7 @@ fun TournamentScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showCreateDialog = false }) {
-                    Text("Cancel", color = Color.Gray)
+                    Text("Cancel", color = textSub)
                 }
             },
             containerColor = cardBg
@@ -663,7 +601,7 @@ fun TournamentScreen(
                         viewModel.updateTournament(updated)
                         editingTournament = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = editName.isNotBlank()
                 ) {
                     Text("SAVE CHANGES", fontWeight = FontWeight.Bold)
@@ -747,7 +685,7 @@ fun TournamentScreen(
                             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = inviteCodeInput.trim().length >= 3
                 ) {
                     Text("JOIN / CLAIM ACCESS 🚀", fontWeight = FontWeight.ExtraBold)

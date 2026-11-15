@@ -79,7 +79,7 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
                     Text("W", color = textSub, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
                     Text("L", color = textSub, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(28.dp))
                     Text("PTS", color = themeAccent, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(36.dp))
-                    Text("NRR", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(54.dp))
+                    Text("NRR", color = if (isDarkTheme) NeonBlue else LightPitchText, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.width(54.dp))
                 }
             }
 
@@ -141,7 +141,7 @@ fun PointsTableRow(rank: Int, entry: PointsTableEntry, isDarkTheme: Boolean = tr
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = "$rank",
-                        color = if (rank <= 4) Color.Black else textMain,
+                        color = if (rank <= 4) (if (isDarkTheme) Color.Black else Color.White) else textMain,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp
                     )
@@ -174,10 +174,10 @@ fun PointsTableRow(rank: Int, entry: PointsTableEntry, isDarkTheme: Boolean = tr
             }
 
             Text("${entry.matchesPlayed}", color = textSub, fontSize = 12.sp, modifier = Modifier.width(28.dp))
-            Text("${entry.won}", color = BidGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(28.dp))
-            Text("${entry.lost}", color = UnsoldRed, fontSize = 12.sp, modifier = Modifier.width(28.dp))
+            Text("${entry.won}", color = if (isDarkTheme) BidGreen else LightModeGreenDark, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.width(28.dp))
+            Text("${entry.lost}", color = if (isDarkTheme) UnsoldRed else LightModeRedDark, fontSize = 12.sp, modifier = Modifier.width(28.dp))
             Text("${entry.points}", color = themeAccent, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, modifier = Modifier.width(36.dp))
-            Text(nrrFormatted, color = NeonBlue, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, modifier = Modifier.width(54.dp))
+            Text(nrrFormatted, color = if (isDarkTheme) NeonBlue else LightPitchText, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, modifier = Modifier.width(54.dp))
         }
     }
 }

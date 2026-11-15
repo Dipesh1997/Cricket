@@ -99,7 +99,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "LIVE IPL AUCTION ARENA",
-                            color = IplGold,
+                            color = textMain,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
                         )
@@ -112,7 +112,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                         // Spin Wheel Trigger Button
                         Button(
                             onClick = { showSpinWheelModal = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                             shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                         ) {
@@ -208,13 +208,13 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             if (player.isOverseas) {
                                 StatChip(
                                     text = "Overseas (${player.country})",
-                                    backgroundColor = NeonBlue.copy(alpha = 0.2f),
-                                    textColor = NeonBlue,
+                                    backgroundColor = if (isDarkTheme) NeonBlue.copy(alpha = 0.2f) else LightPitchSurface,
+                                    textColor = textMain,
                                     icon = {
                                         Icon(
                                             imageVector = Icons.Default.Public,
                                             contentDescription = null,
-                                            tint = NeonBlue,
+                                            tint = if (isDarkTheme) NeonBlue else LightPitchPrimary,
                                             modifier = Modifier.size(12.dp)
                                         )
                                     }
@@ -236,7 +236,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             DriveImage(
                                 url = player.imageUrl,
                                 contentDescription = player.name,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                fallbackIcon = getPlayerPlaceholderIcon(player.id, player.name)
                             )
                         }
 
@@ -466,7 +467,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = cardBg),
                     shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.5f))
                 ) {
                     Column(
                         modifier = Modifier
@@ -478,13 +479,13 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             Icon(
                                 imageVector = Icons.Default.Visibility,
                                 contentDescription = null,
-                                tint = NeonBlue,
+                                tint = if (isDarkTheme) NeonBlue else LightPitchPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "SPECTATOR LIVE AUCTION VIEW",
-                                color = NeonBlue,
+                                color = textMain,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 14.sp
                             )
@@ -632,12 +633,12 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = surfaceBg),
                     shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = "AUCTIONEER ADMIN CONTROLS",
-                            color = NeonBlue,
+                            color = textMain,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )

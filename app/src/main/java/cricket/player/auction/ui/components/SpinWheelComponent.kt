@@ -60,9 +60,6 @@ fun SpinWheelModal(
     onDismiss: () -> Unit,
     onPlayerSelected: (Player) -> Unit
 ) {
-    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
-    val textMain = if (isDarkTheme) Color.White else LightPitchText
-    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
     var isSpinning by remember { mutableStateOf(false) }
     var selectedPlayer by remember { mutableStateOf<Player?>(null) }
     val rotationAnim = remember { Animatable(0f) }
@@ -107,6 +104,13 @@ fun SpinWheelModal(
 
     val availablePlayers = if (isFixedSetStage) fixedSetPlayers else openCategoryPlayers
 
+    val isLight = !isDarkTheme
+    val cardBg = if (isLight) LightPitchCard else StadiumCardDark
+    val surfaceBg = if (isLight) LightPitchSurface else StadiumSurface
+    val textMain = if (isLight) LightPitchText else Color.White
+    val textSub = if (isLight) LightPitchSecondary else Color.LightGray
+    val themeAccent = if (isLight) LightPitchPrimary else IplGold
+
     AlertDialog(
         onDismissRequest = { if (!isSpinning) onDismiss() },
         title = {
@@ -118,11 +122,11 @@ fun SpinWheelModal(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(imageVector = Icons.Default.Casino, contentDescription = null, tint = IplGold)
+                    Icon(imageVector = Icons.Default.Casino, contentDescription = null, tint = themeAccent)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "LUCKY PLAYER SPIN WHEEL",
-                        color = IplGold,
+                        color = textMain,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 16.sp
                     )
@@ -130,10 +134,10 @@ fun SpinWheelModal(
                 Spacer(modifier = Modifier.height(4.dp))
                 StatChip(
                     text = if (isFixedSetStage) "FIXED CATEGORY SET (${fixedSetPlayers.size} Left)" else "OPEN CATEGORY (${openCategoryPlayers.size} Left)",
-                    backgroundColor = if (isFixedSetStage) IplGold.copy(alpha = 0.2f) else NeonBlue.copy(alpha = 0.2f),
-                    textColor = if (isFixedSetStage) IplGold else NeonBlue,
+                    backgroundColor = surfaceBg,
+                    textColor = textMain,
                     icon = if (isFixedSetStage) {
-                        { Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = IplGold, modifier = Modifier.size(12.dp)) }
+                        { Icon(imageVector = Icons.Default.Star, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp)) }
                     } else null
                 )
             }
@@ -332,9 +336,9 @@ fun SpinWheelModal(
                     // Selected Winner Card with Circular Cutout Image
                     if (selectedPlayer != null) {
                         Surface(
-                            color = StadiumSurface,
+                            color = surfaceBg,
                             shape = RoundedCornerShape(14.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.5.dp, IplGold)
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, themeAccent)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -346,13 +350,14 @@ fun SpinWheelModal(
                                     modifier = Modifier
                                         .size(54.dp)
                                         .clip(CircleShape)
-                                        .border(2.dp, IplGold, CircleShape)
-                                        .background(StadiumDark)
+                                        .border(2.dp, themeAccent, CircleShape)
+                                        .background(if (isLight) LightPitchCard else StadiumDark)
                                 ) {
                                     DriveImage(
                                         url = selectedPlayer!!.imageUrl,
                                         contentDescription = selectedPlayer!!.name,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier.fillMaxSize(),
+                                        fallbackIcon = getPlayerPlaceholderIcon(selectedPlayer!!.id, selectedPlayer!!.name)
                                     )
                                 }
 
@@ -361,13 +366,13 @@ fun SpinWheelModal(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = selectedPlayer!!.name,
-                                        color = Color.White,
+                                        color = textMain,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp
                                     )
                                     Text(
                                         text = "${selectedPlayer!!.role.label} • Base: ${selectedPlayer!!.basePrice}Cr",
-                                        color = IplGold,
+                                        color = textSub,
                                         fontSize = 11.sp
                                     )
                                 }
@@ -402,8 +407,8 @@ fun SpinWheelModal(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (canSpin) IplGold else Color.Gray,
-                        contentColor = Color.Black
+                        containerColor = if (canSpin) themeAccent else Color.Gray,
+                        contentColor = if (isLight) Color.White else Color.Black
                     ),
                     enabled = canSpin
                 ) {

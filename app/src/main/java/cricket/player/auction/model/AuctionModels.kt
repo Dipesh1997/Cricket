@@ -56,7 +56,8 @@ data class Tournament(
     val scorerInviteCode: String = "",
     val adminCode: String = "",
     val spectatorInviteCode: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isOfflineOnly: Boolean = false
 )
 
 data class Player(

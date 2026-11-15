@@ -142,6 +142,12 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         return localRepository.createTournament(name, defaultPurse, maxSlots, maxOverseas)
     }
 
+    fun createDemoTournament(): Tournament {
+        val demo = localRepository.createDemoTournament()
+        _currentUser.value = _currentUser.value.copy(role = UserRole.ADMIN_AUCTIONEER)
+        return demo
+    }
+
     fun selectTournament(tournamentId: String) {
         localRepository.setActiveTournament(tournamentId)
         if (localRepository.isMasterAdminMode.value) {

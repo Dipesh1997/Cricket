@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.components.DriveImage
 import cricket.player.auction.ui.components.StatChip
+import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 import kotlinx.coroutines.delay
@@ -60,6 +61,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val textMain = if (isDarkTheme) Color.White else LightPitchText
     val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
     val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
+    val textGold = if (isDarkTheme) IplGold else LightPitchText
+    val textBlue = if (isDarkTheme) NeonBlue else LightPitchText
+    val accentNavy = if (isDarkTheme) NeonBlue else LightPitchPrimary
 
     val matches by viewModel.matches.collectAsState()
     val tourneyMatches = remember(matches, activeTournament) {
@@ -328,17 +332,17 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 clipboardManager.setText(AnnotatedString(scorerCode))
                                 Toast.makeText(context, "📋 Scorer Code '$scorerCode' copied!", Toast.LENGTH_SHORT).show()
                             },
-                            color = NeonBlue.copy(alpha = 0.15f),
+                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
                             shape = RoundedCornerShape(6.dp),
-                            border = androidx.compose.foundation.BorderStroke(0.8.dp, NeonBlue.copy(alpha = 0.5f))
+                            border = androidx.compose.foundation.BorderStroke(0.8.dp, accentNavy.copy(alpha = 0.5f))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(11.dp))
+                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(scorerCode, color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(scorerCode, color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -354,24 +358,24 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = if (isDarkTheme) Color.Black else Color.White, modifier = Modifier.size(12.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("New Match", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("New Match", color = if (isDarkTheme) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
                             }
                         }
                     } else if (isSpectator) {
                         Surface(
-                            color = NeonBlue.copy(alpha = 0.15f),
+                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
                             shape = RoundedCornerShape(6.dp),
-                            border = androidx.compose.foundation.BorderStroke(0.8.dp, NeonBlue.copy(alpha = 0.4f))
+                            border = androidx.compose.foundation.BorderStroke(0.8.dp, accentNavy.copy(alpha = 0.4f))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(11.dp))
+                                Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("Spectator", color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Spectator", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -741,7 +745,12 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, themeAccent, CircleShape).background(surfaceBg)) {
-                                                DriveImage(url = striker.imageUrl, contentDescription = striker.name, modifier = Modifier.fillMaxSize())
+                                                DriveImage(
+                                                    url = striker.imageUrl,
+                                                    contentDescription = striker.name,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    fallbackIcon = getPlayerPlaceholderIcon(striker.id, striker.name)
+                                                )
                                             }
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
@@ -792,8 +801,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             modifier = Modifier.weight(2.3f),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, NeonBlue, CircleShape).background(surfaceBg)) {
-                                                DriveImage(url = nonStriker.imageUrl, contentDescription = nonStriker.name, modifier = Modifier.fillMaxSize())
+                                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, accentNavy, CircleShape).background(surfaceBg)) {
+                                                DriveImage(
+                                                    url = nonStriker.imageUrl,
+                                                    contentDescription = nonStriker.name,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    fallbackIcon = getPlayerPlaceholderIcon(nonStriker.id, nonStriker.name)
+                                                )
                                             }
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
@@ -884,8 +898,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(modifier = Modifier.weight(2.3f), verticalAlignment = Alignment.CenterVertically) {
-                                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, NeonBlue, CircleShape).background(surfaceBg)) {
-                                                DriveImage(url = bowler.imageUrl, contentDescription = bowler.name, modifier = Modifier.fillMaxSize())
+                                            Box(modifier = Modifier.size(18.dp).clip(CircleShape).border(1.dp, accentNavy, CircleShape).background(surfaceBg)) {
+                                                DriveImage(
+                                                    url = bowler.imageUrl,
+                                                    contentDescription = bowler.name,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    fallbackIcon = getPlayerPlaceholderIcon(bowler.id, bowler.name)
+                                                )
                                             }
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(bowler.name, color = textMain, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
@@ -894,7 +913,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         Text("$bMaidens", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
                                         Text("$bRuns", color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
                                         Text("$bWkts", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                        Text(bEcon, color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
+                                        Text(bEcon, color = textMain, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
                                     }
                                 } else {
                                     Text("Select Bowler to begin over", color = textSub, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
@@ -1867,9 +1886,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             modifier = Modifier
                                                 .size(24.dp)
                                                 .clip(CircleShape)
-                                                .background(StadiumDark)
+                                                .background(if (isDarkTheme) StadiumDark else LightPitchSurface)
                                         ) {
-                                            DriveImage(url = player.imageUrl, contentDescription = player.name, modifier = Modifier.fillMaxSize())
+                                            DriveImage(
+                                                url = player.imageUrl,
+                                                contentDescription = player.name,
+                                                modifier = Modifier.fillMaxSize(),
+                                                fallbackIcon = getPlayerPlaceholderIcon(player.id, player.name)
+                                            )
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
@@ -2465,10 +2489,15 @@ fun DropdownPlayerPicker(
                     modifier = Modifier
                         .size(22.dp)
                         .clip(CircleShape)
-                        .border(1.dp, IplGold, CircleShape)
-                        .background(StadiumDark)
+                        .border(1.dp, themeAccent, CircleShape)
+                        .background(if (isDarkTheme) StadiumDark else LightPitchSurface)
                 ) {
-                    DriveImage(url = selectedPlayer.imageUrl, contentDescription = selectedPlayer.name, modifier = Modifier.fillMaxSize())
+                    DriveImage(
+                        url = selectedPlayer.imageUrl,
+                        contentDescription = selectedPlayer.name,
+                        modifier = Modifier.fillMaxSize(),
+                        fallbackIcon = getPlayerPlaceholderIcon(selectedPlayer.id, selectedPlayer.name)
+                    )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
             }
@@ -2487,10 +2516,10 @@ fun DropdownPlayerPicker(
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text(title, color = IplGold, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            title = { Text(title, color = textMain, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
             text = {
                 if (players.isEmpty()) {
-                    Text("No players available for selection.", color = Color.Gray, fontSize = 13.sp)
+                    Text("No players available for selection.", color = textSub, fontSize = 13.sp)
                 } else {
                     LazyColumn(
                         modifier = Modifier
@@ -2505,9 +2534,9 @@ fun DropdownPlayerPicker(
                                     onPlayerSelected(player)
                                     showDialog = false
                                 },
-                                color = if (isSelected) IplGold.copy(alpha = 0.2f) else StadiumSurface,
+                                color = if (isSelected) themeAccent.copy(alpha = 0.2f) else surfaceBg,
                                 shape = RoundedCornerShape(8.dp),
-                                border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, IplGold) else null,
+                                border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, themeAccent) else null,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -2518,17 +2547,22 @@ fun DropdownPlayerPicker(
                                         modifier = Modifier
                                             .size(28.dp)
                                             .clip(CircleShape)
-                                            .background(StadiumDark)
+                                            .background(if (isDarkTheme) StadiumDark else LightPitchCard)
                                     ) {
-                                        DriveImage(url = player.imageUrl, contentDescription = player.name, modifier = Modifier.fillMaxSize())
+                                        DriveImage(
+                                            url = player.imageUrl,
+                                            contentDescription = player.name,
+                                            modifier = Modifier.fillMaxSize(),
+                                            fallbackIcon = getPlayerPlaceholderIcon(player.id, player.name)
+                                        )
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(player.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text(player.role.label, color = Color.Gray, fontSize = 10.sp)
+                                        Text(player.name, color = textMain, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(player.role.label, color = textSub, fontSize = 10.sp)
                                     }
                                     if (isSelected) {
-                                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = IplGold, modifier = Modifier.size(18.dp))
+                                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = themeAccent, modifier = Modifier.size(18.dp))
                                     }
                                 }
                             }

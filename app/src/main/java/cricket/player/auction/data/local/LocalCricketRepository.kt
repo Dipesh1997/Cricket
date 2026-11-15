@@ -267,6 +267,62 @@ class LocalCricketRepository(context: Context) {
         return newTourney
     }
 
+    fun createDemoTournament(): Tournament {
+        val tourneyId = "demo_${System.currentTimeMillis()}"
+        val demoTourney = Tournament(
+            id = tourneyId,
+            name = "🎮 Demo Cup 2026 (Offline)",
+            defaultPurse = 100.0,
+            maxSlots = 15,
+            maxOverseas = 5,
+            scorerInviteCode = "DEMOSC1",
+            adminCode = "DEMOADM1",
+            spectatorInviteCode = "DEMOSPEC",
+            isOfflineOnly = true
+        )
+
+        // 4 Demo Teams
+        val team1 = Team(id = "team_${tourneyId}_1", tournamentId = tourneyId, name = "Mumbai Strikers", shortCode = "MS", primaryColorHex = "#004BA0", totalPurse = 100.0, inviteCode = "CAPTMS1")
+        val team2 = Team(id = "team_${tourneyId}_2", tournamentId = tourneyId, name = "Chennai Superstars", shortCode = "CS", primaryColorHex = "#F9CD05", totalPurse = 100.0, inviteCode = "CAPTCS1")
+        val team3 = Team(id = "team_${tourneyId}_3", tournamentId = tourneyId, name = "Bangalore Challengers", shortCode = "BC", primaryColorHex = "#EC1C24", totalPurse = 100.0, inviteCode = "CAPTBC1")
+        val team4 = Team(id = "team_${tourneyId}_4", tournamentId = tourneyId, name = "Kolkata Riders", shortCode = "KR", primaryColorHex = "#3A225D", totalPurse = 100.0, inviteCode = "CAPTKR1")
+        val demoTeams = listOf(team1, team2, team3, team4)
+
+        // 20 Demo Players across Batsmen, Bowlers, All-rounders, Wicket Keepers
+        val demoPlayers = listOf(
+            Player(id = "p_${tourneyId}_1", tournamentId = tourneyId, name = "Virat Kohli", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 7263, Avg: 37.2, SR: 130.0", setName = "Set 1 - Marquee"),
+            Player(id = "p_${tourneyId}_2", tournamentId = tourneyId, name = "Rohit Sharma", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 6211, Avg: 29.5, SR: 130.8", setName = "Set 1 - Marquee"),
+            Player(id = "p_${tourneyId}_3", tournamentId = tourneyId, name = "Jasprit Bumrah", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Wkts: 145, Econ: 7.39, Avg: 23.3", setName = "Set 1 - Marquee"),
+            Player(id = "p_${tourneyId}_4", tournamentId = tourneyId, name = "Hardik Pandya", role = PlayerRole.ALL_ROUNDER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2309, Wkts: 53, SR: 145.8", setName = "Set 1 - Marquee"),
+            Player(id = "p_${tourneyId}_5", tournamentId = tourneyId, name = "MS Dhoni", role = PlayerRole.WICKET_KEEPER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 5082, Avg: 38.8, Catches: 142", setName = "Set 2 - Keepers"),
+            Player(id = "p_${tourneyId}_6", tournamentId = tourneyId, name = "Jos Buttler", role = PlayerRole.WICKET_KEEPER, country = "England", isOverseas = true, basePrice = 2.0, stats = "Runs: 3223, SR: 148.3, 5x 100s", setName = "Set 2 - Keepers"),
+            Player(id = "p_${tourneyId}_7", tournamentId = tourneyId, name = "Rishabh Pant", role = PlayerRole.WICKET_KEEPER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2838, SR: 148.0, 1x 100", setName = "Set 2 - Keepers"),
+            Player(id = "p_${tourneyId}_8", tournamentId = tourneyId, name = "KL Rahul", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 4163, Avg: 46.8, SR: 134.4", setName = "Set 2 - Keepers"),
+            Player(id = "p_${tourneyId}_9", tournamentId = tourneyId, name = "Glenn Maxwell", role = PlayerRole.ALL_ROUNDER, country = "Australia", isOverseas = true, basePrice = 2.0, stats = "Runs: 2719, SR: 157.0, Wkts: 31", setName = "Set 3 - All-Rounders"),
+            Player(id = "p_${tourneyId}_10", tournamentId = tourneyId, name = "Ravindra Jadeja", role = PlayerRole.ALL_ROUNDER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2692, Wkts: 152, Econ: 7.60", setName = "Set 3 - All-Rounders"),
+            Player(id = "p_${tourneyId}_11", tournamentId = tourneyId, name = "Andre Russell", role = PlayerRole.ALL_ROUNDER, country = "West Indies", isOverseas = true, basePrice = 2.0, stats = "Runs: 2262, SR: 174.0, Wkts: 96", setName = "Set 3 - All-Rounders"),
+            Player(id = "p_${tourneyId}_12", tournamentId = tourneyId, name = "Rashid Khan", role = PlayerRole.BOWLER, country = "Afghanistan", isOverseas = true, basePrice = 2.0, stats = "Wkts: 139, Econ: 6.67, Avg: 20.7", setName = "Set 3 - All-Rounders"),
+            Player(id = "p_${tourneyId}_13", tournamentId = tourneyId, name = "Mitchell Starc", role = PlayerRole.BOWLER, country = "Australia", isOverseas = true, basePrice = 2.0, stats = "Wkts: 51, Econ: 7.98, Avg: 22.8", setName = "Set 4 - Fast Bowlers"),
+            Player(id = "p_${tourneyId}_14", tournamentId = tourneyId, name = "Trent Boult", role = PlayerRole.BOWLER, country = "New Zealand", isOverseas = true, basePrice = 2.0, stats = "Wkts: 105, Econ: 8.29, Powerplay: 50w", setName = "Set 4 - Fast Bowlers"),
+            Player(id = "p_${tourneyId}_15", tournamentId = tourneyId, name = "Kagiso Rabada", role = PlayerRole.BOWLER, country = "South Africa", isOverseas = true, basePrice = 2.0, stats = "Wkts: 106, Econ: 8.42, Strike Rate: 14.8", setName = "Set 4 - Fast Bowlers"),
+            Player(id = "p_${tourneyId}_16", tournamentId = tourneyId, name = "Mohammed Shami", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Wkts: 127, Econ: 8.44, Purple Cap 2023", setName = "Set 4 - Fast Bowlers"),
+            Player(id = "p_${tourneyId}_17", tournamentId = tourneyId, name = "Suryakumar Yadav", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 3249, SR: 143.3, 360-degree hitter", setName = "Set 5 - Batters"),
+            Player(id = "p_${tourneyId}_18", tournamentId = tourneyId, name = "Shubman Gill", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2790, Avg: 37.7, Orange Cap 2023", setName = "Set 5 - Batters"),
+            Player(id = "p_${tourneyId}_19", tournamentId = tourneyId, name = "David Warner", role = PlayerRole.BATSMAN, country = "Australia", isOverseas = true, basePrice = 2.0, stats = "Runs: 6397, Avg: 41.5, 3x Orange Cap", setName = "Set 5 - Batters"),
+            Player(id = "p_${tourneyId}_20", tournamentId = tourneyId, name = "Bhuvneshwar Kumar", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 1.5, stats = "Wkts: 170, Econ: 7.39, 2x Purple Cap", setName = "Set 5 - Batters")
+        )
+
+        _tournaments.value = _tournaments.value + demoTourney
+        _teams.value = _teams.value + demoTeams
+        _players.value = _players.value + demoPlayers
+        _activeTournamentId.value = demoTourney.id
+        _activePlayerId.value = demoPlayers.first().id
+        deviceTourneyManager.addTournament(demoTourney.id, "ADMIN")
+        _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+        persistAsync()
+        return demoTourney
+    }
+
     fun setCaptainReady(teamId: String, isReady: Boolean) {
         val updated = _captainReadyMap.value.toMutableMap()
         updated[teamId] = isReady

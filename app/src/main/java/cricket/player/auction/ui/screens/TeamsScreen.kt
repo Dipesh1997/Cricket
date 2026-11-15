@@ -44,6 +44,8 @@ import cricket.player.auction.ui.components.PhotoUploaderField
 import cricket.player.auction.ui.components.PurseProgressBar
 import cricket.player.auction.ui.components.StatChip
 import cricket.player.auction.ui.components.parseColorHex
+import cricket.player.auction.ui.components.getTeamPlaceholderIcon
+import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
@@ -221,7 +223,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                     ) {
                         Text(
                             text = "Squad Roster (${squadPlayers.size}/${team.maxSlots} Players)",
-                            color = IplGold,
+                            color = textMain,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -230,7 +232,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                             onClick = {
                                 showAddPlayerForTeamDialog = team
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
@@ -245,7 +247,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                     if (squadPlayers.isEmpty()) {
                         Text(
                             text = "No players acquired yet. Click 'Add Player' to add team members directly!",
-                            color = Color.Gray,
+                            color = textSub,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
@@ -256,7 +258,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         ) {
                             items(squadPlayers) { player ->
                                 Surface(
-                                    color = StadiumSurface,
+                                    color = if (isDarkTheme) StadiumSurface else LightPitchSurface,
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
@@ -272,10 +274,15 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                                                 modifier = Modifier
                                                     .size(40.dp)
                                                     .clip(androidx.compose.foundation.shape.CircleShape)
-                                                    .border(1.5.dp, IplGold, androidx.compose.foundation.shape.CircleShape)
-                                                    .background(StadiumDark)
+                                                    .border(1.5.dp, themeAccent, androidx.compose.foundation.shape.CircleShape)
+                                                    .background(if (isDarkTheme) StadiumDark else LightPitchCard)
                                             ) {
-                                                DriveImage(url = player.imageUrl, contentDescription = player.name, modifier = Modifier.fillMaxSize())
+                                                DriveImage(
+                                                    url = player.imageUrl,
+                                                    contentDescription = player.name,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    fallbackIcon = getPlayerPlaceholderIcon(player.id, player.name)
+                                                )
                                             }
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Column {
@@ -350,7 +357,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         Checkbox(
                             checked = isOverseas,
                             onCheckedChange = { isOverseas = it },
-                            colors = CheckboxDefaults.colors(checkedColor = NeonBlue)
+                            colors = CheckboxDefaults.colors(checkedColor = if (isDarkTheme) NeonBlue else LightPitchPrimary)
                         )
                         Text("Overseas Player", color = textMain, fontSize = 13.sp)
                     }
@@ -365,7 +372,8 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                     PhotoUploaderField(
                         imageUrl = photoUrl,
                         onImageUrlChange = { photoUrl = it },
-                        label = "Player Photo"
+                        label = "Player Photo",
+                        placeholderIcon = getPlayerPlaceholderIcon(name)
                     )
                 }
             },
@@ -391,7 +399,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         )
                         showAddPlayerForTeamDialog = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = name.isNotBlank()
                 ) {
                     Text("ADD TO SQUAD", fontWeight = FontWeight.Bold)
@@ -464,7 +472,8 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                     PhotoUploaderField(
                         imageUrl = logoUrl,
                         onImageUrlChange = { logoUrl = it },
-                        label = "Team Logo"
+                        label = "Team Logo",
+                        placeholderIcon = getTeamPlaceholderIcon(teamName)
                     )
                 }
             },
@@ -482,7 +491,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         )
                         showCreateTeamDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = teamName.isNotBlank() && shortCode.isNotBlank()
                 ) {
                     Text("Create Team", fontWeight = FontWeight.Bold)
@@ -567,7 +576,8 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                     PhotoUploaderField(
                         imageUrl = editLogoUrl,
                         onImageUrlChange = { editLogoUrl = it },
-                        label = "Team Logo"
+                        label = "Team Logo",
+                        placeholderIcon = getTeamPlaceholderIcon(target.id, editName)
                     )
                 }
             },
@@ -586,7 +596,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         viewModel.updateTeam(updated)
                         editingTeam = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                     enabled = editName.isNotBlank() && editCode.isNotBlank()
                 ) {
                     Text("SAVE CHANGES", fontWeight = FontWeight.Bold)
@@ -651,6 +661,7 @@ fun TeamPurseCard(
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
     val textMain = if (isDarkTheme) Color.White else LightPitchText
     val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
 
     Card(
         colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -676,12 +687,21 @@ fun TeamPurseCard(
                             .background(teamColor, shape = RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = team.shortCode,
-                            color = Color.White,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 14.sp
-                        )
+                        if (team.logoUrl.isNotBlank()) {
+                            DriveImage(
+                                url = team.logoUrl,
+                                contentDescription = team.name,
+                                modifier = Modifier.fillMaxSize(),
+                                fallbackIcon = getTeamPlaceholderIcon(team.id, team.name)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = getTeamPlaceholderIcon(team.id, team.name),
+                                contentDescription = team.name,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -699,11 +719,11 @@ fun TeamPurseCard(
                             modifier = Modifier.padding(top = 2.dp)
                         ) {
                             if (team.captainEmail != null) {
-                                Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = if (isDarkTheme) IplGold else LightPitchPrimary, modifier = Modifier.size(11.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "Capt: ${team.captainEmail.take(14)}${if (team.captainEmail.length > 14) "…" else ""}",
-                                    color = IplGold,
+                                    color = textMain,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -739,9 +759,9 @@ fun TeamPurseCard(
                             Spacer(modifier = Modifier.height(3.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Surface(
-                                    color = IplGold.copy(alpha = 0.15f),
+                                    color = if (isDarkTheme) IplGold.copy(alpha = 0.15f) else LightPitchSurface,
                                     shape = RoundedCornerShape(6.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.4f)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) IplGold else LightPitchPrimary).copy(alpha = 0.4f)),
                                     modifier = Modifier.clickable {
                                         clipboardManager.setText(AnnotatedString(team.inviteCode))
                                         Toast.makeText(context, "🔑 Code ${team.inviteCode} copied to clipboard!", Toast.LENGTH_SHORT).show()
@@ -751,36 +771,36 @@ fun TeamPurseCard(
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (isDarkTheme) IplGold else LightPitchPrimary, modifier = Modifier.size(11.dp))
                                         Spacer(modifier = Modifier.width(3.dp))
                                         Text(
                                             text = "INVITE: ${team.inviteCode}",
-                                            color = IplGold,
+                                            color = textMain,
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.ExtraBold
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
-                                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = if (isDarkTheme) IplGold else LightPitchPrimary, modifier = Modifier.size(11.dp))
                                     }
                                 }
 
                                 if (isAdmin && onRegenerateCodeClick != null) {
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Surface(
-                                        color = NeonBlue.copy(alpha = 0.15f),
+                                        color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
                                         shape = RoundedCornerShape(6.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f)),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.4f)),
                                         modifier = Modifier.clickable { onRegenerateCodeClick() }
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(11.dp))
+                                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(11.dp))
                                             Spacer(modifier = Modifier.width(2.dp))
                                             Text(
                                                 text = "Reset",
-                                                color = NeonBlue,
+                                                color = textMain,
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -797,15 +817,15 @@ fun TeamPurseCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatChip(
                         text = team.remainingPurse.formatIplCurrency(),
-                        backgroundColor = IplGold.copy(alpha = 0.2f),
-                        textColor = IplGold
+                        backgroundColor = if (isDarkTheme) IplGold.copy(alpha = 0.2f) else LightPitchSurface,
+                        textColor = textMain
                     )
 
                     if (isAdmin) {
                         Spacer(modifier = Modifier.width(2.dp))
 
                         IconButton(onClick = onEditClick) {
-                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Team", tint = IplGold, modifier = Modifier.size(18.dp))
+                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Team", tint = themeAccent, modifier = Modifier.size(18.dp))
                         }
 
                         IconButton(onClick = onDeleteClick) {
@@ -837,11 +857,11 @@ fun TeamPurseCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(14.dp))
+                    Icon(imageVector = Icons.Default.Public, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Overseas: $overseasCount/${team.maxOverseas}",
-                        color = NeonBlue,
+                        color = textMain,
                         fontSize = 12.sp
                     )
                 }

@@ -227,6 +227,9 @@ class FirebaseCricketRepository(
 
                 // Push each tournament as a vertical, expandable object hierarchy
                 for (tourney in schema.tournaments) {
+                    // Skip offline-only / demo tournaments from Firebase Realtime Database
+                    if (tourney.isOfflineOnly) continue
+
                     val tRef = database.reference.child("tournaments").child(tourney.id)
 
                     // 1. Info node
