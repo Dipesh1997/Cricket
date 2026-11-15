@@ -55,6 +55,7 @@ data class Tournament(
     val driveFileUrl: String = "",
     val scorerInviteCode: String = "",
     val adminCode: String = "",
+    val spectatorInviteCode: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -302,6 +303,7 @@ fun Double.formatIplCurrency(): String {
 fun Tournament.sanitized(): Tournament {
     val cleanId = id ?: "t_${System.currentTimeMillis()}"
     val cleanAdminCode = if (adminCode.isNullOrBlank()) "ADM" + cleanId.takeLast(4).uppercase() else adminCode
+    val cleanSpecCode = if (spectatorInviteCode.isNullOrBlank()) "SPEC" + cleanId.takeLast(4).uppercase() else spectatorInviteCode
     return this.copy(
         id = cleanId,
         name = name ?: "Tournament",
@@ -310,7 +312,8 @@ fun Tournament.sanitized(): Tournament {
         maxOverseas = if (maxOverseas < 0) 8 else maxOverseas,
         driveFileUrl = driveFileUrl ?: "",
         scorerInviteCode = if (scorerInviteCode.isNullOrBlank()) "SC" + cleanId.takeLast(4).uppercase() else scorerInviteCode,
-        adminCode = cleanAdminCode
+        adminCode = cleanAdminCode,
+        spectatorInviteCode = cleanSpecCode
     )
 }
 

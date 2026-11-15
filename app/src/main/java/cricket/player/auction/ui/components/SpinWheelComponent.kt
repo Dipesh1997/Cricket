@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,10 +28,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.Player
 import cricket.player.auction.model.PlayerStatus
+import cricket.player.auction.model.Team
 import cricket.player.auction.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -52,6 +55,7 @@ val WheelColors = listOf(
 @Composable
 fun SpinWheelModal(
     players: List<Player>,
+    teams: List<Team> = emptyList(),
     isDarkTheme: Boolean = true,
     onDismiss: () -> Unit,
     onPlayerSelected: (Player) -> Unit
@@ -79,6 +83,28 @@ fun SpinWheelModal(
     }
 
     val isFixedSetStage = fixedSetPlayers.isNotEmpty()
+    val totalTeams = teams.size
+    val fixedCount = fixedSetPlayers.size
+
+    // Multiple of Teams Rule for Fixed Set:
+    // If there are teams, fixedSetPlayers must be >= totalTeams and fixedSetPlayers % totalTeams == 0
+    val isFixedSetQuotaMet = remember(isFixedSetStage, totalTeams, fixedCount) {
+        if (!isFixedSetStage) true
+        else if (totalTeams <= 0) true
+        else (fixedCount >= totalTeams && fixedCount % totalTeams == 0)
+    }
+
+    val nextMultipleTarget = remember(totalTeams, fixedCount) {
+        if (totalTeams <= 0) fixedCount
+        else if (fixedCount < totalTeams) totalTeams
+        else ((fixedCount / totalTeams) + 1) * totalTeams
+    }
+
+    val playersDeficit = remember(isFixedSetStage, totalTeams, fixedCount, nextMultipleTarget) {
+        if (!isFixedSetStage || totalTeams <= 0 || isFixedSetQuotaMet) 0
+        else nextMultipleTarget - fixedCount
+    }
+
     val availablePlayers = if (isFixedSetStage) fixedSetPlayers else openCategoryPlayers
 
     AlertDialog(
@@ -118,6 +144,61 @@ fun SpinWheelModal(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Fixed Set Team Multiples Notice / Warning
+                if (isFixedSetStage && !isFixedSetQuotaMet && totalTeams > 0) {
+                    Surface(
+                        color = Color(0xFFD32F2F).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFF5252)),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF5252),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "FIXED SET INCOMPLETE",
+                                    color = Color(0xFFFF5252),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Total Teams: $totalTeams. Fixed sets require players in exact multiples of $totalTeams (e.g. $totalTeams, ${totalTeams * 2}, ${totalTeams * 3}...). You currently have $fixedCount player${if (fixedCount == 1) "" else "s"}.\n\nPlease add $playersDeficit more player${if (playersDeficit == 1) "" else "s"} to complete the set of $nextMultipleTarget before spinning!",
+                                color = textMain,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                } else if (isFixedSetStage && isFixedSetQuotaMet && totalTeams > 0) {
+                    Surface(
+                        color = BidGreen.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BidGreen.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            text = "✅ Fixed Set Quota Met: $fixedCount players (${fixedCount / totalTeams} round${if (fixedCount / totalTeams > 1) "s" else ""} for $totalTeams teams)",
+                            color = BidGreen,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(6.dp)
+                        )
+                    }
+                }
+
                 if (availablePlayers.isEmpty()) {
                     Text(
                         text = "No 'UP_NEXT' players available in roster to spin!",
@@ -298,9 +379,10 @@ fun SpinWheelModal(
         },
         confirmButton = {
             if (availablePlayers.isNotEmpty()) {
+                val canSpin = !isSpinning && (!isFixedSetStage || isFixedSetQuotaMet)
                 Button(
                     onClick = {
-                        if (!isSpinning) {
+                        if (canSpin) {
                             isSpinning = true
                             scope.launch {
                                 val targetIndex = availablePlayers.indices.random()
@@ -319,10 +401,18 @@ fun SpinWheelModal(
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
-                    enabled = !isSpinning
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (canSpin) IplGold else Color.Gray,
+                        contentColor = Color.Black
+                    ),
+                    enabled = canSpin
                 ) {
-                    Text(if (isSpinning) "SPINNING..." else "SPIN WHEEL!", fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        if (isSpinning) "SPINNING..."
+                        else if (isFixedSetStage && !isFixedSetQuotaMet) "ADD $playersDeficit MORE TO SPIN ($fixedCount/$nextMultipleTarget)"
+                        else "SPIN WHEEL!",
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
             }
         },

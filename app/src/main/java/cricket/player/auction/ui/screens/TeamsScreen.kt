@@ -14,8 +14,12 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +37,7 @@ import cricket.player.auction.model.Player
 import cricket.player.auction.model.PlayerRole
 import cricket.player.auction.model.PlayerStatus
 import cricket.player.auction.model.Team
+import cricket.player.auction.model.UserRole
 import cricket.player.auction.model.formatIplCurrency
 import cricket.player.auction.ui.components.DriveImage
 import cricket.player.auction.ui.components.PhotoUploaderField
@@ -45,10 +50,15 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeamsScreen(viewModel: AuctionViewModel) {
+    val context = LocalContext.current
     val teams by viewModel.teams.collectAsState()
     val players by viewModel.players.collectAsState()
     val activeTournament by viewModel.activeTournament.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val isAdmin = currentUser?.role == UserRole.ADMIN_AUCTIONEER
+    val isSpectator = currentUser?.role == UserRole.SPECTATOR
 
     val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -65,12 +75,14 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCreateTeamDialog = true },
-                containerColor = IplGold,
-                contentColor = Color.Black
-            ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Team")
+            if (isAdmin) {
+                FloatingActionButton(
+                    onClick = { showCreateTeamDialog = true },
+                    containerColor = themeAccent,
+                    contentColor = Color.Black
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Team")
+                }
             }
         },
         containerColor = screenBg
@@ -115,6 +127,29 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                 }
             }
 
+            if (isSpectator) {
+                Surface(
+                    color = NeonBlue.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Spectator Mode: Teams and squads are in read-only view.",
+                            color = NeonBlue,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
             if (teams.isEmpty()) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -140,10 +175,19 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                             team = team,
                             squadCount = squadCount,
                             overseasCount = overseasCount,
+                            isAdmin = isAdmin,
                             isDarkTheme = isDarkTheme,
                             onClick = { selectedTeamForRoster = team },
                             onEditClick = { editingTeam = team },
-                            onDeleteClick = { deletingTeam = team }
+                            onDeleteClick = { deletingTeam = team },
+                            onRemoveCaptainClick = {
+                                viewModel.removeTeamCaptain(team.id)
+                                Toast.makeText(context, "👑 Captain removed from ${team.name} & fresh code generated!", Toast.LENGTH_SHORT).show()
+                            },
+                            onRegenerateCodeClick = {
+                                val newCode = viewModel.regenerateTeamInviteCode(team.id)
+                                Toast.makeText(context, "🔑 New Code $newCode generated for ${team.name}!", Toast.LENGTH_SHORT).show()
+                            }
                         )
                     }
                 }
@@ -506,6 +550,20 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         singleLine = true
                     )
 
+                    if (target.captainEmail != null) {
+                        Button(
+                            onClick = {
+                                viewModel.removeTeamCaptain(target.id)
+                                editCaptainEmail = ""
+                                Toast.makeText(context, "👑 Captain removed from ${target.name} & fresh code generated!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Remove Team Captain ❌", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+
                     PhotoUploaderField(
                         imageUrl = editLogoUrl,
                         onImageUrlChange = { editLogoUrl = it },
@@ -578,10 +636,13 @@ fun TeamPurseCard(
     team: Team,
     squadCount: Int,
     overseasCount: Int,
+    isAdmin: Boolean = false,
     isDarkTheme: Boolean = true,
     onClick: () -> Unit,
     onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onRemoveCaptainClick: (() -> Unit)? = null,
+    onRegenerateCodeClick: (() -> Unit)? = null
 ) {
     val teamColor = parseColorHex(team.primaryColorHex)
     val context = LocalContext.current
@@ -631,31 +692,100 @@ fun TeamPurseCard(
                             fontSize = 15.sp,
                             maxLines = 1
                         )
-                        if (team.inviteCode.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Surface(
-                                color = IplGold.copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(6.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.4f)),
-                                modifier = Modifier.clickable {
-                                    clipboardManager.setText(AnnotatedString(team.inviteCode))
-                                    Toast.makeText(context, "🔑 Code ${team.inviteCode} copied to clipboard!", Toast.LENGTH_SHORT).show()
+
+                        // Captain Information & Management
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            if (team.captainEmail != null) {
+                                Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Capt: ${team.captainEmail.take(14)}${if (team.captainEmail.length > 14) "…" else ""}",
+                                    color = IplGold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (isAdmin && onRemoveCaptainClick != null) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Surface(
+                                        color = UnsoldRed.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = Modifier.clickable { onRemoveCaptainClick() }
+                                    ) {
+                                        Text(
+                                            text = "Remove ❌",
+                                            color = UnsoldRed,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
                                 }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                            } else {
+                                Icon(imageVector = Icons.Default.PersonOutline, contentDescription = null, tint = textSub, modifier = Modifier.size(11.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Capt: Unclaimed",
+                                    color = textSub,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+
+                        // Team Invite Code & Reset
+                        if (team.inviteCode.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = IplGold.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.4f)),
+                                    modifier = Modifier.clickable {
+                                        clipboardManager.setText(AnnotatedString(team.inviteCode))
+                                        Toast.makeText(context, "🔑 Code ${team.inviteCode} copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                    }
                                 ) {
-                                    Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(
-                                        text = "INVITE: ${team.inviteCode}",
-                                        color = IplGold,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "INVITE: ${team.inviteCode}",
+                                            color = IplGold,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = IplGold, modifier = Modifier.size(11.dp))
+                                    }
+                                }
+
+                                if (isAdmin && onRegenerateCodeClick != null) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Surface(
+                                        color = NeonBlue.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.4f)),
+                                        modifier = Modifier.clickable { onRegenerateCodeClick() }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(11.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(
+                                                text = "Reset",
+                                                color = NeonBlue,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -671,14 +801,16 @@ fun TeamPurseCard(
                         textColor = IplGold
                     )
 
-                    Spacer(modifier = Modifier.width(2.dp))
+                    if (isAdmin) {
+                        Spacer(modifier = Modifier.width(2.dp))
 
-                    IconButton(onClick = onEditClick) {
-                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Team", tint = IplGold, modifier = Modifier.size(18.dp))
-                    }
+                        IconButton(onClick = onEditClick) {
+                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Team", tint = IplGold, modifier = Modifier.size(18.dp))
+                        }
 
-                    IconButton(onClick = onDeleteClick) {
-                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Team", tint = UnsoldRed, modifier = Modifier.size(18.dp))
+                        IconButton(onClick = onDeleteClick) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Team", tint = UnsoldRed, modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
             }

@@ -9,18 +9,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +40,7 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 @Composable
 fun SettingsScreen(viewModel: AuctionViewModel) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val currentUser by viewModel.currentUser.collectAsState()
     val activeTournament by viewModel.activeTournament.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
@@ -70,6 +77,219 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
             color = textSub,
             fontSize = 12.sp
         )
+
+        // --- 1. Spectator Code Card (Prominently displayed at top) ---
+        val spectatorCode = activeTournament?.spectatorInviteCode.orEmpty().ifBlank {
+            "SPEC" + (activeTournament?.id ?: "").takeLast(4).uppercase()
+        }
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, NeonBlue)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonBlue)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "SPECTATOR CODE (READ-ONLY)",
+                            color = NeonBlue,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                    StatChip(text = "LIVE VIEW ONLY", backgroundColor = NeonBlue.copy(alpha = 0.2f), textColor = NeonBlue)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "Share this spectator code with audience, fans, or team viewers. Anyone joining with this code can watch the lucky player spin wheel, auction bids, match scorecards, and points table in real-time without modifying any data.",
+                    color = textSub,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Surface(
+                    color = surfaceBg,
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("SPECTATOR JOIN CODE", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = spectatorCode,
+                                color = textMain,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 2.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(spectatorCode))
+                                Toast.makeText(context, "👁️ Spectator Code '$spectatorCode' copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("COPY CODE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 2. Admin Role & Code Management Card (Only for Tournament Admin) ---
+        if (currentUser?.role == UserRole.ADMIN_AUCTIONEER && activeTournament != null) {
+            val tourney = activeTournament!!
+            Card(
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth(),
+                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.7f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Default.Security, contentDescription = null, tint = themeAccent)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "ROLE & ACCESS CODES (ADMIN)",
+                            color = textMain,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Generate and share codes to add co-admins, scorers, or reset codes to revoke old users.",
+                        color = textSub,
+                        fontSize = 12.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 1. Admin Code Row
+                    Surface(
+                        color = surfaceBg,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("ADMIN / AUCTIONEER CODE", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(tourney.adminCode, color = themeAccent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("Share to add another admin with full privileges", color = textSub, fontSize = 10.sp)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                IconButton(onClick = {
+                                    clipboardManager.setText(AnnotatedString(tourney.adminCode))
+                                    Toast.makeText(context, "🔑 Admin Code copied!", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Copy", tint = themeAccent, modifier = Modifier.size(18.dp))
+                                }
+                                IconButton(onClick = {
+                                    val newCode = viewModel.regenerateAdminCode(tourney.id)
+                                    Toast.makeText(context, "🔄 New Admin Code generated: $newCode", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = "Regenerate", tint = NeonBlue, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Scorer Code Row
+                    Surface(
+                        color = surfaceBg,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("LIVE SCORER INVITE CODE", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(tourney.scorerInviteCode, color = NeonBlue, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("Reset to remove previous scorer and invite new one", color = textSub, fontSize = 10.sp)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                IconButton(onClick = {
+                                    clipboardManager.setText(AnnotatedString(tourney.scorerInviteCode))
+                                    Toast.makeText(context, "🏏 Scorer Code copied!", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Copy", tint = NeonBlue, modifier = Modifier.size(18.dp))
+                                }
+                                IconButton(onClick = {
+                                    val newCode = viewModel.regenerateScorerCode(tourney.id)
+                                    Toast.makeText(context, "🔄 Scorer reset! New code: $newCode", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = "Regenerate", tint = themeAccent, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Spectator Code Row
+                    Surface(
+                        color = surfaceBg,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("SPECTATOR INVITE CODE", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(spectatorCode, color = textMain, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("Reset to cycle audience code", color = textSub, fontSize = 10.sp)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                IconButton(onClick = {
+                                    clipboardManager.setText(AnnotatedString(spectatorCode))
+                                    Toast.makeText(context, "👁️ Spectator Code copied!", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(imageVector = Icons.Default.ContentCopy, contentDescription = "Copy", tint = textMain, modifier = Modifier.size(18.dp))
+                                }
+                                IconButton(onClick = {
+                                    val newCode = viewModel.regenerateSpectatorCode(tourney.id)
+                                    Toast.makeText(context, "🔄 Spectator code reset! New code: $newCode", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = "Regenerate", tint = NeonBlue, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // --- Export & Import Backup Card ---
         Card(

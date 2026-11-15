@@ -146,7 +146,37 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.setActiveTournament(tournamentId)
         if (localRepository.isMasterAdminMode.value) {
             _currentUser.value = _currentUser.value.copy(role = UserRole.ADMIN_AUCTIONEER)
+        } else {
+            val roleStr = localRepository.getTournamentRole(tournamentId)
+            val role = when (roleStr) {
+                "ADMIN" -> UserRole.ADMIN_AUCTIONEER
+                "SCORER" -> UserRole.SCORER
+                "CAPTAIN" -> UserRole.TEAM_CAPTAIN
+                "SPECTATOR" -> UserRole.SPECTATOR
+                else -> UserRole.ADMIN_AUCTIONEER
+            }
+            _currentUser.value = _currentUser.value.copy(role = role)
         }
+    }
+
+    fun removeTeamCaptain(teamId: String) {
+        localRepository.removeTeamCaptain(teamId)
+    }
+
+    fun regenerateTeamInviteCode(teamId: String): String {
+        return localRepository.regenerateTeamInviteCode(teamId)
+    }
+
+    fun regenerateScorerCode(tournamentId: String): String {
+        return localRepository.regenerateScorerCode(tournamentId)
+    }
+
+    fun regenerateAdminCode(tournamentId: String): String {
+        return localRepository.regenerateAdminCode(tournamentId)
+    }
+
+    fun regenerateSpectatorCode(tournamentId: String): String {
+        return localRepository.regenerateSpectatorCode(tournamentId)
     }
 
     fun toggleMasterAdminMode(): Boolean {

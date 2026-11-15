@@ -284,6 +284,7 @@ function applyStructuredFirebaseData(data) {
       name: info.name || "Tournament",
       adminCode: info.adminCode || "ADM2026",
       scorerInviteCode: info.scorerInviteCode || "SC8K2M",
+      spectatorInviteCode: info.spectatorInviteCode || ("SPEC" + tId.slice(-4).toUpperCase()),
       defaultPurse: parseFloat(info.defaultPurse) || 100.0,
       maxSlots: parseInt(info.maxSlots) || 25,
       maxOverseas: parseInt(info.maxOverseas) || 8,
@@ -447,6 +448,7 @@ function saveToFirebase() {
       name: tourney.name,
       adminCode: tourney.adminCode || "ADM2026",
       scorerInviteCode: tourney.scorerInviteCode || "SC8K2M",
+      spectatorInviteCode: tourney.spectatorInviteCode || ("SPEC" + tourney.id.slice(-4).toUpperCase()),
       defaultPurse: tourney.defaultPurse || 100.0,
       maxSlots: tourney.maxSlots || 25,
       maxOverseas: tourney.maxOverseas || 8,
@@ -1860,7 +1862,38 @@ function submitClaimCode() {
     return;
   }
 
-  // 4. Fallback: Any valid code (e.g. 7-character code or custom code)
+  // 4. Check if matches Spectator Invite Code
+  let specTourney = state.tournaments.find(t => (t.spectatorInviteCode || "").toUpperCase() === code);
+  if (!specTourney && code.startsWith("SPEC")) {
+    specTourney = {
+      id: "t_" + Date.now(),
+      name: "Tournament (" + code + ")",
+      defaultPurse: 100.0,
+      maxSlots: 25,
+      maxOverseas: 8,
+      spectatorInviteCode: code,
+      scorerInviteCode: "SC" + Math.floor(1000 + Math.random() * 9000),
+      adminCode: "ADM" + Math.floor(1000 + Math.random() * 9000),
+      createdAt: Date.now(),
+      creatorDeviceId: getBrowserDeviceId()
+    };
+    state.tournaments.push(specTourney);
+  }
+
+  if (specTourney) {
+    registerMyTournament(specTourney.id);
+    state.activeTournamentId = specTourney.id;
+    state.currentUser.role = "SPECTATOR";
+    state.currentUser.assignedTeamId = null;
+    document.getElementById("userRoleSelect").value = "SPECTATOR";
+    saveToFirebase();
+    closeModal("claimCodeModal");
+    renderAll();
+    showToast(`👁️ Spectator Access (Read-Only) for "${specTourney.name}"! Registered on this device.`);
+    return;
+  }
+
+  // 5. Fallback: Any valid code (e.g. 7-character code or custom code)
   if (code.length >= 3) {
     let genTourney = {
       id: "t_" + Date.now(),
@@ -1999,6 +2032,7 @@ function submitCreateTourney() {
 
   const scorerInviteCode = "SC" + Math.floor(1000 + Math.random() * 9000).toString();
   const adminCode = "ADM" + Math.floor(1000 + Math.random() * 9000).toString();
+  const spectatorInviteCode = "SPEC" + Math.floor(1000 + Math.random() * 9000).toString();
 
   const newId = "t_" + Date.now();
   const tourney = {
@@ -2009,6 +2043,7 @@ function submitCreateTourney() {
     maxOverseas: maxOverseas,
     scorerInviteCode: scorerInviteCode,
     adminCode: adminCode,
+    spectatorInviteCode: spectatorInviteCode,
     createdAt: Date.now(),
     creatorDeviceId: getBrowserDeviceId()
   };
@@ -2135,8 +2170,23 @@ function submitCreateMatch() {
 }
 
 function doSpinWheel() {
-  const availablePlayers = state.players.filter(p => p.status === "UP_NEXT" || p.status === "UNSOLD");
+  const upNext = state.players.filter(p => p.status === "UP_NEXT");
+  const fixedPlayers = upNext.filter(p => p.isFixedSet);
+  const totalTeams = state.teams.length;
   const displayEl = document.getElementById("spinWheelDisplay");
+
+  // Fixed sets must be an exact multiple of the total number of teams
+  if (fixedPlayers.length > 0) {
+    if (totalTeams > 0 && (fixedPlayers.length < totalTeams || fixedPlayers.length % totalTeams !== 0)) {
+      const target = fixedPlayers.length < totalTeams ? totalTeams : Math.ceil(fixedPlayers.length / totalTeams) * totalTeams;
+      const deficit = target - fixedPlayers.length;
+      showToast(`⚠️ Fixed sets must be a multiple of ${totalTeams} teams. Add ${deficit} more player(s) to complete set of ${target}!`);
+      if (displayEl) displayEl.innerText = `Add ${deficit} more fixed player(s)!`;
+      return;
+    }
+  }
+
+  const availablePlayers = (fixedPlayers.length > 0) ? fixedPlayers : state.players.filter(p => p.status === "UP_NEXT" || p.status === "UNSOLD");
   if (availablePlayers.length === 0) {
     if (displayEl) displayEl.innerText = "No Available Players!";
     return;

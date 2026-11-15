@@ -1,5 +1,6 @@
 package cricket.player.auction.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -29,6 +31,8 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuctionScreen(viewModel: AuctionViewModel) {
+    val context = LocalContext.current
+    val activeTournament by viewModel.activeTournament.collectAsState()
     val activePlayer by viewModel.activePlayer.collectAsState()
     val highestBidderTeam by viewModel.highestBidderTeam.collectAsState()
     val teams by viewModel.teams.collectAsState()
@@ -173,7 +177,22 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     selected = player.isFixedSet,
                                     onClick = {
                                         if (currentUser?.role == UserRole.ADMIN_AUCTIONEER) {
-                                            viewModel.togglePlayerFixedSet(player.id, !player.isFixedSet)
+                                            val newFixed = !player.isFixedSet
+                                            viewModel.togglePlayerFixedSet(player.id, newFixed)
+                                            val tourneyTeams = teams.filter { it.tournamentId == activeTournament?.id }
+                                            val currentFixed = players.count {
+                                                it.tournamentId == activeTournament?.id && it.status == PlayerStatus.UP_NEXT && (if (it.id == player.id) newFixed else it.isFixedSet)
+                                            }
+                                            val tCount = tourneyTeams.size
+                                            if (tCount > 0) {
+                                                if (currentFixed >= tCount && currentFixed % tCount == 0) {
+                                                    Toast.makeText(context, "⭐ Fixed Set complete: $currentFixed players (${currentFixed / tCount} round for $tCount teams)!", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    val target = if (currentFixed < tCount) tCount else ((currentFixed / tCount) + 1) * tCount
+                                                    val needed = target - currentFixed
+                                                    Toast.makeText(context, "⭐ Fixed Set: $currentFixed players. Add $needed more for $tCount teams multiple ($target)!", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
                                         }
                                     },
                                     label = { Text(if (player.isFixedSet) "⭐ Fixed Set" else "+ Fix Set", fontSize = 10.sp) },
@@ -441,128 +460,166 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             }
         }
 
-        // --- Bidding Controls Section ---
+        // --- Bidding Controls Section or Spectator View Banner ---
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = cardBg),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+            if (currentUser?.role == UserRole.SPECTATOR) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = NeonBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "SPECTATOR LIVE AUCTION VIEW",
+                                color = NeonBlue,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "BIDDING TEAM",
+                            text = "You are watching this auction in real-time spectator mode. Bids and auction outcomes update live on your screen.",
                             color = textSub,
                             fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "BIDDING TEAM",
+                                color = textSub,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            val isTeamLocked = currentUser?.assignedTeamId != null
+                            TextButton(
+                                onClick = {
+                                    if (!isTeamLocked) {
+                                        showTeamSelectorDialog = true
+                                    }
+                                },
+                                enabled = !isTeamLocked
+                            ) {
+                                Text(
+                                    text = if (isTeamLocked) "🔒 ${currentBiddingTeam?.name ?: "My Team"}" else (currentBiddingTeam?.name ?: "Select Team"),
+                                    color = themeAccent,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (!isTeamLocked) {
+                                    Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = themeAccent)
+                                }
+                            }
+                        }
+
+                        if (currentBiddingTeam != null) {
+                            PurseProgressBar(
+                                spent = currentBiddingTeam.spentPurse,
+                                total = currentBiddingTeam.totalPurse,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "QUICK BID INCREMENTS",
+                            color = textSub,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
 
-                        val isTeamLocked = currentUser?.assignedTeamId != null
-                        TextButton(
-                            onClick = {
-                                if (!isTeamLocked) {
-                                    showTeamSelectorDialog = true
-                                }
-                            },
-                            enabled = !isTeamLocked
-                        ) {
-                            Text(
-                                text = if (isTeamLocked) "🔒 ${currentBiddingTeam?.name ?: "My Team"}" else (currentBiddingTeam?.name ?: "Select Team"),
-                                color = themeAccent,
-                                fontWeight = FontWeight.Bold
-                            )
-                            if (!isTeamLocked) {
-                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = themeAccent)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val activeP = activePlayer
+                        val isAuctionReady = joinedCaptainTeams.isEmpty() || isBiddingStarted || areAllCaptainsReady
+                        val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD && currentBiddingTeam != null && isAuctionReady
+                        val availablePurse = currentBiddingTeam?.remainingPurse ?: 0.0
+
+                        if (!isAuctionReady) {
+                            Surface(
+                                color = themeAccent.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                            ) {
+                                Text(
+                                    text = "⏳ Bidding is locked until all joined captains click READY",
+                                    color = themeAccent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(8.dp),
+                                    textAlign = TextAlign.Center
+                                )
                             }
                         }
-                    }
 
-                    if (currentBiddingTeam != null) {
-                        PurseProgressBar(
-                            spent = currentBiddingTeam.spentPurse,
-                            total = currentBiddingTeam.totalPurse,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "QUICK BID INCREMENTS",
-                        color = textSub,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val activeP = activePlayer
-                    val isAuctionReady = joinedCaptainTeams.isEmpty() || isBiddingStarted || areAllCaptainsReady
-                    val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD && currentBiddingTeam != null && isAuctionReady
-                    val availablePurse = currentBiddingTeam?.remainingPurse ?: 0.0
-
-                    if (!isAuctionReady) {
-                        Surface(
-                            color = themeAccent.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = "⏳ Bidding is locked until all joined captains click READY",
-                                color = themeAccent,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(8.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            BidIncrementButton(
-                                label = "+₹20L",
-                                amountCr = 0.20,
-                                availablePurse = availablePurse,
-                                isEnabled = isBidEnabled,
-                                onClick = {
-                                    if (currentBiddingTeam != null) {
-                                        viewModel.placeBid(currentBiddingTeam.id, 0.20)
+                            Box(modifier = Modifier.weight(1f)) {
+                                BidIncrementButton(
+                                    label = "+₹20L",
+                                    amountCr = 0.20,
+                                    availablePurse = availablePurse,
+                                    isEnabled = isBidEnabled,
+                                    onClick = {
+                                        if (currentBiddingTeam != null) {
+                                            viewModel.placeBid(currentBiddingTeam.id, 0.20)
+                                        }
                                     }
-                                }
-                            )
-                        }
-                        Box(modifier = Modifier.weight(1f)) {
-                            BidIncrementButton(
-                                label = "+₹50L",
-                                amountCr = 0.50,
-                                availablePurse = availablePurse,
-                                isEnabled = isBidEnabled,
-                                onClick = {
-                                    if (currentBiddingTeam != null) {
-                                        viewModel.placeBid(currentBiddingTeam.id, 0.50)
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                BidIncrementButton(
+                                    label = "+₹50L",
+                                    amountCr = 0.50,
+                                    availablePurse = availablePurse,
+                                    isEnabled = isBidEnabled,
+                                    onClick = {
+                                        if (currentBiddingTeam != null) {
+                                            viewModel.placeBid(currentBiddingTeam.id, 0.50)
+                                        }
                                     }
-                                }
-                            )
-                        }
-                        Box(modifier = Modifier.weight(1f)) {
-                            BidIncrementButton(
-                                label = "+₹1.00Cr",
-                                amountCr = 1.00,
-                                availablePurse = availablePurse,
-                                isEnabled = isBidEnabled,
-                                onClick = {
-                                    if (currentBiddingTeam != null) {
-                                        viewModel.placeBid(currentBiddingTeam.id, 1.00)
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                BidIncrementButton(
+                                    label = "+₹1.00Cr",
+                                    amountCr = 1.00,
+                                    availablePurse = availablePurse,
+                                    isEnabled = isBidEnabled,
+                                    onClick = {
+                                        if (currentBiddingTeam != null) {
+                                            viewModel.placeBid(currentBiddingTeam.id, 1.00)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -718,8 +775,12 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
     // --- Interactive Spin Wheel Dialog ---
     if (showSpinWheelModal) {
+        val tourneyTeams = remember(teams, activeTournament) {
+            teams.filter { it.tournamentId == activeTournament?.id }
+        }
         SpinWheelModal(
             players = players,
+            teams = tourneyTeams,
             isDarkTheme = isDarkTheme,
             onDismiss = { showSpinWheelModal = false },
             onPlayerSelected = { selectedPlayer ->

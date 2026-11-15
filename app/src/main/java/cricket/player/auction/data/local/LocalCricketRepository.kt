@@ -247,6 +247,7 @@ class LocalCricketRepository(context: Context) {
     fun createTournament(name: String, defaultPurse: Double, maxSlots: Int, maxOverseas: Int): Tournament {
         val scorerCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
         val adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
+        val spectatorCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
         val newTourney = Tournament(
             id = "t_${System.currentTimeMillis()}",
             name = name,
@@ -254,7 +255,8 @@ class LocalCricketRepository(context: Context) {
             maxSlots = maxSlots,
             maxOverseas = maxOverseas,
             scorerInviteCode = scorerCode,
-            adminCode = adminCode
+            adminCode = adminCode,
+            spectatorInviteCode = spectatorCode
         )
         _tournaments.value = _tournaments.value + newTourney
         _activeTournamentId.value = newTourney.id
@@ -303,7 +305,18 @@ class LocalCricketRepository(context: Context) {
             return Pair(scorerTourney, UserRole.SCORER)
         }
 
-        // 3. Check if code matches Team Captain Invite Code
+        // 3. Check if code matches Spectator Invite Code
+        val spectatorTourney = _tournaments.value.find { it.spectatorInviteCode.equals(cleanCode, ignoreCase = true) }
+        if (spectatorTourney != null) {
+            _activeTournamentId.value = spectatorTourney.id
+            deviceTourneyManager.addTournament(spectatorTourney.id, "SPECTATOR")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(spectatorTourney.id, "SPECTATOR", spectatorTourney.name)
+            persistAsync()
+            return Pair(spectatorTourney, UserRole.SPECTATOR)
+        }
+
+        // 4. Check if code matches Team Captain Invite Code
         val matchingTeam = _teams.value.find { it.inviteCode.equals(cleanCode, ignoreCase = true) }
         if (matchingTeam != null) {
             var parentTourney = _tournaments.value.find { it.id == matchingTeam.tournamentId }
@@ -315,7 +328,8 @@ class LocalCricketRepository(context: Context) {
                     maxSlots = 25,
                     maxOverseas = 8,
                     scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
-                    adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
+                    adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase(),
+                    spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
                 )
                 _tournaments.value = _tournaments.value + parentTourney
             }
@@ -327,7 +341,7 @@ class LocalCricketRepository(context: Context) {
             return Pair(parentTourney, UserRole.TEAM_CAPTAIN)
         }
 
-        // 4. Auto-register Admin code starting with ADM
+        // 5. Auto-register Admin code starting with ADM
         if (cleanCode.startsWith("ADM")) {
             val newTourney = Tournament(
                 id = "t_${System.currentTimeMillis()}",
@@ -336,15 +350,19 @@ class LocalCricketRepository(context: Context) {
                 maxSlots = 25,
                 maxOverseas = 8,
                 adminCode = cleanCode,
-                scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
+                scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
+                spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
             )
             _tournaments.value = _tournaments.value + newTourney
             _activeTournamentId.value = newTourney.id
+            deviceTourneyManager.addTournament(newTourney.id, "ADMIN")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(newTourney.id, "ADMIN", newTourney.name)
             persistAsync()
             return Pair(newTourney, UserRole.ADMIN_AUCTIONEER)
         }
 
-        // 5. Auto-register Scorer code starting with SC
+        // 6. Auto-register Scorer code starting with SC
         if (cleanCode.startsWith("SC")) {
             val newTourney = Tournament(
                 id = "t_${System.currentTimeMillis()}",
@@ -353,12 +371,37 @@ class LocalCricketRepository(context: Context) {
                 maxSlots = 25,
                 maxOverseas = 8,
                 scorerInviteCode = cleanCode,
+                adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase(),
+                spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
+            )
+            _tournaments.value = _tournaments.value + newTourney
+            _activeTournamentId.value = newTourney.id
+            deviceTourneyManager.addTournament(newTourney.id, "SCORER")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(newTourney.id, "SCORER", newTourney.name)
+            persistAsync()
+            return Pair(newTourney, UserRole.SCORER)
+        }
+
+        // 7. Auto-register Spectator code starting with SPEC
+        if (cleanCode.startsWith("SPEC")) {
+            val newTourney = Tournament(
+                id = "t_${System.currentTimeMillis()}",
+                name = "Tournament ($cleanCode)",
+                defaultPurse = 100.0,
+                maxSlots = 25,
+                maxOverseas = 8,
+                spectatorInviteCode = cleanCode,
+                scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
                 adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
             )
             _tournaments.value = _tournaments.value + newTourney
             _activeTournamentId.value = newTourney.id
+            deviceTourneyManager.addTournament(newTourney.id, "SPECTATOR")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(newTourney.id, "SPECTATOR", newTourney.name)
             persistAsync()
-            return Pair(newTourney, UserRole.SCORER)
+            return Pair(newTourney, UserRole.SPECTATOR)
         }
 
         // 6. Fallback: Any other valid code (e.g. 7-character code or custom code)
@@ -391,6 +434,64 @@ class LocalCricketRepository(context: Context) {
         deviceTourneyManager.setMasterAdminMode(newState)
         _isMasterAdminMode.value = newState
         return newState
+    }
+
+    fun getTournamentRole(tournamentId: String): String {
+        return deviceTourneyManager.getTournamentRole(tournamentId)
+    }
+
+    fun removeTeamCaptain(teamId: String) {
+        val newInviteCode = "CAP" + UUID.randomUUID().toString().take(4).uppercase()
+        _teams.value = _teams.value.map { team ->
+            if (team.id == teamId) {
+                team.copy(captainEmail = null, inviteCode = newInviteCode)
+            } else team
+        }
+        persistAsync()
+    }
+
+    fun regenerateTeamInviteCode(teamId: String): String {
+        val newInviteCode = "CAP" + UUID.randomUUID().toString().take(4).uppercase()
+        _teams.value = _teams.value.map { team ->
+            if (team.id == teamId) {
+                team.copy(inviteCode = newInviteCode)
+            } else team
+        }
+        persistAsync()
+        return newInviteCode
+    }
+
+    fun regenerateScorerCode(tournamentId: String): String {
+        val newCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
+        _tournaments.value = _tournaments.value.map { tourney ->
+            if (tourney.id == tournamentId) {
+                tourney.copy(scorerInviteCode = newCode)
+            } else tourney
+        }
+        persistAsync()
+        return newCode
+    }
+
+    fun regenerateAdminCode(tournamentId: String): String {
+        val newCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
+        _tournaments.value = _tournaments.value.map { tourney ->
+            if (tourney.id == tournamentId) {
+                tourney.copy(adminCode = newCode)
+            } else tourney
+        }
+        persistAsync()
+        return newCode
+    }
+
+    fun regenerateSpectatorCode(tournamentId: String): String {
+        val newCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
+        _tournaments.value = _tournaments.value.map { tourney ->
+            if (tourney.id == tournamentId) {
+                tourney.copy(spectatorInviteCode = newCode)
+            } else tourney
+        }
+        persistAsync()
+        return newCode
     }
 
     fun deleteTournament(tournamentId: String) {

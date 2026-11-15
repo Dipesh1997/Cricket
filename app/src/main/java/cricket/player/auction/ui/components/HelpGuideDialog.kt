@@ -89,7 +89,7 @@ fun HelpGuideDialog(
                     icon = Icons.Default.VpnKey,
                     iconColor = NeonBlue,
                     title = "2. Multi-Device Joining & Role Codes",
-                    description = "• Other devices tap 'ENTER CODE 🔑' on Home to join.\n• ADMIN CODE: Grants full tournament admin, staging, and bidding controls.\n• TEAM CAPTAIN CODE: Binds the device to their team with dedicated bidding.\n• SCORER CODE: Unlocks live scoring and ball-by-ball updates.",
+                    description = "• Other devices tap 'ENTER CODE 🔑' on Home to join.\n• ADMIN CODE: Grants full tournament admin, staging, and bidding controls.\n• SPECTATOR CODE: Allows anyone to view live auction, scorecards, and standings in read-only mode.\n• TEAM CAPTAIN CODE: Binds the device to their team with dedicated bidding.\n• SCORER CODE: Unlocks live scoring and ball-by-ball updates.\n• Admins can remove captains, reset scorer codes, or cycle admin codes anytime in Settings.",
                     surfaceBg = surfaceBg,
                     textColor = textColor,
                     subTextColor = subTextColor
@@ -100,7 +100,7 @@ fun HelpGuideDialog(
                     icon = Icons.Default.Shield,
                     iconColor = IplGold,
                     title = "3. Teams & Squads Dashboard",
-                    description = "• In 'Teams & Squads', tap '+' to create custom teams with team colors and initial budget.\n• Copy and share the 6-digit Invite Code with the team captain.\n• Tap any team card to inspect acquired players, slot counts, and remaining purse.",
+                    description = "• In 'Teams & Squads', tap '+' to create custom teams with team colors and initial budget.\n• Copy and share the Invite Code with the team captain.\n• Admins can remove captains or reset invite codes directly from each team card.\n• Tap any team card to inspect acquired players, slot counts, and remaining purse.",
                     surfaceBg = surfaceBg,
                     textColor = textColor,
                     subTextColor = subTextColor
@@ -111,7 +111,7 @@ fun HelpGuideDialog(
                     icon = Icons.Default.Casino,
                     iconColor = BidGreen,
                     title = "4. Player Roster & Spin Wheel",
-                    description = "• Add players with their role (Batsman, Bowler, All-Rounder, Wicket Keeper), country, overseas status, and base price.\n• In Auction Arena, use the 'SPIN WHEEL' to pick players with exciting live animations!",
+                    description = "• Add players with their role, country, overseas status, and base price.\n• ⭐ FIXED SETS: Fixed set players must be in exact multiples of the total teams (e.g. 4, 8, 12 players for 4 teams) to spin for equal team opportunities.\n• In Auction Arena, use the 'SPIN WHEEL' to pick players with exciting live animations!",
                     surfaceBg = surfaceBg,
                     textColor = textColor,
                     subTextColor = subTextColor

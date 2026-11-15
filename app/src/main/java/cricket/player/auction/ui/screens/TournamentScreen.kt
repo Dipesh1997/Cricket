@@ -56,6 +56,7 @@ fun TournamentScreen(
     var deletingTournament by remember { mutableStateOf<Tournament?>(null) }
 
     val currentUser by viewModel.currentUser.collectAsState()
+    val isSpectator = currentUser?.role == cricket.player.auction.model.UserRole.SPECTATOR
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -408,13 +409,15 @@ fun TournamentScreen(
                                         }
 
                                         // Edit Button
-                                        IconButton(onClick = { editingTournament = tourney }) {
-                                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Tournament", tint = IplGold, modifier = Modifier.size(18.dp))
-                                        }
+                                        if (isMasterAdmin || !isSpectator) {
+                                            IconButton(onClick = { editingTournament = tourney }) {
+                                                Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Tournament", tint = IplGold, modifier = Modifier.size(18.dp))
+                                            }
 
-                                        // Delete Button
-                                        IconButton(onClick = { deletingTournament = tourney }) {
-                                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Tournament", tint = UnsoldRed, modifier = Modifier.size(18.dp))
+                                            // Delete Button
+                                            IconButton(onClick = { deletingTournament = tourney }) {
+                                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Tournament", tint = UnsoldRed, modifier = Modifier.size(18.dp))
+                                            }
                                         }
 
                                         Icon(imageVector = Icons.Default.ArrowForward, contentDescription = null, tint = textSub, modifier = Modifier.size(18.dp))
@@ -490,6 +493,33 @@ fun TournamentScreen(
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(12.dp))
                                             }
+                                        }
+                                    }
+
+                                    val specCode = tourney.spectatorInviteCode.ifBlank { "SPEC" + tourney.id.takeLast(4).uppercase() }
+                                    Surface(
+                                        color = Color.LightGray.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.4f)),
+                                        modifier = Modifier.clickable {
+                                            clipboardManager.setText(AnnotatedString(specCode))
+                                            Toast.makeText(context, "👁️ Spectator Code $specCode copied!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = textMain, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "SPEC: $specCode",
+                                                color = textMain,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = textMain, modifier = Modifier.size(12.dp))
                                         }
                                     }
                                 }

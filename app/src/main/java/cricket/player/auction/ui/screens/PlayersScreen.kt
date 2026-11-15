@@ -14,15 +14,18 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.components.DriveImage
 import cricket.player.auction.ui.components.PhotoUploaderField
@@ -33,10 +36,16 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayersScreen(viewModel: AuctionViewModel) {
+    val context = LocalContext.current
     val players by viewModel.players.collectAsState()
     val teams by viewModel.teams.collectAsState()
+    val activeTournament by viewModel.activeTournament.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
     val activePlayerId by viewModel.activePlayerId.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val isAdmin = currentUser?.role == UserRole.ADMIN_AUCTIONEER
+    val isSpectator = currentUser?.role == UserRole.SPECTATOR
 
     val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -63,12 +72,14 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddPlayerDialog = true },
-                containerColor = themeAccent,
-                contentColor = Color.Black
-            ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Player")
+            if (isAdmin) {
+                FloatingActionButton(
+                    onClick = { showAddPlayerDialog = true },
+                    containerColor = themeAccent,
+                    contentColor = Color.Black
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Player")
+                }
             }
         },
         containerColor = screenBg
@@ -90,6 +101,30 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                 color = textSub,
                 fontSize = 12.sp
             )
+
+            if (isSpectator) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    color = NeonBlue.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Spectator Mode: Player roster is in read-only view.",
+                            color = NeonBlue,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -188,7 +223,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                                 modifier = Modifier
                                     .size(56.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .clickable { editingPhotoPlayer = player }
+                                    .clickable { if (!isSpectator) editingPhotoPlayer = player }
                             ) {
                                 DriveImage(
                                     url = player.imageUrl,
@@ -212,7 +247,10 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                                     fontSize = 12.sp
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     StatChip(
                                         text = "Base: ${player.basePrice.formatIplCurrency()}",
                                         backgroundColor = surfaceBg,
@@ -231,31 +269,66 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                                             textColor = UnsoldRed
                                         )
                                     }
+
+                                    if (isAdmin && player.status == PlayerStatus.UP_NEXT) {
+                                        FilterChip(
+                                            selected = player.isFixedSet,
+                                            onClick = {
+                                                val newFixed = !player.isFixedSet
+                                                viewModel.togglePlayerFixedSet(player.id, newFixed)
+                                                val tourneyTeams = teams.filter { it.tournamentId == activeTournament?.id }
+                                                val currentFixed = players.count {
+                                                    it.tournamentId == activeTournament?.id && it.status == PlayerStatus.UP_NEXT && (if (it.id == player.id) newFixed else it.isFixedSet)
+                                                }
+                                                val tCount = tourneyTeams.size
+                                                if (tCount > 0) {
+                                                    if (currentFixed >= tCount && currentFixed % tCount == 0) {
+                                                        Toast.makeText(context, "⭐ Fixed Set complete: $currentFixed players (${currentFixed / tCount} round for $tCount teams)!", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        val target = if (currentFixed < tCount) tCount else ((currentFixed / tCount) + 1) * tCount
+                                                        val needed = target - currentFixed
+                                                        Toast.makeText(context, "⭐ Fixed Set: $currentFixed players. Add $needed more for $tCount teams multiple ($target)!", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            },
+                                            label = { Text(if (player.isFixedSet) "⭐ Fixed Set" else "+ Fix Set", fontSize = 10.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = themeAccent,
+                                                selectedLabelColor = Color.Black,
+                                                containerColor = surfaceBg,
+                                                labelColor = textMain
+                                            )
+                                        )
+                                    }
                                 }
                             }
 
                             // Edit Player Details Icon Button
-                            IconButton(onClick = { editingPlayer = player }) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit Player",
-                                    tint = themeAccent,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                            if (isAdmin) {
+                                IconButton(onClick = { editingPlayer = player }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Edit Player",
+                                        tint = themeAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
 
                             // Delete Player Icon Button
-                            IconButton(onClick = { deletingPlayer = player }) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete Player",
-                                    tint = UnsoldRed,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                            if (isAdmin) {
+                                IconButton(onClick = { deletingPlayer = player }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete Player",
+                                        tint = UnsoldRed,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
 
                             // Action Button: Set for Live Bidding
-                            if (player.status != PlayerStatus.SOLD) {
+                            if (isAdmin && player.status != PlayerStatus.SOLD) {
                                 IconButton(onClick = { viewModel.selectActivePlayer(player.id) }) {
                                     Icon(
                                         imageVector = Icons.Default.Gavel,

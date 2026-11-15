@@ -235,6 +235,7 @@ class FirebaseCricketRepository(
                         "name" to tourney.name,
                         "adminCode" to tourney.adminCode,
                         "scorerInviteCode" to tourney.scorerInviteCode,
+                        "spectatorInviteCode" to tourney.spectatorInviteCode,
                         "defaultPurse" to tourney.defaultPurse,
                         "maxSlots" to tourney.maxSlots,
                         "maxOverseas" to tourney.maxOverseas,
@@ -462,6 +463,7 @@ class FirebaseCricketRepository(
         val maxOverseas = snap.child("maxOverseas").getValue(Int::class.java) ?: 8
         val adminCode = snap.child("adminCode").getValue(String::class.java) ?: ""
         val scorerCode = snap.child("scorerInviteCode").getValue(String::class.java) ?: ""
+        val spectatorCode = snap.child("spectatorInviteCode").getValue(String::class.java) ?: ("SPEC" + id.takeLast(4).uppercase())
         val createdAt = snap.child("createdAt").getValue(Long::class.java) ?: System.currentTimeMillis()
 
         return Tournament(
@@ -472,6 +474,7 @@ class FirebaseCricketRepository(
             maxOverseas = maxOverseas,
             adminCode = adminCode,
             scorerInviteCode = scorerCode,
+            spectatorInviteCode = spectatorCode,
             createdAt = createdAt
         )
     }

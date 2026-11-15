@@ -46,7 +46,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val activeMatchState by viewModel.activeMatch.collectAsState()
     val activeMatch = activeMatchState
     val ballRecords by viewModel.ballRecords.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+
+    val isSpectator = currentUser?.role == UserRole.SPECTATOR
+    val canScore = remember(currentUser) {
+        currentUser?.role == UserRole.ADMIN_AUCTIONEER || currentUser?.role == UserRole.SCORER
+    }
 
     val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -234,30 +240,32 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         onDismissRequest = { showMatchDropdown = false },
                         modifier = Modifier.background(cardBg)
                     ) {
-                        DropdownMenuItem(
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.AddCircle,
-                                        contentDescription = null,
-                                        tint = themeAccent,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "+ Create New Match",
-                                        color = themeAccent,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 12.sp
-                                    )
+                        if (canScore) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.AddCircle,
+                                            contentDescription = null,
+                                            tint = themeAccent,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "+ Create New Match",
+                                            color = themeAccent,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    showMatchDropdown = false
+                                    showCreateMatchModal = true
                                 }
-                            },
-                            onClick = {
-                                showMatchDropdown = false
-                                showCreateMatchModal = true
-                            }
-                        )
-                        HorizontalDivider(color = surfaceBg, thickness = 1.dp)
+                            )
+                            HorizontalDivider(color = surfaceBg, thickness = 1.dp)
+                        }
 
                         if (tourneyMatches.isEmpty()) {
                             DropdownMenuItem(
@@ -335,19 +343,36 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    // + New Match Button
-                    Surface(
-                        onClick = { showCreateMatchModal = true },
-                        color = themeAccent,
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    // + New Match Button (Scorers/Admins) or Spectator Tag
+                    if (canScore) {
+                        Surface(
+                            onClick = { showCreateMatchModal = true },
+                            color = themeAccent,
+                            shape = RoundedCornerShape(6.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("New Match", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("New Match", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+                    } else if (isSpectator) {
+                        Surface(
+                            color = NeonBlue.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.8.dp, NeonBlue.copy(alpha = 0.4f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonBlue, modifier = Modifier.size(11.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Spectator", color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
 
@@ -369,56 +394,58 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             }
                         }
 
-                        // Status actions: Resume/Edit or End
-                        if (activeMatch.status == MatchStatus.COMPLETED) {
-                            if (isEditable) {
-                                Surface(
-                                    onClick = {
-                                        viewModel.resumeMatch(activeMatch.id)
-                                        Toast.makeText(context, "✏️ Match reopened for editing!", Toast.LENGTH_SHORT).show()
-                                    },
-                                    color = themeAccent.copy(alpha = 0.2f),
-                                    shape = RoundedCornerShape(6.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                        // Status actions: Resume/Edit or End (Only for scorer / admin)
+                        if (canScore) {
+                            if (activeMatch.status == MatchStatus.COMPLETED) {
+                                if (isEditable) {
+                                    Surface(
+                                        onClick = {
+                                            viewModel.resumeMatch(activeMatch.id)
+                                            Toast.makeText(context, "✏️ Match reopened for editing!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        color = themeAccent.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
                                     ) {
-                                        Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent, modifier = Modifier.size(11.dp))
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text("Edit ✏️", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent, modifier = Modifier.size(11.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text("Edit ✏️", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                } else {
+                                    Surface(
+                                        color = Color.Gray.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text("Locked 🔒", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             } else {
+                                // Live match actions
                                 Surface(
-                                    color = Color.Gray.copy(alpha = 0.2f),
+                                    onClick = { showEndInningsConfirmModal = true },
+                                    color = UnsoldRed.copy(alpha = 0.9f),
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
+                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
                                         Spacer(modifier = Modifier.width(2.dp))
-                                        Text("Locked 🔒", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text(if (currentInnings == 1) "End Inn" else "End Inn 2", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                     }
-                                }
-                            }
-                        } else {
-                            // Live match actions
-                            Surface(
-                                onClick = { showEndInningsConfirmModal = true },
-                                color = UnsoldRed.copy(alpha = 0.9f),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Text(if (currentInnings == 1) "End Inn" else "End Inn 2", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -878,211 +905,248 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
                     // --- Ball-by-Ball Instant Scoring Keypad ---
                     item {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = cardBg),
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, surfaceBg)
-                        ) {
-                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                                // Extras Row
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                        if (!canScore || isSpectator) {
+                            Surface(
+                                color = NeonBlue.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text("EXTRAS", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-
-                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        ExtraType.values().forEach { extra ->
-                                            val isSel = selectedExtraType == extra
-                                            Surface(
-                                                onClick = { selectedExtraType = if (isSel) ExtraType.NONE else extra },
-                                                color = if (isSel) NeonBlue else surfaceBg,
-                                                shape = RoundedCornerShape(4.dp)
-                                            ) {
-                                                Text(
-                                                    text = extra.name,
-                                                    color = if (isSel) Color.Black else textMain,
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                                )
-                                            }
-                                        }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Visibility,
+                                            contentDescription = null,
+                                            tint = NeonBlue,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "SPECTATOR LIVE MATCH VIEW",
+                                            color = NeonBlue,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 13.sp
+                                        )
                                     }
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // Runs Row: 0, 1, 2, 3, 4, 6
-                                val runsList = listOf(0, 1, 2, 3, 4, 6)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    runsList.forEach { run ->
-                                        Button(
-                                            onClick = {
-                                                if (strikerId != null && bowlerId != null && isEditable) {
-                                                    // Auto-resume if match was completed
-                                                    if (match.status == MatchStatus.COMPLETED) {
-                                                        viewModel.resumeMatch(match.id)
-                                                    }
-                                                    val extraRuns = if (selectedExtraType == ExtraType.WIDE || selectedExtraType == ExtraType.NO_BALL) 1 else 0
-                                                    val isLegal = selectedExtraType != ExtraType.WIDE && selectedExtraType != ExtraType.NO_BALL
-                                                    val legalBallsBefore = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
-                                                    val overNum = legalBallsBefore / 6
-                                                    val ballNum = (legalBallsBefore % 6) + 1
-
-                                                    val ball = BallRecord(
-                                                        id = "b_${System.currentTimeMillis()}",
-                                                        matchId = match.id,
-                                                        innings = currentInnings,
-                                                        overNumber = overNum,
-                                                        ballNumber = ballNum,
-                                                        strikerId = strikerId ?: "",
-                                                        nonStrikerId = nonStrikerId,
-                                                        bowlerId = bowlerId ?: "",
-                                                        runsScored = run,
-                                                        extraType = selectedExtraType,
-                                                        extraRuns = extraRuns,
-                                                        commentary = "$run runs scored"
-                                                    )
-                                                    viewModel.addBallRecord(ball)
-                                                    selectedExtraType = ExtraType.NONE
-
-                                                    // Strike swap on odd runs:
-                                                    var newStriker = strikerId
-                                                    var newNonStriker = nonStrikerId
-                                                    if (run % 2 != 0 && newNonStriker != null) {
-                                                        val temp = newStriker
-                                                        newStriker = newNonStriker
-                                                        newNonStriker = temp
-                                                    }
-
-                                                    // End of Over (6 legal balls completed): swap strike & prompt bowler change!
-                                                    val isOverComplete = isLegal && (ballNum == 6)
-                                                    if (isOverComplete && newNonStriker != null) {
-                                                        val temp = newStriker
-                                                        newStriker = newNonStriker
-                                                        newNonStriker = temp
-
-                                                        showChangeBowlerModal = true
-                                                        bowlerId = null
-                                                    }
-
-                                                    strikerId = newStriker
-                                                    nonStrikerId = newNonStriker
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (run == 4 || run == 6) themeAccent else surfaceBg,
-                                                contentColor = if (run == 4 || run == 6) Color.Black else textMain
-                                            ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(0.dp),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(42.dp),
-                                            enabled = isEditable
-                                        ) {
-                                            Text("$run", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // Action Buttons Row: WICKET, END INN, UNDO, REOPEN
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    // Wicket Button
-                                    Button(
-                                        onClick = {
-                                            if (match.status == MatchStatus.COMPLETED) {
-                                                viewModel.resumeMatch(match.id)
-                                            }
-                                            showWicketModal = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                                        modifier = Modifier.weight(1.1f).height(38.dp),
-                                        enabled = isEditable
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(13.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text("WICKET", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
-                                    }
-
-                                    // End Innings Button
-                                    Button(
-                                        onClick = { showEndInningsConfirmModal = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed.copy(alpha = 0.8f), contentColor = Color.White),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                                        modifier = Modifier.weight(1.1f).height(38.dp),
-                                        enabled = isEditable && match.status != MatchStatus.COMPLETED
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(13.dp))
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text(if (currentInnings == 1) "END INN" else "END INN 2", fontWeight = FontWeight.Bold, fontSize = 10.sp)
-                                    }
-
-                                    // Undo Ball Button
-                                    Button(
-                                        onClick = {
-                                            if (match.status == MatchStatus.COMPLETED) {
-                                                viewModel.resumeMatch(match.id)
-                                            }
-                                            val undone = viewModel.undoLastBall(match.id)
-                                            if (undone != null) {
-                                                strikerId = undone.strikerId
-                                                nonStrikerId = undone.nonStrikerId
-                                                bowlerId = undone.bowlerId
-                                            }
-                                            showTargetModal = false
-                                            Toast.makeText(context, "↩️ Last ball undone", Toast.LENGTH_SHORT).show()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = surfaceBg, contentColor = textMain),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                                        modifier = Modifier.weight(1f).height(38.dp),
-                                        enabled = isEditable && matchBalls.isNotEmpty()
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(13.dp))
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text("UNDO", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    }
-
-                                    // Undo End Innings or Reopen
-                                    if (currentInnings == 2 || match.status == MatchStatus.COMPLETED) {
-                                        Button(
-                                            onClick = { showUndoEndInningsConfirmModal = true },
-                                            colors = ButtonDefaults.buttonColors(containerColor = NeonBlue.copy(alpha = 0.2f), contentColor = NeonBlue),
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(0.9f).height(38.dp),
-                                            enabled = isEditable
-                                        ) {
-                                            Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(12.dp))
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text("Undo Inn", fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                                        }
-                                    }
-                                }
-
-                                if (!isEditable) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "🔒 Match is locked because a subsequent match has completed.",
-                                        color = Color.Gray,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium
+                                        text = "You are watching live scores in read-only mode. All ball recordings, wickets, and scorecards update in real time.",
+                                        color = textSub,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center
                                     )
+                                }
+                            }
+                        } else {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = cardBg),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, surfaceBg)
+                            ) {
+                                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                                    // Extras Row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("EXTRAS", color = textSub, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            ExtraType.values().forEach { extra ->
+                                                val isSel = selectedExtraType == extra
+                                                Surface(
+                                                    onClick = { selectedExtraType = if (isSel) ExtraType.NONE else extra },
+                                                    color = if (isSel) NeonBlue else surfaceBg,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = extra.name,
+                                                        color = if (isSel) Color.Black else textMain,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Runs Row: 0, 1, 2, 3, 4, 6
+                                    val runsList = listOf(0, 1, 2, 3, 4, 6)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        runsList.forEach { run ->
+                                            Button(
+                                                onClick = {
+                                                    if (strikerId != null && bowlerId != null && isEditable) {
+                                                        // Auto-resume if match was completed
+                                                        if (match.status == MatchStatus.COMPLETED) {
+                                                            viewModel.resumeMatch(match.id)
+                                                        }
+                                                        val extraRuns = if (selectedExtraType == ExtraType.WIDE || selectedExtraType == ExtraType.NO_BALL) 1 else 0
+                                                        val isLegal = selectedExtraType != ExtraType.WIDE && selectedExtraType != ExtraType.NO_BALL
+                                                        val legalBallsBefore = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                                        val overNum = legalBallsBefore / 6
+                                                        val ballNum = (legalBallsBefore % 6) + 1
+
+                                                        val ball = BallRecord(
+                                                            id = "b_${System.currentTimeMillis()}",
+                                                            matchId = match.id,
+                                                            innings = currentInnings,
+                                                            overNumber = overNum,
+                                                            ballNumber = ballNum,
+                                                            strikerId = strikerId ?: "",
+                                                            nonStrikerId = nonStrikerId,
+                                                            bowlerId = bowlerId ?: "",
+                                                            runsScored = run,
+                                                            extraType = selectedExtraType,
+                                                            extraRuns = extraRuns,
+                                                            commentary = "$run runs scored"
+                                                        )
+                                                        viewModel.addBallRecord(ball)
+                                                        selectedExtraType = ExtraType.NONE
+
+                                                        // Strike swap on odd runs:
+                                                        var newStriker = strikerId
+                                                        var newNonStriker = nonStrikerId
+                                                        if (run % 2 != 0 && newNonStriker != null) {
+                                                            val temp = newStriker
+                                                            newStriker = newNonStriker
+                                                            newNonStriker = temp
+                                                        }
+
+                                                        // End of Over (6 legal balls completed): swap strike & prompt bowler change!
+                                                        val isOverComplete = isLegal && (ballNum == 6)
+                                                        if (isOverComplete && newNonStriker != null) {
+                                                            val temp = newStriker
+                                                            newStriker = newNonStriker
+                                                            newNonStriker = temp
+
+                                                            showChangeBowlerModal = true
+                                                            bowlerId = null
+                                                        }
+
+                                                        strikerId = newStriker
+                                                        nonStrikerId = newNonStriker
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = if (run == 4 || run == 6) themeAccent else surfaceBg,
+                                                    contentColor = if (run == 4 || run == 6) Color.Black else textMain
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(0.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(42.dp),
+                                                enabled = isEditable
+                                            ) {
+                                                Text("$run", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Action Buttons Row: WICKET, END INN, UNDO, REOPEN
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        // Wicket Button
+                                        Button(
+                                            onClick = {
+                                                if (match.status == MatchStatus.COMPLETED) {
+                                                    viewModel.resumeMatch(match.id)
+                                                }
+                                                showWicketModal = true
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                                            modifier = Modifier.weight(1.1f).height(38.dp),
+                                            enabled = isEditable
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(13.dp))
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text("WICKET", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                                        }
+
+                                        // End Innings Button
+                                        Button(
+                                            onClick = { showEndInningsConfirmModal = true },
+                                            colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed.copy(alpha = 0.8f), contentColor = Color.White),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                            modifier = Modifier.weight(1.1f).height(38.dp),
+                                            enabled = isEditable && match.status != MatchStatus.COMPLETED
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(13.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(if (currentInnings == 1) "END INN" else "END INN 2", fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                        }
+
+                                        // Undo Ball Button
+                                        Button(
+                                            onClick = {
+                                                if (match.status == MatchStatus.COMPLETED) {
+                                                    viewModel.resumeMatch(match.id)
+                                                }
+                                                val undone = viewModel.undoLastBall(match.id)
+                                                if (undone != null) {
+                                                    strikerId = undone.strikerId
+                                                    nonStrikerId = undone.nonStrikerId
+                                                    bowlerId = undone.bowlerId
+                                                }
+                                                showTargetModal = false
+                                                Toast.makeText(context, "↩️ Last ball undone", Toast.LENGTH_SHORT).show()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = surfaceBg, contentColor = textMain),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                                            modifier = Modifier.weight(1f).height(38.dp),
+                                            enabled = isEditable && matchBalls.isNotEmpty()
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(13.dp))
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text("UNDO", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+
+                                        // Undo End Innings or Reopen
+                                        if (currentInnings == 2 || match.status == MatchStatus.COMPLETED) {
+                                            Button(
+                                                onClick = { showUndoEndInningsConfirmModal = true },
+                                                colors = ButtonDefaults.buttonColors(containerColor = NeonBlue.copy(alpha = 0.2f), contentColor = NeonBlue),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                                modifier = Modifier.weight(0.9f).height(38.dp),
+                                                enabled = isEditable
+                                            ) {
+                                                Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text("Undo Inn", fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                            }
+                                        }
+                                    }
+
+                                    if (!isEditable) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "🔒 Match is locked because a subsequent match has completed.",
+                                            color = Color.Gray,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
                         }
