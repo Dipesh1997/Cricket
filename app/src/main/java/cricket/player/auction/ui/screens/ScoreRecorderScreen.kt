@@ -20,12 +20,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.components.DriveImage
 import cricket.player.auction.ui.components.StatChip
 import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
+import cricket.player.auction.ui.components.parseColorHex
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 import kotlinx.coroutines.delay
@@ -76,7 +78,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var showCreateMatchModal by remember { mutableStateOf(false) }
     var showCoinTossModal by remember { mutableStateOf(false) }
     var showWicketModal by remember { mutableStateOf(false) }
-    var showScorecardModal by remember { mutableStateOf(false) }
+    var selectedMatchForScorecard by remember { mutableStateOf<Match?>(null) }
+    var showDeclareWinnerPopup by remember { mutableStateOf(false) }
+    var lastConcludedMatchId by remember { mutableStateOf<String?>(null) }
     var showTargetModal by remember { mutableStateOf(false) }
     var showEndInningsConfirmModal by remember { mutableStateOf(false) }
     var showUndoEndInningsConfirmModal by remember { mutableStateOf(false) }
@@ -178,6 +182,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     LaunchedEffect(currentInnings, activeMatch?.status) {
         if (currentInnings == 2 && activeMatch?.status == MatchStatus.LIVE_INNINGS_2) {
             showTargetModal = true
+        }
+    }
+
+    // Auto-show Declare Winner Modal when Match Completes naturally (target chased, all-out, overs complete)
+    LaunchedEffect(activeMatch?.id, activeMatch?.status) {
+        if (activeMatch?.status == MatchStatus.COMPLETED && lastConcludedMatchId != activeMatch?.id) {
+            showDeclareWinnerPopup = true
+            lastConcludedMatchId = activeMatch?.id
         }
     }
 
@@ -383,7 +395,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     if (activeMatch != null) {
                         // Scorecard Button
                         Surface(
-                            onClick = { showScorecardModal = true },
+                            onClick = { selectedMatchForScorecard = activeMatch },
                             color = surfaceBg,
                             shape = RoundedCornerShape(6.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
@@ -458,33 +470,82 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             }
 
             if (activeMatch == null) {
-                Column(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = themeAccent, modifier = Modifier.size(56.dp))
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text("No Active Match Selected", color = textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        if (tourneyMatches.isNotEmpty()) "Select a match from the dropdown above or create a new one"
-                        else "Setup a new match with Coin Toss & Captain Bat/Bowl decisions to start scoring",
-                        color = textSub,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(18.dp))
-                    Button(
-                        onClick = { showCreateMatchModal = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = themeAccent, modifier = Modifier.size(52.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("No Active Match Selected", color = textMain, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                if (tourneyMatches.isNotEmpty()) "Tap any match card below to inspect Cricbuzz scorecard, or create a new match."
+                                else "Setup a new match with Coin Toss & Captain decisions to start scoring.",
+                                color = textSub,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            if (canScore) {
+                                Button(
+                                    onClick = { showCreateMatchModal = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    if (tourneyMatches.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "TOURNAMENT MATCHES (${tourneyMatches.size})",
+                                    color = themeAccent,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp
+                                )
+                                Text("Tap card for Cricbuzz table", color = textSub, fontSize = 10.sp)
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                        }
+
+                        items(tourneyMatches) { m ->
+                            val mEditable = viewModel.isMatchEditable(m)
+                            MatchHistoryCard(
+                                match = m,
+                                teams = teams,
+                                isEditable = mEditable,
+                                isDarkTheme = isDarkTheme,
+                                cardBg = cardBg,
+                                surfaceBg = surfaceBg,
+                                textMain = textMain,
+                                textSub = textSub,
+                                themeAccent = themeAccent,
+                                onClick = {
+                                    selectedMatchForScorecard = m
+                                }
+                            )
+                        }
                     }
                 }
             } else if (activeMatch != null) {
@@ -1254,6 +1315,49 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             }
                         }
                     }
+
+                    // --- Tournament Match Cards History List ---
+                    if (tourneyMatches.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "MATCHES & CARDS HISTORY (${tourneyMatches.size})",
+                                    color = themeAccent,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    text = "Tap card to open Cricbuzz table",
+                                    color = textSub,
+                                    fontSize = 9.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
+                        items(tourneyMatches) { m ->
+                            val mEditable = viewModel.isMatchEditable(m)
+                            MatchHistoryCard(
+                                match = m,
+                                teams = teams,
+                                isEditable = mEditable,
+                                isDarkTheme = isDarkTheme,
+                                cardBg = cardBg,
+                                surfaceBg = surfaceBg,
+                                textMain = textMain,
+                                textSub = textSub,
+                                themeAccent = themeAccent,
+                                onClick = {
+                                    selectedMatchForScorecard = m
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1974,46 +2078,215 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
         )
     }
 
-    // --- Cricbuzz-Style Full Scorecard Modal ---
-    if (showScorecardModal) {
-        var selectedScorecardInnings by remember { mutableStateOf(currentInnings) }
-        val innBalls = matchBalls.filter { it.innings == selectedScorecardInnings }
-        val innBattingTeamId = if (selectedScorecardInnings == 1) activeMatch?.teamAId else activeMatch?.teamBId
-        val innBowlingTeamId = if (selectedScorecardInnings == 1) activeMatch?.teamBId else activeMatch?.teamAId
+    // --- Declare Winner Modal (Concluded match pop-up) ---
+    if (showDeclareWinnerPopup && activeMatch != null && activeMatch.status == MatchStatus.COMPLETED) {
+        val match = activeMatch
+        val winnerTeam = teams.find { it.id == match.winnerTeamId }
+        val teamA = teams.find { it.id == match.teamAId }
+        val teamB = teams.find { it.id == match.teamBId }
+
+        AlertDialog(
+            onDismissRequest = { showDeclareWinnerPopup = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = null,
+                    tint = themeAccent,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🏆 MATCH CONCLUDED!",
+                        color = themeAccent,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = match.resultSummary.ifBlank { if (winnerTeam != null) "${winnerTeam.name} won!" else "Match Tied!" },
+                        color = textMain,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = surfaceBg),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(teamA?.name ?: "Team A", color = textMain, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${match.teamARuns}/${match.teamAWickets} (${match.teamAOversBatted} ov)", color = textMain, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(teamB?.name ?: "Team B", color = textMain, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${match.teamBRuns}/${match.teamBWickets} (${match.teamBOversBatted} ov)", color = textMain, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Match is saved in match history cards. You can inspect full scorecards of both teams or edit/undo if needed.",
+                        color = textSub,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            showDeclareWinnerPopup = false
+                            selectedMatchForScorecard = match
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("VIEW CRICBUZZ SCORECARD 📊", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+
+                    if (canScore) {
+                        Button(
+                            onClick = {
+                                showDeclareWinnerPopup = false
+                                showCreateMatchModal = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = surfaceBg, contentColor = textMain),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(imageVector = Icons.Default.AddCircle, contentDescription = null, tint = themeAccent, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("+ CREATE NEXT MATCH 🏏", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+
+                        if (isEditable) {
+                            OutlinedButton(
+                                onClick = {
+                                    showDeclareWinnerPopup = false
+                                    viewModel.resumeMatch(match.id)
+                                    viewModel.undoLastBall(match.id)
+                                    Toast.makeText(context, "✏️ Last ball undone! Match reopened for editing.", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = themeAccent),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.6f)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("UNDO LAST BALL & EDIT ✏️", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    TextButton(
+                        onClick = { showDeclareWinnerPopup = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("DISMISS", color = textSub, fontSize = 11.sp)
+                    }
+                }
+            },
+            containerColor = cardBg
+        )
+    }
+
+    // --- Cricbuzz-Style Full Scorecard Modal for Any Clicked Match ---
+    if (selectedMatchForScorecard != null) {
+        val targetMatch = selectedMatchForScorecard!!
+        val targetMatchBalls = remember(targetMatch, ballRecords) {
+            ballRecords.filter { it.matchId == targetMatch.id }
+        }
+        val isTargetEditable = viewModel.isMatchEditable(targetMatch)
+        val teamA = teams.find { it.id == targetMatch.teamAId }
+        val teamB = teams.find { it.id == targetMatch.teamBId }
+        var selectedScorecardInnings by remember { mutableStateOf(targetMatch.currentInnings) }
+        val innBalls = targetMatchBalls.filter { it.innings == selectedScorecardInnings }
+        val innBattingTeamId = if (selectedScorecardInnings == 1) targetMatch.teamAId else targetMatch.teamBId
+        val innBowlingTeamId = if (selectedScorecardInnings == 1) targetMatch.teamBId else targetMatch.teamAId
         val innBattingTeam = teams.find { it.id == innBattingTeamId }
         val innBowlingTeam = teams.find { it.id == innBowlingTeamId }
 
         AlertDialog(
-            onDismissRequest = { showScorecardModal = false },
+            onDismissRequest = { selectedMatchForScorecard = null },
             title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("MATCH SCORECARD", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        FilterChip(
-                            selected = selectedScorecardInnings == 1,
-                            onClick = { selectedScorecardInnings = 1 },
-                            label = { Text("Inn 1", fontSize = 10.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = IplGold,
-                                selectedLabelColor = Color.Black,
-                                containerColor = surfaceBg,
-                                labelColor = Color.White
-                            )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "CRICBUZZ SCORECARD",
+                            color = themeAccent,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp
                         )
-                        FilterChip(
-                            selected = selectedScorecardInnings == 2,
-                            onClick = { selectedScorecardInnings = 2 },
-                            label = { Text("Inn 2", fontSize = 10.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = IplGold,
-                                selectedLabelColor = Color.Black,
-                                containerColor = surfaceBg,
-                                labelColor = Color.White
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            FilterChip(
+                                selected = selectedScorecardInnings == 1,
+                                onClick = { selectedScorecardInnings = 1 },
+                                label = { Text("Inn 1: ${teamA?.shortCode ?: "T1"}", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = themeAccent,
+                                    selectedLabelColor = if (isDarkTheme) Color.Black else Color.White,
+                                    containerColor = surfaceBg,
+                                    labelColor = textMain
+                                )
                             )
+                            FilterChip(
+                                selected = selectedScorecardInnings == 2,
+                                onClick = { selectedScorecardInnings = 2 },
+                                label = { Text("Inn 2: ${teamB?.shortCode ?: "T2"}", fontSize = 10.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = themeAccent,
+                                    selectedLabelColor = if (isDarkTheme) Color.Black else Color.White,
+                                    containerColor = surfaceBg,
+                                    labelColor = textMain
+                                )
+                            )
+                        }
+                    }
+                    if (targetMatch.resultSummary.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "🏆 ${targetMatch.resultSummary}",
+                            color = BidGreen,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -2025,11 +2298,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         .heightIn(max = 480.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Header banner
+                    // Header banner for current innings
                     item {
-                        val innRuns = if (selectedScorecardInnings == 1) activeMatch?.teamARuns ?: 0 else activeMatch?.teamBRuns ?: 0
-                        val innWkts = if (selectedScorecardInnings == 1) activeMatch?.teamAWickets ?: 0 else activeMatch?.teamBWickets ?: 0
-                        val innOvers = if (selectedScorecardInnings == 1) activeMatch?.teamAOversBatted ?: 0.0 else activeMatch?.teamBOversBatted ?: 0.0
+                        val innRuns = if (selectedScorecardInnings == 1) targetMatch.teamARuns else targetMatch.teamBRuns
+                        val innWkts = if (selectedScorecardInnings == 1) targetMatch.teamAWickets else targetMatch.teamBWickets
+                        val innOvers = if (selectedScorecardInnings == 1) targetMatch.teamAOversBatted else targetMatch.teamBOversBatted
 
                         Card(
                             colors = CardDefaults.cardColors(containerColor = surfaceBg),
@@ -2046,13 +2319,16 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     text = "${innBattingTeam?.name ?: "Batting"} Innings",
                                     color = textMain,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "$innRuns / $innWkts ($innOvers ov)",
-                                    color = IplGold,
+                                    color = themeAccent,
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 15.sp
+                                    fontSize = 14.sp
                                 )
                             }
                         }
@@ -2060,7 +2336,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
                     // --- BATTING SECTION ---
                     item {
-                        Text("BATTING", color = IplGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("BATTING TABLE", color = themeAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
 
                     item {
@@ -2110,10 +2386,10 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(2.3f)) {
-                                        Text(p?.name ?: pId, color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
-                                        Text(statusStr, color = if (isOut) Color.Gray else BidGreen, fontSize = 9.sp)
+                                        Text(p?.name ?: pId, color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(statusStr, color = if (isOut) textSub else BidGreen, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
-                                    Text("$pRuns", color = if (pRuns >= 50) IplGold else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
+                                    Text("$pRuns", color = if (pRuns >= 50) themeAccent else textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
                                     Text("$pFaced", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
                                     Text("$p4s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
                                     Text("$p6s", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
@@ -2150,7 +2426,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     // --- BOWLING SECTION ---
                     item {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("BOWLING", color = NeonBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("BOWLING TABLE", color = if (isDarkTheme) NeonBlue else LightPitchText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
 
                     item {
@@ -2196,12 +2472,12 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(b?.name ?: bId, color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(2.3f), maxLines = 1)
+                                Text(b?.name ?: bId, color = textMain, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.weight(2.3f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(bOvers, color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
                                 Text("$bMaidens", color = textSub, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
                                 Text("$bRuns", color = textMain, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.7f))
                                 Text("$bWkts", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, textAlign = TextAlign.End, modifier = Modifier.weight(0.6f))
-                                Text(bEcon, color = NeonBlue, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                Text(bEcon, color = if (isDarkTheme) NeonBlue else LightPitchText, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
                             }
                             HorizontalDivider(color = textMain.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 2.dp))
                         }
@@ -2233,15 +2509,207 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = { showScorecardModal = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("Close", fontWeight = FontWeight.Bold)
+                    if (canScore && isTargetEditable) {
+                        Button(
+                            onClick = {
+                                viewModel.selectActiveMatch(targetMatch.id)
+                                viewModel.resumeMatch(targetMatch.id)
+                                viewModel.undoLastBall(targetMatch.id)
+                                selectedMatchForScorecard = null
+                                Toast.makeText(context, "✏️ Last ball undone! Match reopened for live scoring.", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("UNDO LAST BALL & EDIT MATCH ✏️", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                        }
+                    }
+                    TextButton(
+                        onClick = { selectedMatchForScorecard = null },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Close", fontWeight = FontWeight.Bold, color = textSub)
+                    }
                 }
             },
             containerColor = cardBg
         )
+    }
+}
+
+// --- Clickable Match History Card ---
+@Composable
+fun MatchHistoryCard(
+    match: Match,
+    teams: List<Team>,
+    isEditable: Boolean,
+    isDarkTheme: Boolean,
+    cardBg: Color,
+    surfaceBg: Color,
+    textMain: Color,
+    textSub: Color,
+    themeAccent: Color,
+    onClick: () -> Unit
+) {
+    val teamA = teams.find { it.id == match.teamAId }
+    val teamB = teams.find { it.id == match.teamBId }
+    val isCompleted = match.status == MatchStatus.COMPLETED
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (!isCompleted) BidGreen.copy(alpha = 0.5f) else surfaceBg
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Header: Status badge & editable tag
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(
+                        color = if (!isCompleted) BidGreen.copy(alpha = 0.15f) else themeAccent.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = if (!isCompleted) "● LIVE" else "COMPLETED 🏆",
+                            color = if (!isCompleted) BidGreen else themeAccent,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    if (isCompleted && isEditable) {
+                        Surface(
+                            color = (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "EDITABLE ✏️",
+                                color = if (isDarkTheme) NeonBlue else LightPitchPrimary,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Tap for scorecard →",
+                    color = textSub,
+                    fontSize = 10.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Scores for both teams:
+            // Team A
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(parseColorHex(teamA?.primaryColorHex.orEmpty())),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(teamA?.shortCode?.take(2) ?: "T1", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = teamA?.name ?: "Team A",
+                        color = textMain,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "${match.teamARuns}/${match.teamAWickets} (${match.teamAOversBatted} ov)",
+                    color = textMain,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Team B
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(parseColorHex(teamB?.primaryColorHex.orEmpty())),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(teamB?.shortCode?.take(2) ?: "T2", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = teamB?.name ?: "Team B",
+                        color = textMain,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "${match.teamBRuns}/${match.teamBWickets} (${match.teamBOversBatted} ov)",
+                    color = textMain,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+            }
+
+            if (match.resultSummary.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = surfaceBg, thickness = 0.8.dp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "🏆 ${match.resultSummary}",
+                    color = if (isCompleted) BidGreen else themeAccent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 

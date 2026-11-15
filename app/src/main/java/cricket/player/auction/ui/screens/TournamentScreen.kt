@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.Tournament
@@ -329,14 +330,20 @@ fun TournamentScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = themeAccent)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = tourney.name,
                                             color = textMain,
                                             fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 17.sp
+                                            fontSize = 17.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            softWrap = true
                                         )
                                     }
 
@@ -431,33 +438,6 @@ fun TournamentScreen(
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
                                             }
-                                        }
-                                    }
-
-                                    val specCode = tourney.spectatorInviteCode.ifBlank { "SPEC" + tourney.id.takeLast(4).uppercase() }
-                                    Surface(
-                                        color = if (isDarkTheme) Color.LightGray.copy(alpha = 0.15f) else LightPitchSurface,
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) Color.LightGray else LightPitchContainer)),
-                                        modifier = Modifier.clickable {
-                                            clipboardManager.setText(AnnotatedString(specCode))
-                                            Toast.makeText(context, "👁️ Spectator Code $specCode copied!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = textMain, modifier = Modifier.size(12.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "SPEC: $specCode",
-                                                color = textMain,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = textMain, modifier = Modifier.size(12.dp))
                                         }
                                     }
                                 }

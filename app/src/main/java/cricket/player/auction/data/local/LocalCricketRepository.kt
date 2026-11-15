@@ -27,16 +27,20 @@ class LocalCricketRepository(context: Context) {
     private val _isMasterAdminMode = MutableStateFlow(deviceTourneyManager.isMasterAdminMode())
     val isMasterAdminMode: StateFlow<Boolean> = _isMasterAdminMode.asStateFlow()
 
+    private val _hideDemoData = MutableStateFlow(deviceTourneyManager.isHideDemoData())
+    val hideDemoData: StateFlow<Boolean> = _hideDemoData.asStateFlow()
+
     private val _tournaments = MutableStateFlow<List<Tournament>>(emptyList())
     val tournaments: StateFlow<List<Tournament>> = _tournaments.asStateFlow()
 
     // Expose all tournaments if Master Admin is active, or only tournaments this device created or joined!
-    val userTournaments: StateFlow<List<Tournament>> = combine(_tournaments, _myTournamentIds, _isMasterAdminMode) { all, myIds, isMaster ->
-        if (isMaster) {
+    val userTournaments: StateFlow<List<Tournament>> = combine(_tournaments, _myTournamentIds, _isMasterAdminMode, _hideDemoData) { all, myIds, isMaster, hideDemo ->
+        val base = if (isMaster) {
             all
         } else {
             all.filter { it.id in myIds }
         }
+        if (hideDemo) base.filter { !it.isOfflineOnly } else base
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val _captainReadyMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -490,6 +494,11 @@ class LocalCricketRepository(context: Context) {
         deviceTourneyManager.setMasterAdminMode(newState)
         _isMasterAdminMode.value = newState
         return newState
+    }
+
+    fun setHideDemoData(hide: Boolean) {
+        deviceTourneyManager.setHideDemoData(hide)
+        _hideDemoData.value = hide
     }
 
     fun getTournamentRole(tournamentId: String): String {

@@ -41,6 +41,11 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     val matches: StateFlow<List<Match>> = localRepository.matches
     val activeMatchId: StateFlow<String?> = localRepository.activeMatchId
     val ballRecords: StateFlow<List<BallRecord>> = localRepository.ballRecords
+    val hideDemoData: StateFlow<Boolean> = localRepository.hideDemoData
+
+    fun setHideDemoData(hide: Boolean) {
+        localRepository.setHideDemoData(hide)
+    }
 
     private val _currentUser = MutableStateFlow(
         UserProfile(
@@ -349,8 +354,13 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         val matchIndex = tourneyMatches.indexOfFirst { it.id == match.id }
         if (matchIndex == -1) return true
         val subsequentMatches = tourneyMatches.drop(matchIndex + 1)
-        // Match is editable until any next match is completed
-        return subsequentMatches.none { it.status == MatchStatus.COMPLETED }
+        // Match is editable if it is the last match before any subsequent match is live or completed
+        return subsequentMatches.none { 
+            it.status == MatchStatus.COMPLETED || 
+            it.status == MatchStatus.LIVE_INNINGS_1 || 
+            it.status == MatchStatus.LIVE_INNINGS_2 ||
+            it.teamARuns > 0 || it.teamAOversBatted > 0.0 || it.teamAWickets > 0
+        }
     }
 
     // --- Captain Invite & Role Switch ---

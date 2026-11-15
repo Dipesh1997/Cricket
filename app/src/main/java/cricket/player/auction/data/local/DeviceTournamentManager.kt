@@ -46,6 +46,14 @@ class DeviceTournamentManager(context: Context) {
         prefs.edit().putBoolean("is_master_admin_mode", enabled).apply()
     }
 
+    fun isHideDemoData(): Boolean {
+        return prefs.getBoolean("hide_demo_data", false)
+    }
+
+    fun setHideDemoData(hide: Boolean) {
+        prefs.edit().putBoolean("hide_demo_data", hide).apply()
+    }
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }

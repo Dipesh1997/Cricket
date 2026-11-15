@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +28,8 @@ fun HelpGuideDialog(
     isMasterAdmin: Boolean = false,
     onToggleMasterAdmin: (() -> Unit)? = null,
     onStartDemoMode: (() -> Unit)? = null,
+    hideDemoData: Boolean = false,
+    onToggleHideDemoData: ((Boolean) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -102,6 +105,44 @@ fun HelpGuideDialog(
                             lineHeight = 16.sp
                         )
                         Spacer(modifier = Modifier.height(10.dp))
+
+                        // Checkbox to Hide / Disable Demo Data
+                        if (onToggleHideDemoData != null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { onToggleHideDemoData(!hideDemoData) }
+                                    .background(surfaceBg.copy(alpha = 0.5f))
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                            ) {
+                                Checkbox(
+                                    checked = hideDemoData,
+                                    onCheckedChange = { onToggleHideDemoData(it) },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = accentColor,
+                                        checkmarkColor = if (isDarkTheme) Color.Black else Color.White
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Hide Demo Data / Tournaments",
+                                        color = textColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = if (hideDemoData) "Demo tournament hidden from list" else "Unchecked: Demo tournament visible in list",
+                                        color = subTextColor,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         Button(
                             onClick = {
                                 onStartDemoMode?.invoke()

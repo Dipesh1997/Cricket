@@ -73,6 +73,7 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
 
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val isMasterAdmin by viewModel.isMasterAdminMode.collectAsState()
+    val hideDemoData by viewModel.hideDemoData.collectAsState()
     val isHomeScreen = currentRoute == Screen.Tournament.route
     var showHelpDialog by remember { mutableStateOf(false) }
     var exportTrigger by remember { mutableStateOf(0) }
@@ -119,6 +120,8 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                     Toast.LENGTH_LONG
                 ).show()
             },
+            hideDemoData = hideDemoData,
+            onToggleHideDemoData = { viewModel.setHideDemoData(it) },
             onDismiss = { showHelpDialog = false }
         )
     }
