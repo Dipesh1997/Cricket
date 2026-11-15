@@ -1,6 +1,8 @@
 package cricket.player.auction.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,11 +10,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,6 +24,8 @@ import cricket.player.auction.ui.theme.*
 @Composable
 fun HelpGuideDialog(
     isDarkTheme: Boolean,
+    isMasterAdmin: Boolean = false,
+    onToggleMasterAdmin: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -28,6 +33,9 @@ fun HelpGuideDialog(
     val textColor = if (isDarkTheme) Color.White else LightPitchText
     val subTextColor = if (isDarkTheme) Color.LightGray else LightPitchSecondary
     val accentColor = if (isDarkTheme) IplGold else LightPitchPrimary
+    val context = LocalContext.current
+    var tapCount by remember { mutableStateOf(0) }
+    var lastTapTimestamp by remember { mutableStateOf(0L) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -142,15 +150,37 @@ fun HelpGuideDialog(
                     subTextColor = subTextColor
                 )
 
-                // 8. Auto Backup & Restore
+                // 8. Auto Backup & Restore (Tapping 5x unlocks/disables Master Admin Mode)
                 HelpGuideSection(
-                    icon = Icons.Default.Storage,
-                    iconColor = BidGreen,
-                    title = "8. Automatic Backup & Restore",
-                    description = "• Tap 'Backup' in the top menu to save your full database directly to the 'Cricket' folder in File Manager.\n• Tap 'Restore' to automatically reload and restore from 'Cricket/cricket_backup.json' anytime without manual file selection!",
-                    surfaceBg = surfaceBg,
+                    icon = if (isMasterAdmin) Icons.Default.Security else Icons.Default.Storage,
+                    iconColor = if (isMasterAdmin) IplGold else BidGreen,
+                    title = if (isMasterAdmin) "8. Automatic Backup & Restore 👑 (MASTER ADMIN ACTIVE)" else "8. Automatic Backup & Restore",
+                    description = if (isMasterAdmin) {
+                        "• Tap 'Backup' in the top menu to save your full database directly to the 'Cricket' folder in File Manager.\n• Tap 'Restore' to reload and restore from 'Cricket/cricket_backup.json' anytime.\n\n👑 MASTER ADMIN IS ACTIVE: Full database control unlocked across all tournaments (Android & Web). View, update, edit, and delete any tournament.\n(Tap this card 5 times to disable Master Admin and restore device view)."
+                    } else {
+                        "• Tap 'Backup' in the top menu to save your full database directly to the 'Cricket' folder in File Manager.\n• Tap 'Restore' to automatically reload and restore from 'Cricket/cricket_backup.json' anytime without manual file selection!"
+                    },
+                    surfaceBg = if (isMasterAdmin) IplGold.copy(alpha = 0.12f) else surfaceBg,
                     textColor = textColor,
-                    subTextColor = subTextColor
+                    subTextColor = subTextColor,
+                    onClick = {
+                        val now = System.currentTimeMillis()
+                        if (now - lastTapTimestamp > 2500L) {
+                            tapCount = 1
+                        } else {
+                            tapCount++
+                        }
+                        lastTapTimestamp = now
+
+                        if (tapCount >= 5) {
+                            tapCount = 0
+                            onToggleMasterAdmin?.invoke()
+                        } else if (tapCount in 2..4) {
+                            val remaining = 5 - tapCount
+                            val actionStr = if (isMasterAdmin) "disable" else "unlock"
+                            Toast.makeText(context, "Tap $remaining more time${if (remaining > 1) "s" else ""} to $actionStr Master Admin Mode 👑", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 )
             }
         },
@@ -176,12 +206,15 @@ private fun HelpGuideSection(
     description: String,
     surfaceBg: Color,
     textColor: Color,
-    subTextColor: Color
+    subTextColor: Color,
+    onClick: (() -> Unit)? = null
 ) {
     Surface(
         color = surfaceBg,
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

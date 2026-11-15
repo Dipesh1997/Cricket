@@ -1,22 +1,47 @@
-# Proguard rules for R8 code shrinking
+# Proguard & R8 optimization rules for Cricket Auction
 
-# Keep data models and local database schema classes
--keep class cricket.player.auction.model.** { *; }
--keep class cricket.player.auction.data.local.** { *; }
+# Preserve reflection attributes and annotations for serialization
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+-keepattributes SourceFile,LineNumberTable
 
-# Keep Firebase classes and annotations
+# Preserve Firebase Realtime Database and Auth connections & POJO reflection
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+
+-keepclassmembers class * {
+    @com.google.firebase.database.PropertyName <fields>;
+    @com.google.firebase.database.PropertyName <methods>;
+    @com.google.firebase.database.IgnoreExtraProperties <fields>;
+    @com.google.firebase.database.Exclude <fields>;
+    @com.google.firebase.database.Exclude <methods>;
+}
+
+-keep class com.google.firebase.database.** { *; }
+-keepclassmembers class com.google.firebase.database.** { *; }
+-keep class com.google.firebase.auth.** { *; }
+-keepclassmembers class com.google.firebase.auth.** { *; }
+
+# Keep all Cricket data models, local schemas, and remote data classes intact
+-keep class cricket.player.auction.model.** { *; }
+-keepclassmembers class cricket.player.auction.model.** { *; }
+-keep class cricket.player.auction.data.local.** { *; }
+-keepclassmembers class cricket.player.auction.data.local.** { *; }
+-keep class cricket.player.auction.data.remote.** { *; }
+-keepclassmembers class cricket.player.auction.data.remote.** { *; }
 
 # Keep Google Play Services Auth classes
 -keep class com.google.android.gms.auth.** { *; }
 -dontwarn com.google.android.gms.auth.**
+-keep class com.google.android.gms.tasks.** { *; }
 
 # Gson serialization rules
--keepattributes Signature
--keepattributes *Annotation*
--dontwarn sun.misc.Unsafe
 -keep class com.google.gson.** { *; }
+-keepclassmembers class com.google.gson.** { *; }
+-keepclassmembers enum * { *; }
+-dontwarn sun.misc.Unsafe
 
 # Retrofit rules
 -keep class retrofit2.** { *; }
@@ -25,4 +50,3 @@
 # Coil image loading rules
 -keep class coil.** { *; }
 -dontwarn coil.**
-

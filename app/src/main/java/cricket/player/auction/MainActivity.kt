@@ -72,6 +72,7 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Tournament.route
 
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+    val isMasterAdmin by viewModel.isMasterAdminMode.collectAsState()
     val isHomeScreen = currentRoute == Screen.Tournament.route
     var showHelpDialog by remember { mutableStateOf(false) }
     var exportTrigger by remember { mutableStateOf(0) }
@@ -93,11 +94,29 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
     if (showHelpDialog) {
         HelpGuideDialog(
             isDarkTheme = isDarkTheme,
+            isMasterAdmin = isMasterAdmin,
+            onToggleMasterAdmin = {
+                val newState = viewModel.toggleMasterAdminMode()
+                if (newState) {
+                    Toast.makeText(
+                        context,
+                        "🔓 MASTER ADMIN UNLOCKED!\nFull database access across all tournaments (Android & Web) enabled.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        "🔒 MASTER ADMIN DISABLED\nStandard device view restored.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
             onDismiss = { showHelpDialog = false }
         )
     }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 title = {
@@ -122,7 +141,7 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
                             Spacer(modifier = Modifier.width(4.dp))
                         } else {
                             Icon(
-                                imageVector = Icons.Default.SportsCricket,
+                                imageVector = if (isMasterAdmin) Icons.Default.Security else Icons.Default.SportsCricket,
                                 contentDescription = null,
                                 tint = accentColor,
                                 modifier = Modifier.size(24.dp)
@@ -132,13 +151,13 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
 
                         Text(
                             text = when {
-                                currentRoute == Screen.Tournament.route -> "CRICKET HUB"
-                                currentRoute == Screen.Dashboard.route -> "TOURNAMENT WORKSPACE"
-                                currentRoute == Screen.Auction.route -> "AUCTION ARENA"
-                                currentRoute.startsWith("list") || currentRoute == Screen.List.route -> "TOURNAMENT LISTS"
+                                currentRoute == Screen.Tournament.route -> if (isMasterAdmin) "CRICKET HUB 👑" else "CRICKET HUB"
+                                currentRoute == Screen.Dashboard.route -> if (isMasterAdmin) "WORKSPACE 👑" else "TOURNAMENT WORKSPACE"
+                                currentRoute == Screen.Auction.route -> if (isMasterAdmin) "AUCTION ARENA 👑" else "AUCTION ARENA"
+                                currentRoute.startsWith("list") || currentRoute == Screen.List.route -> if (isMasterAdmin) "TOURNAMENT LISTS 👑" else "TOURNAMENT LISTS"
                                 currentRoute == Screen.Teams.route -> "TEAMS & SQUADS"
                                 currentRoute == Screen.Players.route -> "PLAYER ROSTER"
-                                currentRoute == Screen.Scorer.route -> "LIVE SCORER"
+                                currentRoute == Screen.Scorer.route -> if (isMasterAdmin) "LIVE SCORER 👑" else "LIVE SCORER"
                                 currentRoute == Screen.Points.route -> "POINTS TABLE"
                                 currentRoute == Screen.MVP.route -> "MVP LEADERBOARD"
                                 currentRoute == Screen.Settings.route -> "SETTINGS & BACKUP"
@@ -279,7 +298,9 @@ fun MainAppStructure(viewModel: AuctionViewModel) {
         NavHost(
             navController = navController,
             startDestination = Screen.Tournament.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
             composable(Screen.Tournament.route) {
                 TournamentScreen(

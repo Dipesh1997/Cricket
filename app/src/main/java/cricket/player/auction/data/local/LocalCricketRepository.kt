@@ -24,12 +24,19 @@ class LocalCricketRepository(context: Context) {
     private val _myTournamentIds = MutableStateFlow<Set<String>>(deviceTourneyManager.getMyTournamentIds())
     val myTournamentIds: StateFlow<Set<String>> = _myTournamentIds.asStateFlow()
 
+    private val _isMasterAdminMode = MutableStateFlow(deviceTourneyManager.isMasterAdminMode())
+    val isMasterAdminMode: StateFlow<Boolean> = _isMasterAdminMode.asStateFlow()
+
     private val _tournaments = MutableStateFlow<List<Tournament>>(emptyList())
     val tournaments: StateFlow<List<Tournament>> = _tournaments.asStateFlow()
 
-    // Expose only tournaments that this device created or joined!
-    val userTournaments: StateFlow<List<Tournament>> = combine(_tournaments, _myTournamentIds) { all, myIds ->
-        all.filter { it.id in myIds }
+    // Expose all tournaments if Master Admin is active, or only tournaments this device created or joined!
+    val userTournaments: StateFlow<List<Tournament>> = combine(_tournaments, _myTournamentIds, _isMasterAdminMode) { all, myIds, isMaster ->
+        if (isMaster) {
+            all
+        } else {
+            all.filter { it.id in myIds }
+        }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val _captainReadyMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -379,16 +386,28 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
+    fun toggleMasterAdminMode(): Boolean {
+        val newState = !_isMasterAdminMode.value
+        deviceTourneyManager.setMasterAdminMode(newState)
+        _isMasterAdminMode.value = newState
+        return newState
+    }
+
     fun deleteTournament(tournamentId: String) {
+        val tourneyMatchIds = _matches.value.filter { it.tournamentId == tournamentId }.map { it.id }.toSet()
+        val tourneyPlayerIds = _players.value.filter { it.tournamentId == tournamentId }.map { it.id }.toSet()
         _tournaments.value = _tournaments.value.filterNot { it.id == tournamentId }
         _teams.value = _teams.value.filterNot { it.tournamentId == tournamentId }
         _players.value = _players.value.filterNot { it.tournamentId == tournamentId }
         _matches.value = _matches.value.filterNot { it.tournamentId == tournamentId }
+        _ballRecords.value = _ballRecords.value.filterNot { it.matchId in tourneyMatchIds }
+        _bids.value = _bids.value.filterNot { it.playerId in tourneyPlayerIds }
         deviceTourneyManager.removeTournament(tournamentId)
         _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
         if (_activeTournamentId.value == tournamentId) {
             _activeTournamentId.value = userTournaments.value.firstOrNull()?.id ?: ""
         }
+        firebaseRepo.deleteTournament(tournamentId)
         persistAsync()
     }
 

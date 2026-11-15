@@ -38,6 +38,14 @@ class DeviceTournamentManager(context: Context) {
         return getMyTournamentIds().contains(tournamentId)
     }
 
+    fun isMasterAdminMode(): Boolean {
+        return prefs.getBoolean("is_master_admin_mode", false)
+    }
+
+    fun setMasterAdminMode(enabled: Boolean) {
+        prefs.edit().putBoolean("is_master_admin_mode", enabled).apply()
+    }
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }

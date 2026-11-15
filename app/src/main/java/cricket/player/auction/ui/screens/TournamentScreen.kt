@@ -10,16 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -54,6 +45,7 @@ fun TournamentScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val tournaments by viewModel.tournaments.collectAsState()
+    val isMasterAdmin by viewModel.isMasterAdminMode.collectAsState()
     val activeTournamentId by viewModel.activeTournamentId.collectAsState()
     val teams by viewModel.teams.collectAsState()
     val players by viewModel.players.collectAsState()
@@ -333,6 +325,41 @@ fun TournamentScreen(
                     }
                 }
             } else {
+                if (isMasterAdmin) {
+                    Surface(
+                        color = if (isDarkTheme) StadiumCardDark else LightPitchContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, IplGold),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = IplGold,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "👑 MASTER ADMIN UNLOCKED",
+                                    color = IplGold,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Text(
+                                    text = "Displaying all ${tournaments.size} tournaments across all Android and Web devices with full view, update, and delete control.",
+                                    color = textSub,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Text(
                     text = "SELECT TOURNAMENT WORKSPACE",
                     color = textSub,

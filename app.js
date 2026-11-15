@@ -117,8 +117,29 @@ function registerMyTournament(tourneyId) {
 }
 
 function isMyTournament(tourneyId) {
+  if (isMasterAdminMode()) return true;
   const list = getMyTournamentIds();
   return list.includes(tourneyId);
+}
+
+function isMasterAdminMode() {
+  try {
+    return localStorage.getItem("cricket_master_admin_mode") === "true";
+  } catch (_e) {
+    return false;
+  }
+}
+
+function toggleMasterAdminMode() {
+  const current = isMasterAdminMode();
+  try {
+    localStorage.setItem("cricket_master_admin_mode", (!current).toString());
+  } catch (_e) {}
+  if (!current) {
+    state.currentUser.role = "ADMIN_AUCTIONEER";
+  }
+  renderAll();
+  showToast(!current ? "🔓 MASTER ADMIN UNLOCKED: All tournaments visible with full control!" : "🔒 Master Admin Mode Disabled: Restored device view");
 }
 
 function registerBrowserDevice() {
@@ -1873,14 +1894,15 @@ function renderTournaments() {
   const listEl = document.getElementById("tournamentsList");
   if (!listEl) return;
 
+  const isMaster = isMasterAdminMode();
   const myTourneyIds = getMyTournamentIds();
-  // Filter tournaments so this device ONLY shows tournaments it created or joined
-  const myTournaments = state.tournaments.filter(t => myTourneyIds.includes(t.id));
+  // Filter tournaments so this device ONLY shows tournaments it created or joined, UNLESS Master Admin Mode is active
+  const myTournaments = isMaster ? state.tournaments : state.tournaments.filter(t => myTourneyIds.includes(t.id));
 
   const active = myTournaments.find(t => t.id === state.activeTournamentId) || myTournaments[0];
   if (active) {
     const titleEl = document.getElementById("activeTourneyTitle");
-    if (titleEl) titleEl.innerText = active.name;
+    if (titleEl) titleEl.innerText = active.name + (isMaster ? " 👑" : "");
     const codeEl = document.getElementById("tourneyScorerCode");
     if (codeEl) codeEl.innerText = active.scorerInviteCode || "SC8K2M";
   } else {
@@ -1901,7 +1923,17 @@ function renderTournaments() {
     return;
   }
 
-  listEl.innerHTML = myTournaments.map(t => `
+  const masterBanner = isMaster ? `
+    <div class="card" style="margin-bottom: 14px; background: rgba(255, 215, 0, 0.1); border: 1px solid var(--color-gold); display: flex; align-items: center; gap: 12px; padding: 12px 16px;">
+      <span style="font-size: 1.5rem;">👑</span>
+      <div>
+        <h4 style="color: var(--color-gold); margin: 0; font-size: 1rem;">MASTER ADMIN UNLOCKED</h4>
+        <p style="color: var(--color-text-sub); margin: 2px 0 0 0; font-size: 0.8rem;">Showing all ${state.tournaments.length} tournaments across all Android and Web devices with full view, edit, and delete control.</p>
+      </div>
+    </div>
+  ` : '';
+
+  listEl.innerHTML = masterBanner + myTournaments.map(t => `
     <div class="card" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface);">
       <div>
         <h4 style="color: var(--color-gold); font-size: 1.1rem; margin-bottom: 4px;">${t.name} ${t.id === state.activeTournamentId ? '⭐ (Active)' : ''}</h4>
@@ -1911,11 +1943,37 @@ function renderTournaments() {
           <span style="color: var(--color-blue);">🏏 Scorer Code: <strong>${t.scorerInviteCode || 'SC8K2M'}</strong></span>
         </p>
       </div>
-      <div>
+      <div style="display: flex; gap: 8px;">
         ${t.id !== state.activeTournamentId ? `<button class="btn btn-sm btn-secondary" onclick="switchActiveTournament('${t.id}')">Select</button>` : ''}
+        ${isMaster ? `<button class="btn btn-sm btn-danger" style="background: var(--color-red); color: white;" onclick="deleteTournament('${t.id}')">Delete 🗑️</button>` : ''}
       </div>
     </div>
   `).join("");
+}
+
+function deleteTournament(tourneyId) {
+  const target = state.tournaments.find(t => t.id === tourneyId);
+  const name = target ? target.name : "tournament";
+  if (!confirm(`Are you sure you want to permanently delete '${name}' and all associated teams, players, and matches?`)) return;
+
+  state.tournaments = state.tournaments.filter(t => t.id !== tourneyId);
+  state.teams = state.teams.filter(t => t.tournamentId !== tourneyId);
+  state.players = state.players.filter(p => p.tournamentId !== tourneyId);
+  state.matches = state.matches.filter(m => m.tournamentId !== tourneyId);
+  state.ballRecords = state.ballRecords.filter(b => b.tournamentId !== tourneyId);
+  state.bids = state.bids.filter(b => b.tournamentId !== tourneyId);
+
+  if (state.activeTournamentId === tourneyId) {
+    state.activeTournamentId = state.tournaments[0] ? state.tournaments[0].id : "";
+  }
+
+  if (db) {
+    db.ref("tournaments/" + tourneyId).remove().catch(() => {});
+  }
+
+  saveToFirebase();
+  renderAll();
+  showToast(`🗑️ Tournament '${name}' deleted successfully!`);
 }
 
 function switchActiveTournament(tourneyId) {
@@ -2257,4 +2315,7 @@ if (typeof window !== 'undefined') {
   window.copyText = copyText;
   window.switchActiveTournament = switchActiveTournament;
   window.showToast = showToast;
+  window.toggleMasterAdminMode = toggleMasterAdminMode;
+  window.isMasterAdminMode = isMasterAdminMode;
+  window.deleteTournament = deleteTournament;
 }

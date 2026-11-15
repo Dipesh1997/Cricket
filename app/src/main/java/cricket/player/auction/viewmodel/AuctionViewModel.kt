@@ -17,6 +17,7 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     // Scoped only to tournaments this device created or joined!
     val tournaments: StateFlow<List<Tournament>> = localRepository.userTournaments
     val allTournaments: StateFlow<List<Tournament>> = localRepository.tournaments
+    val isMasterAdminMode: StateFlow<Boolean> = localRepository.isMasterAdminMode
     val activeTournamentId: StateFlow<String> = localRepository.activeTournamentId
 
     val captainReadyMap: StateFlow<Map<String, Boolean>> = localRepository.captainReadyMap
@@ -143,6 +144,17 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
 
     fun selectTournament(tournamentId: String) {
         localRepository.setActiveTournament(tournamentId)
+        if (localRepository.isMasterAdminMode.value) {
+            _currentUser.value = _currentUser.value.copy(role = UserRole.ADMIN_AUCTIONEER)
+        }
+    }
+
+    fun toggleMasterAdminMode(): Boolean {
+        val newState = localRepository.toggleMasterAdminMode()
+        if (newState) {
+            _currentUser.value = _currentUser.value.copy(role = UserRole.ADMIN_AUCTIONEER)
+        }
+        return newState
     }
 
     fun updateTournament(tournament: Tournament) {
