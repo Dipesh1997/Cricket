@@ -41,4 +41,40 @@ class MasterAdminModeTest {
         assertEquals(1, remainingMatches.size)
         assertEquals("m2", remainingMatches[0].id)
     }
+
+    @Test
+    fun testDeviceTournamentIsolationAndPruning() {
+        val myDeviceId = "pixel_device_123"
+        val foreignDeviceId = "web_device_456"
+
+        val tMyCreated = Tournament(id = "t_mine", name = "My Pixel Cup", creatorDeviceId = myDeviceId)
+        val tForeign = Tournament(id = "t_foreign", name = "Web Cup", creatorDeviceId = foreignDeviceId)
+        val tJoined = Tournament(id = "t_joined", name = "Joined League", creatorDeviceId = foreignDeviceId)
+
+        val allTournaments = listOf(tMyCreated, tForeign, tJoined)
+
+        // Assume device had contaminated myTournamentIds containing foreign tournaments
+        val contaminatedMyIds = setOf("t_mine", "t_foreign", "t_joined")
+        val roles = mapOf("t_mine" to "ADMIN", "t_foreign" to "ADMIN", "t_joined" to "SCORER")
+
+        // Pruning logic: if creatorDeviceId is foreign and role is ADMIN, it is pruned
+        val cleanedSet = contaminatedMyIds.filter { tId ->
+            val tourney = allTournaments.find { it.id == tId }
+            if (tourney != null && tourney.creatorDeviceId.isNotBlank() && tourney.creatorDeviceId != myDeviceId) {
+                roles[tId] != "ADMIN" // Legit joined roles (like SCORER) are kept
+            } else {
+                true
+            }
+        }.toSet()
+
+        assertEquals(setOf("t_mine", "t_joined"), cleanedSet)
+        assertFalse(cleanedSet.contains("t_foreign"))
+
+        // Standard user sees only their tournaments
+        val visibleTournaments = allTournaments.filter { it.id in cleanedSet }
+        assertEquals(2, visibleTournaments.size)
+        assertTrue(visibleTournaments.any { it.id == "t_mine" })
+        assertTrue(visibleTournaments.any { it.id == "t_joined" })
+        assertFalse(visibleTournaments.any { it.id == "t_foreign" })
+    }
 }

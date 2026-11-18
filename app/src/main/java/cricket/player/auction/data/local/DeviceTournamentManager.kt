@@ -54,6 +54,15 @@ class DeviceTournamentManager(context: Context) {
         prefs.edit().putBoolean("hide_demo_data", hide).apply()
     }
 
+    fun setMyTournaments(tournamentIds: Set<String>, roleMap: Map<String, String> = emptyMap()) {
+        val editor = prefs.edit()
+        editor.putStringSet("my_tournament_ids", tournamentIds)
+        roleMap.forEach { (tId, role) ->
+            editor.putString("role_$tId", role)
+        }
+        editor.apply()
+    }
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }

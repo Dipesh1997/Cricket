@@ -44,7 +44,7 @@ class LocalCricketRepository(context: Context) {
         val base = if (isMaster) {
             all
         } else {
-            all.filter { it.id in myIds || (!it.isOfflineOnly && !it.id.startsWith("demo_")) }
+            all.filter { it.id in myIds }
         }
         if (hideDemo) base.filter { !it.isOfflineOnly && !it.id.startsWith("demo_") } else base
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -95,6 +95,29 @@ class LocalCricketRepository(context: Context) {
                 _isBiddingStarted.value = isStarted
             }
         }
+        firebaseRepo.onDeviceTournamentsRemoteUpdated = { remoteDeviceTourneys ->
+            val currentMyIds = deviceTourneyManager.getMyTournamentIds()
+            val demoIds = currentMyIds.filter { isDemoOrOffline(it) }
+            val cleanedSet = mutableSetOf<String>()
+            cleanedSet.addAll(demoIds)
+
+            remoteDeviceTourneys.forEach { (tId, role) ->
+                val tourney = _tournaments.value.find { it.id == tId }
+                if (tourney != null && tourney.creatorDeviceId.isNotBlank() && tourney.creatorDeviceId != firebaseRepo.deviceId && role == "ADMIN") {
+                    // Contaminated foreign tournament - prune from this device's remote list
+                    firebaseRepo.removeDeviceTournament(tId)
+                } else {
+                    cleanedSet.add(tId)
+                }
+            }
+
+            // Keep tournaments created on this device
+            _tournaments.value.filter { it.creatorDeviceId.isNotBlank() && it.creatorDeviceId == firebaseRepo.deviceId }.forEach {
+                cleanedSet.add(it.id)
+            }
+            deviceTourneyManager.setMyTournaments(cleanedSet, remoteDeviceTourneys)
+            _myTournamentIds.value = cleanedSet
+        }
         scope.launch {
             val schema = dbManager.loadDatabase().sanitized()
             _tournaments.value = schema.tournaments
@@ -107,6 +130,22 @@ class LocalCricketRepository(context: Context) {
             _activeTournamentId.value = schema.activeTournamentId.ifEmpty { schema.tournaments.firstOrNull()?.id ?: "" }
             _activePlayerId.value = schema.activePlayerId ?: schema.players.firstOrNull()?.id
             _activeMatchId.value = schema.activeMatchId ?: schema.matches.firstOrNull()?.id
+
+            // Clean up any tournaments in local deviceTourneyManager that belong to foreign devices
+            val currentMyIds = deviceTourneyManager.getMyTournamentIds()
+            val validLocalIds = currentMyIds.filter { tId ->
+                val tourney = schema.tournaments.find { it.id == tId }
+                if (tourney != null && tourney.creatorDeviceId.isNotBlank() && tourney.creatorDeviceId != firebaseRepo.deviceId) {
+                    val role = deviceTourneyManager.getTournamentRole(tId)
+                    role != "ADMIN"
+                } else {
+                    true
+                }
+            }.toSet()
+            if (validLocalIds != currentMyIds) {
+                deviceTourneyManager.setMyTournaments(validLocalIds)
+                _myTournamentIds.value = validLocalIds
+            }
 
             // CRITICAL: Only push to Firebase if local database actually has data.
             // On fresh install / after reinstall, local schema is empty.
@@ -134,8 +173,9 @@ class LocalCricketRepository(context: Context) {
             _activePlayerId.value = remoteSchema.activePlayerId ?: remoteSchema.players.firstOrNull()?.id
             _activeMatchId.value = remoteSchema.activeMatchId ?: remoteSchema.matches.firstOrNull()?.id
 
+            // Only register tournaments created by this device
             remoteTournaments.forEach { rTourney ->
-                if (!isDemoOrOffline(rTourney.id)) {
+                if (rTourney.creatorDeviceId.isNotBlank() && rTourney.creatorDeviceId == firebaseRepo.deviceId) {
                     deviceTourneyManager.addTournament(rTourney.id, "ADMIN")
                 }
             }
@@ -158,16 +198,18 @@ class LocalCricketRepository(context: Context) {
             _ballRecords.value = mergedBallRecords
             _captainInvites.value = mergedInvites
 
-            // Automatically register any remote cloud tournaments so they are always visible
+            // Only register tournaments created by this device
             remoteTournaments.forEach { rTourney ->
-                if (!isDemoOrOffline(rTourney.id)) {
+                if (rTourney.creatorDeviceId.isNotBlank() && rTourney.creatorDeviceId == firebaseRepo.deviceId) {
                     deviceTourneyManager.addTournament(rTourney.id, "ADMIN")
                 }
             }
             _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
 
             if (_activeTournamentId.value.isBlank() || (!_tournaments.value.any { it.id == _activeTournamentId.value })) {
-                _activeTournamentId.value = remoteSchema.activeTournamentId.ifEmpty { _tournaments.value.firstOrNull { !isDemoOrOffline(it.id) }?.id ?: "" }
+                _activeTournamentId.value = _tournaments.value.firstOrNull { it.id in _myTournamentIds.value && !isDemoOrOffline(it.id) }?.id
+                    ?: _tournaments.value.firstOrNull { it.id in _myTournamentIds.value }?.id
+                    ?: ""
             }
         }
 
@@ -312,7 +354,8 @@ class LocalCricketRepository(context: Context) {
             maxOverseas = maxOverseas,
             scorerInviteCode = scorerCode,
             adminCode = adminCode,
-            spectatorInviteCode = spectatorCode
+            spectatorInviteCode = spectatorCode,
+            creatorDeviceId = firebaseRepo.deviceId
         )
         _tournaments.value = _tournaments.value + newTourney
         _activeTournamentId.value = newTourney.id
@@ -334,7 +377,8 @@ class LocalCricketRepository(context: Context) {
             scorerInviteCode = "DEMOSC1",
             adminCode = "DEMOADM1",
             spectatorInviteCode = "DEMOSPEC",
-            isOfflineOnly = true
+            isOfflineOnly = true,
+            creatorDeviceId = firebaseRepo.deviceId
         )
 
         // 4 Demo Teams
@@ -469,7 +513,8 @@ class LocalCricketRepository(context: Context) {
                     maxOverseas = 8,
                     scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
                     adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase(),
-                    spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
+                    spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase(),
+                    creatorDeviceId = firebaseRepo.deviceId
                 )
                 _tournaments.value = _tournaments.value + parentTourney
             }
@@ -491,7 +536,8 @@ class LocalCricketRepository(context: Context) {
                 maxOverseas = 8,
                 adminCode = cleanCode,
                 scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
-                spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
+                spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase(),
+                creatorDeviceId = firebaseRepo.deviceId
             )
             _tournaments.value = _tournaments.value + newTourney
             _activeTournamentId.value = newTourney.id
@@ -512,7 +558,8 @@ class LocalCricketRepository(context: Context) {
                 maxOverseas = 8,
                 scorerInviteCode = cleanCode,
                 adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase(),
-                spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
+                spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase(),
+                creatorDeviceId = firebaseRepo.deviceId
             )
             _tournaments.value = _tournaments.value + newTourney
             _activeTournamentId.value = newTourney.id
@@ -533,7 +580,8 @@ class LocalCricketRepository(context: Context) {
                 maxOverseas = 8,
                 spectatorInviteCode = cleanCode,
                 scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
-                adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
+                adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase(),
+                creatorDeviceId = firebaseRepo.deviceId
             )
             _tournaments.value = _tournaments.value + newTourney
             _activeTournamentId.value = newTourney.id
@@ -553,10 +601,15 @@ class LocalCricketRepository(context: Context) {
                 maxSlots = 25,
                 maxOverseas = 8,
                 adminCode = cleanCode,
-                scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
+                scorerInviteCode = "SC" + UUID.randomUUID().toString().take(4).uppercase(),
+                spectatorInviteCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase(),
+                creatorDeviceId = firebaseRepo.deviceId
             )
             _tournaments.value = _tournaments.value + newTourney
             _activeTournamentId.value = newTourney.id
+            deviceTourneyManager.addTournament(newTourney.id, "ADMIN")
+            _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
+            firebaseRepo.registerDeviceTournament(newTourney.id, "ADMIN", newTourney.name)
             persistAsync()
             return Pair(newTourney, UserRole.ADMIN_AUCTIONEER)
         }

@@ -57,7 +57,8 @@ data class Tournament(
     val adminCode: String = "",
     val spectatorInviteCode: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-    val isOfflineOnly: Boolean = false
+    val isOfflineOnly: Boolean = false,
+    val creatorDeviceId: String = ""
 )
 
 data class Player(
@@ -314,7 +315,8 @@ fun Tournament.sanitized(): Tournament {
         driveFileUrl = driveFileUrl ?: "",
         scorerInviteCode = if (scorerInviteCode.isNullOrBlank()) "SC" + cleanId.takeLast(4).uppercase() else scorerInviteCode,
         adminCode = cleanAdminCode,
-        spectatorInviteCode = cleanSpecCode
+        spectatorInviteCode = cleanSpecCode,
+        creatorDeviceId = creatorDeviceId ?: ""
     )
 }
 
