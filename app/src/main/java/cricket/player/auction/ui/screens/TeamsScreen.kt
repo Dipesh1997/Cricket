@@ -71,6 +71,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
     var editingTeam by remember { mutableStateOf<Team?>(null) }
     var deletingTeam by remember { mutableStateOf<Team?>(null) }
     var showAddPlayerForTeamDialog by remember { mutableStateOf<Team?>(null) }
+    var playerToReAuction by remember { mutableStateOf<Player?>(null) }
 
     Scaffold(
         floatingActionButton = {
@@ -224,7 +225,7 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = team.name, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = team.name, color = textMain, fontWeight = FontWeight.Bold)
                     StatChip(text = team.remainingPurse.formatIplCurrency(), backgroundColor = IplGold.copy(alpha = 0.2f), textColor = IplGold)
                 }
             },
@@ -320,12 +321,35 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                                                 )
                                             }
                                         }
-                                        Text(
-                                            text = (player.soldPrice ?: player.currentBid).formatIplCurrency(),
-                                            color = BidGreen,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = (player.soldPrice ?: player.currentBid).formatIplCurrency(),
+                                                color = BidGreen,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                            if (isAdmin) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Button(
+                                                    onClick = {
+                                                        playerToReAuction = player
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = Color(0xFFEF5350).copy(alpha = 0.2f),
+                                                        contentColor = Color(0xFFEF5350)
+                                                    ),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                                    modifier = Modifier.height(28.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "RE-AUCTION 🔄",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -336,6 +360,51 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             confirmButton = {
                 TextButton(onClick = { selectedTeamForRoster = null }) {
                     Text("Close", color = textSub)
+                }
+            },
+            containerColor = cardBg
+        )
+    }
+
+    // --- Confirmation Dialog to Remove Player for Re-Auction ---
+    if (playerToReAuction != null) {
+        val targetP = playerToReAuction!!
+        val buyerTeam = selectedTeamForRoster ?: teams.find { it.id == targetP.soldToTeamId }
+        val refundAmt = (targetP.soldPrice ?: targetP.currentBid).formatIplCurrency()
+        AlertDialog(
+            onDismissRequest = { playerToReAuction = null },
+            title = {
+                Text(
+                    text = "Re-Auction Player?",
+                    color = textMain,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove ${targetP.name} from ${buyerTeam?.name ?: "this team"} for re-auction?\n\n$refundAmt will be refunded to ${buyerTeam?.shortCode ?: "the team"}'s purse and ${targetP.name} will be returned to the auction pool as UP_NEXT.",
+                    color = textMain,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.removePlayerFromTeamForReAuction(targetP.id)
+                        Toast.makeText(context, "🔄 ${targetP.name} removed for re-auction. Purse refunded!", Toast.LENGTH_SHORT).show()
+                        playerToReAuction = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFEF5350),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text("Re-Auction", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { playerToReAuction = null }) {
+                    Text("Cancel", color = textSub)
                 }
             },
             containerColor = cardBg

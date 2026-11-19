@@ -886,6 +886,40 @@ function renderAuctionArena() {
   adminControls.style.display = state.currentUser.role === "ADMIN_AUCTIONEER" ? "flex" : "none";
 
   renderBidsLog(player.id);
+  renderRecentlySold();
+}
+
+function renderRecentlySold() {
+  const container = document.getElementById("recentlySoldContainer");
+  const badge = document.getElementById("recentlySoldBadge");
+  if (!container) return;
+
+  const soldPlayers = state.players.filter(p => p.status === "SOLD" && (!state.activeTournamentId || p.tournamentId === state.activeTournamentId));
+  const last3 = soldPlayers.slice(-3).reverse();
+  if (badge) badge.innerText = last3.length;
+
+  if (last3.length === 0) {
+    container.innerHTML = `<p style="color: var(--color-text-sub); font-size: 0.85rem;">No players sold yet in this tournament</p>`;
+    return;
+  }
+
+  const isAdmin = state.currentUser.role === "ADMIN_AUCTIONEER";
+  container.innerHTML = last3.map(p => {
+    const buyer = state.teams.find(t => t.id === p.soldToTeamId);
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface); padding: 8px 12px; border-radius: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 700;">${p.name}</span>
+          <span style="font-size: 0.75rem; color: var(--color-text-sub);">${p.role || ''}</span>
+          ${buyer ? `<span style="font-size: 0.75rem; color: var(--color-gold); font-weight: bold;">• ${buyer.shortCode}</span>` : ''}
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="color: var(--color-green); font-weight: 900;">₹${(p.soldPrice || p.currentBid).toFixed(2)} Cr</span>
+          ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="removePlayerFromTeamForReAuction('${p.id}')" style="font-size: 0.7rem; padding: 2px 6px;">UNDO</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
 function renderBidsLog(playerId) {
@@ -1019,22 +1053,30 @@ function undoLastBid() {
   showToast("↩️ Last bid undone!");
 }
 
+function removePlayerFromTeamForReAuction(playerId) {
+  const player = state.players.find(p => p.id === playerId);
+  if (!player) return;
+  const team = state.teams.find(t => t.id === player.soldToTeamId);
+  if (team) {
+    team.spentPurse = Math.max(0, team.spentPurse - (player.soldPrice || player.currentBid));
+  }
+  player.status = "UP_NEXT";
+  player.soldPrice = null;
+  player.soldToTeamId = null;
+  player.currentBid = player.basePrice;
+  player.highestBidderTeamId = null;
+  state.bids = state.bids.filter(b => b.playerId !== playerId);
+  state.activePlayerId = player.id;
+  saveToFirebase();
+  renderAll();
+  showToast(`🔄 ${player.name} returned to auction pool for re-auction!`);
+}
+
 function undoLastSoldPlayer() {
   const soldPlayers = state.players.filter(p => p.status === "SOLD" && (!state.activeTournamentId || p.tournamentId === state.activeTournamentId));
   if (soldPlayers.length === 0) return;
   const lastSold = soldPlayers[soldPlayers.length - 1];
-  const team = state.teams.find(t => t.id === lastSold.soldToTeamId);
-  if (team) {
-    team.spentPurse = Math.max(0, team.spentPurse - (lastSold.soldPrice || lastSold.currentBid));
-  }
-  lastSold.status = "UP_NEXT";
-  lastSold.soldPrice = null;
-  lastSold.soldToTeamId = null;
-  lastSold.currentBid = lastSold.basePrice;
-  lastSold.highestBidderTeamId = null;
-  state.activePlayerId = lastSold.id;
-  saveToFirebase();
-  showToast(`🔄 Undone sold player: ${lastSold.name} restored to stage!`);
+  removePlayerFromTeamForReAuction(lastSold.id);
 }
 
 function toggleFixedSet() {
@@ -1070,9 +1112,12 @@ function startBidTimer() {
 // --- TEAMS & SQUADS ENGINE ---
 function renderTeams() {
   const container = document.getElementById("teamsGridList");
+  if (!container) return;
+  const isAdmin = state.currentUser.role === "ADMIN_AUCTIONEER";
   container.innerHTML = state.teams.map(t => {
     const remaining = t.totalPurse - t.spentPurse;
     const spentPct = Math.min(100, (t.spentPurse / t.totalPurse) * 100);
+    const squad = state.players.filter(p => p.soldToTeamId === t.id);
     return `
       <div class="team-card">
         <div class="team-header">
@@ -1089,6 +1134,25 @@ function renderTeams() {
         </div>
         <div class="progress-bar">
           <div class="progress-fill" style="width: ${spentPct}%;"></div>
+        </div>
+        <div style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-text-sub); margin-bottom: 6px;">
+            <span>Squad (${squad.length})</span>
+            <span>Spent: ₹${t.spentPurse.toFixed(2)} Cr</span>
+          </div>
+          ${squad.length === 0 ? `<p style="font-size: 0.75rem; color: var(--color-text-sub); font-style: italic;">No players acquired yet</p>` : `
+            <div style="display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto;">
+              ${squad.map(p => `
+                <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">
+                  <span>${p.name} <small style="color: var(--color-text-sub);">(${p.role || ''})</small></span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="color: var(--color-green); font-weight: bold;">₹${(p.soldPrice || p.currentBid).toFixed(2)} Cr</span>
+                    ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="removePlayerFromTeamForReAuction('${p.id}')" style="font-size: 0.65rem; padding: 1px 5px;" title="Re-Auction">🔄</button>` : ''}
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          `}
         </div>
       </div>
     `;

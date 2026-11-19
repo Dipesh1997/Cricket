@@ -935,6 +935,35 @@ class LocalCricketRepository(context: Context) {
         return true
     }
 
+    fun removePlayerFromTeamForReAuction(playerId: String): Player? {
+        val player = _players.value.find { it.id == playerId } ?: return null
+        val buyerTeamId = player.soldToTeamId
+        val refundAmount = player.soldPrice ?: player.currentBid
+        if (buyerTeamId != null) {
+            _teams.value = _teams.value.map { t ->
+                if (t.id == buyerTeamId) {
+                    t.copy(spentPurse = (t.spentPurse - refundAmount).coerceAtLeast(0.0))
+                } else t
+            }
+        }
+
+        val restoredPlayer = player.copy(
+            status = PlayerStatus.UP_NEXT,
+            soldPrice = null,
+            soldToTeamId = null,
+            currentBid = player.basePrice,
+            highestBidderTeamId = null
+        )
+        _players.value = _players.value.map { p ->
+            if (p.id == playerId) restoredPlayer else p
+        }
+
+        _bids.value = _bids.value.filterNot { it.playerId == playerId }
+        _activePlayerId.value = restoredPlayer.id
+        persistAsync()
+        return restoredPlayer
+    }
+
     fun undoLastSoldPlayer(tournamentId: String? = null): Player? {
         val targetTournamentId = tournamentId ?: _activeTournamentId.value
         val soldPlayers = _players.value.filter {
@@ -951,35 +980,7 @@ class LocalCricketRepository(context: Context) {
             } ?: soldPlayers.last()
         }
 
-        val buyerTeamId = playerToUndo.soldToTeamId
-        val refundAmount = playerToUndo.soldPrice ?: playerToUndo.currentBid
-        if (buyerTeamId != null) {
-            _teams.value = _teams.value.map { t ->
-                if (t.id == buyerTeamId) {
-                    t.copy(spentPurse = (t.spentPurse - refundAmount).coerceAtLeast(0.0))
-                } else t
-            }
-        }
-
-        val restoredPlayer = playerToUndo.copy(
-            status = PlayerStatus.UP_NEXT,
-            soldPrice = null,
-            soldToTeamId = null,
-            currentBid = playerToUndo.basePrice,
-            highestBidderTeamId = null
-        )
-        _players.value = _players.value.map { p ->
-            if (p.id == playerToUndo.id) restoredPlayer else p
-        }
-
-        val winningBid = _bids.value.find { it.playerId == playerToUndo.id && it.teamId == buyerTeamId }
-        if (winningBid != null) {
-            _bids.value = _bids.value.filterNot { it.id == winningBid.id }
-        }
-
-        _activePlayerId.value = restoredPlayer.id
-        persistAsync()
-        return restoredPlayer
+        return removePlayerFromTeamForReAuction(playerToUndo.id)
     }
 
     fun togglePlayerFixedSet(playerId: String, isFixed: Boolean) {

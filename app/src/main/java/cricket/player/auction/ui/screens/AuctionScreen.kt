@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.*
@@ -47,6 +48,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     val areAllCaptainsReady by viewModel.areAllCaptainsReady.collectAsState()
     val isBiddingStarted by viewModel.isBiddingStarted.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+    val isAdmin = currentUser?.role == UserRole.ADMIN_AUCTIONEER
 
     val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -62,6 +64,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     var showEditSoldAmountDialog by remember { mutableStateOf(false) }
     var playerToEditSoldAmount by remember { mutableStateOf<Player?>(null) }
     var showRemovePlayerDialog by remember { mutableStateOf(false) }
+    var isRecentlySoldExpanded by remember { mutableStateOf(true) }
 
     // Auto-select user assigned team if team captain
     LaunchedEffect(currentUser, teams) {
@@ -890,6 +893,178 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 14.sp
                         )
+                    }
+                }
+            }
+        }
+
+        // --- Recently Sold Players (Expandable - Last 3) ---
+        item {
+            val last3SoldPlayers = remember(players, activeTournament, bids) {
+                players.filter { it.tournamentId == activeTournament?.id && it.status == PlayerStatus.SOLD }
+                    .sortedByDescending { p ->
+                        bids.filter { it.playerId == p.id }.maxOfOrNull { it.timestamp } ?: 0L
+                    }
+                    .take(3)
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isRecentlySoldExpanded = !isRecentlySoldExpanded },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "RECENTLY SOLD PLAYERS (LAST 3)",
+                                color = textMain,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = themeAccent.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "${last3SoldPlayers.size}",
+                                    color = themeAccent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { isRecentlySoldExpanded = !isRecentlySoldExpanded },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isRecentlySoldExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isRecentlySoldExpanded) "Collapse" else "Expand",
+                                tint = textSub
+                            )
+                        }
+                    }
+
+                    if (isRecentlySoldExpanded) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        if (last3SoldPlayers.isEmpty()) {
+                            Text(
+                                text = "No players sold yet in this tournament",
+                                color = textSub,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                last3SoldPlayers.forEach { soldP ->
+                                    val buyerTeam = teams.find { it.id == soldP.soldToTeamId }
+                                    Surface(
+                                        color = if (isDarkTheme) StadiumSurface else LightPitchSurface,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.weight(1f),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(CircleShape)
+                                                        .border(1.dp, themeAccent, CircleShape)
+                                                        .background(if (isDarkTheme) StadiumDark else LightPitchCard)
+                                                ) {
+                                                    DriveImage(
+                                                        url = soldP.imageUrl,
+                                                        contentDescription = soldP.name,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        fallbackIcon = getPlayerPlaceholderIcon(soldP.id, soldP.name)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = soldP.name,
+                                                        color = textMain,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 13.sp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = soldP.role.label + if (soldP.isOverseas) " ✈️" else "",
+                                                            color = textSub,
+                                                            fontSize = 11.sp
+                                                        )
+                                                        if (buyerTeam != null) {
+                                                            Text(
+                                                                text = " • ${buyerTeam.shortCode}",
+                                                                color = themeAccent,
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 11.sp
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = (soldP.soldPrice ?: soldP.currentBid).formatIplCurrency(),
+                                                    color = BidGreen,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 13.sp
+                                                )
+                                                if (isAdmin) {
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Button(
+                                                        onClick = {
+                                                            viewModel.removePlayerFromTeamForReAuction(soldP.id)
+                                                            Toast.makeText(context, "Undid sale of ${soldP.name}. Restored to auction stage!", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = Color(0xFFEF5350).copy(alpha = 0.2f),
+                                                            contentColor = Color(0xFFEF5350)
+                                                        ),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                        modifier = Modifier.height(28.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "UNDO",
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -342,6 +342,14 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         return restored
     }
 
+    fun removePlayerFromTeamForReAuction(playerId: String): Player? {
+        val restored = localRepository.removePlayerFromTeamForReAuction(playerId)
+        if (restored != null) {
+            resetBidTimer()
+        }
+        return restored
+    }
+
     // --- Match & Live Scorer Actions ---
     fun createMatch(
         teamAId: String,

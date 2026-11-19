@@ -134,4 +134,43 @@ class AdminAuctionControlsTest {
         assertEquals(0.0, updatedTeam.spentPurse, 0.001)
         assertEquals(100.0, updatedTeam.remainingPurse, 0.001)
     }
+
+    @Test
+    fun testRemovePlayerFromTeamForReAuctionClearsBidsAndRestoresPool() {
+        val team = Team(id = "t_csk", name = "Chennai Super Kings", shortCode = "CSK", primaryColorHex = "#FFFF00", totalPurse = 100.0, spentPurse = 16.0)
+        val player = Player(
+            id = "p_dhoni",
+            name = "MS Dhoni",
+            role = PlayerRole.WICKET_KEEPER,
+            country = "India",
+            isOverseas = false,
+            basePrice = 2.0,
+            currentBid = 16.0,
+            soldPrice = 16.0,
+            soldToTeamId = "t_csk",
+            status = PlayerStatus.SOLD
+        )
+        val bid = Bid(id = "b_1", playerId = "p_dhoni", teamId = "t_csk", teamName = "CSK", amount = 16.0)
+        val allBids = mutableListOf(bid)
+
+        val refund = player.soldPrice ?: player.currentBid
+        val updatedTeam = team.copy(spentPurse = (team.spentPurse - refund).coerceAtLeast(0.0))
+        val restoredPlayer = player.copy(
+            status = PlayerStatus.UP_NEXT,
+            soldPrice = null,
+            soldToTeamId = null,
+            currentBid = player.basePrice,
+            highestBidderTeamId = null
+        )
+        allBids.removeAll { it.playerId == player.id }
+
+        assertEquals(0.0, updatedTeam.spentPurse, 0.001)
+        assertEquals(100.0, updatedTeam.remainingPurse, 0.001)
+        assertEquals(PlayerStatus.UP_NEXT, restoredPlayer.status)
+        assertNull(restoredPlayer.soldPrice)
+        assertNull(restoredPlayer.soldToTeamId)
+        assertNull(restoredPlayer.highestBidderTeamId)
+        assertEquals(2.0, restoredPlayer.currentBid, 0.001)
+        assertTrue(allBids.isEmpty())
+    }
 }

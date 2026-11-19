@@ -57,6 +57,21 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+            DisposableEffect(isDarkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (isDarkTheme) {
+                        androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    } else {
+                        androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+                    },
+                    navigationBarStyle = if (isDarkTheme) {
+                        androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    } else {
+                        androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+                    }
+                )
+                onDispose {}
+            }
             CricketTheme(darkTheme = isDarkTheme) {
                 MainAppStructure(viewModel = viewModel)
             }
