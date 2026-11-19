@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,13 +42,7 @@ import cricket.player.auction.model.PlayerStatus
 import cricket.player.auction.model.Team
 import cricket.player.auction.model.UserRole
 import cricket.player.auction.model.formatIplCurrency
-import cricket.player.auction.ui.components.DriveImage
-import cricket.player.auction.ui.components.PhotoUploaderField
-import cricket.player.auction.ui.components.PurseProgressBar
-import cricket.player.auction.ui.components.StatChip
-import cricket.player.auction.ui.components.parseColorHex
-import cricket.player.auction.ui.components.getTeamPlaceholderIcon
-import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
+import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
@@ -154,19 +150,36 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
             }
 
             if (teams.isEmpty()) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = cardBg),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(text = "No Teams Registered Yet", color = textMain, fontWeight = FontWeight.Bold)
-                        Text(text = "Tap the + button to create a custom team", color = textSub, fontSize = 12.sp)
-                    }
-                }
+                EmptyStateGuideCard(
+                    mainIcon = Icons.Default.Shield,
+                    badgeText = "TEAMS & FRANCHISES",
+                    title = "No Teams Registered Yet 🛡️",
+                    description = "Create franchise teams with custom colors and budget purses so they can bid in the live auction arena.",
+                    steps = listOf(
+                        GuideStep(
+                            stepNumber = 1,
+                            title = "Create Team Franchise",
+                            description = "Set team name, short code (e.g. MI, CSK), and theme color.",
+                            icon = Icons.Default.Shield
+                        ),
+                        GuideStep(
+                            stepNumber = 2,
+                            title = "Allocate Budget Purse",
+                            description = "Assign total auction purse (e.g. ₹100 Cr) for buying auction players.",
+                            icon = Icons.Default.MonetizationOn
+                        ),
+                        GuideStep(
+                            stepNumber = 3,
+                            title = "Invite Team Captains",
+                            description = "Share the auto-generated Captain Invite Code for real-time mobile bidding.",
+                            icon = Icons.Default.PersonAdd
+                        )
+                    ),
+                    primaryButtonText = if (isAdmin) "+ CREATE FIRST TEAM 🛡️" else null,
+                    onPrimaryClick = if (isAdmin) { { showCreateTeamDialog = true } } else null,
+                    isDarkTheme = isDarkTheme,
+                    accentColor = themeAccent
+                )
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(teams) { team ->

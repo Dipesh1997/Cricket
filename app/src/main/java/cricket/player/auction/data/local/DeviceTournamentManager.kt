@@ -54,6 +54,14 @@ class DeviceTournamentManager(context: Context) {
         prefs.edit().putBoolean("hide_demo_data", hide).apply()
     }
 
+    fun isDarkTheme(): Boolean {
+        return prefs.getBoolean("is_dark_theme", false)
+    }
+
+    fun setDarkTheme(isDark: Boolean) {
+        prefs.edit().putBoolean("is_dark_theme", isDark).apply()
+    }
+
     fun setMyTournaments(tournamentIds: Set<String>, roleMap: Map<String, String> = emptyMap()) {
         val editor = prefs.edit()
         editor.putStringSet("my_tournament_ids", tournamentIds)

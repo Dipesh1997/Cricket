@@ -984,6 +984,59 @@ function markUnsold() {
   showToast(`❌ ${player.name} Marked UNSOLD`);
 }
 
+function editPlayerSoldPrice(playerId, newPrice) {
+  const player = state.players.find(p => p.id === playerId);
+  if (!player || player.status !== "SOLD" || !player.soldToTeamId) return;
+  const team = state.teams.find(t => t.id === player.soldToTeamId);
+  if (!team) return;
+  const oldPrice = player.soldPrice || player.currentBid;
+  const diff = newPrice - oldPrice;
+  team.spentPurse = Math.max(0, team.spentPurse + diff);
+  player.soldPrice = newPrice;
+  player.currentBid = newPrice;
+  saveToFirebase();
+  showToast(`✏️ Sold price updated to ₹${newPrice.toFixed(2)} Cr!`);
+}
+
+function undoLastBid() {
+  const player = state.players.find(p => p.id === state.activePlayerId);
+  if (!player || player.status === "SOLD") return;
+  const playerBids = state.bids.filter(b => b.playerId === player.id);
+  if (playerBids.length === 0) return;
+  const lastBid = playerBids[0];
+  state.bids = state.bids.filter(b => b.id !== lastBid.id);
+  const remaining = playerBids.slice(1);
+  if (remaining.length > 0) {
+    player.currentBid = remaining[0].amount;
+    player.highestBidderTeamId = remaining[0].teamId;
+    player.status = "BIDDING";
+  } else {
+    player.currentBid = player.basePrice;
+    player.highestBidderTeamId = null;
+    player.status = "UP_NEXT";
+  }
+  saveToFirebase();
+  showToast("↩️ Last bid undone!");
+}
+
+function undoLastSoldPlayer() {
+  const soldPlayers = state.players.filter(p => p.status === "SOLD" && (!state.activeTournamentId || p.tournamentId === state.activeTournamentId));
+  if (soldPlayers.length === 0) return;
+  const lastSold = soldPlayers[soldPlayers.length - 1];
+  const team = state.teams.find(t => t.id === lastSold.soldToTeamId);
+  if (team) {
+    team.spentPurse = Math.max(0, team.spentPurse - (lastSold.soldPrice || lastSold.currentBid));
+  }
+  lastSold.status = "UP_NEXT";
+  lastSold.soldPrice = null;
+  lastSold.soldToTeamId = null;
+  lastSold.currentBid = lastSold.basePrice;
+  lastSold.highestBidderTeamId = null;
+  state.activePlayerId = lastSold.id;
+  saveToFirebase();
+  showToast(`🔄 Undone sold player: ${lastSold.name} restored to stage!`);
+}
+
 function toggleFixedSet() {
   if (state.currentUser.role !== "ADMIN_AUCTIONEER") return;
   const player = state.players.find(p => p.id === state.activePlayerId);

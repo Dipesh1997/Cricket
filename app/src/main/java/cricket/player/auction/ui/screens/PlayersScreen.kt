@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.foundation.border
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import cricket.player.auction.model.*
-import cricket.player.auction.ui.components.DriveImage
+import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.components.FixedSetPlayerSelectorDialog
 import cricket.player.auction.ui.components.PhotoUploaderField
 import cricket.player.auction.ui.components.StatChip
@@ -235,8 +237,70 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Player List
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (filteredPlayers.isEmpty()) {
+                if (players.isEmpty()) {
+                    EmptyStateGuideCard(
+                        mainIcon = Icons.Default.Person,
+                        badgeText = "PLAYER ROSTER POOL",
+                        title = "Player Pool is Empty 🏏",
+                        description = "Add players with roles (Batsman, Bowler, All-Rounder, Wicket Keeper), photos, and base prices to draft them in auction.",
+                        steps = listOf(
+                            GuideStep(
+                                stepNumber = 1,
+                                title = "Add Players or Import Roster",
+                                description = "Tap '+ Add Player' to input name, role, country, and starting base price.",
+                                icon = Icons.Default.PersonAdd
+                            ),
+                            GuideStep(
+                                stepNumber = 2,
+                                title = "Organize Sets & Fixed Sets",
+                                description = "Group into Set 1 (Marquee), Set 2, or mark as Fixed Sets for the spin wheel.",
+                                icon = Icons.AutoMirrored.Filled.PlaylistAddCheck
+                            ),
+                            GuideStep(
+                                stepNumber = 3,
+                                title = "Draft into Auction Stage",
+                                description = "Select any player from the roster or spin the wheel in Auction Arena to start live bidding.",
+                                icon = Icons.Default.Gavel
+                            )
+                        ),
+                        primaryButtonText = if (!isSpectator) "+ ADD FIRST PLAYER 👤" else null,
+                        onPrimaryClick = if (!isSpectator) { { showAddPlayerDialog = true } } else null,
+                        isDarkTheme = isDarkTheme,
+                        accentColor = themeAccent
+                    )
+                } else {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = textSub, modifier = Modifier.size(40.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(text = "No players match '$searchQuery'", color = textMain, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = "Try clearing your search query or role filter", color = textSub, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    searchQuery = ""
+                                    selectedStatusFilter = null
+                                    selectedFilterRole = null
+                                },
+                                border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                            ) {
+                                Text("CLEAR FILTERS", color = themeAccent, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Player List
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(filteredPlayers) { player ->
                     val isActive = player.id == activePlayerId
                     val soldTeam = teams.find { it.id == player.soldToTeamId }
@@ -383,6 +447,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
             }
         }
     }
+}
 
     // --- Add New Player Dialog ---
     if (showAddPlayerDialog) {

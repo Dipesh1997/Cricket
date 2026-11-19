@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,6 +59,9 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     var showTeamSelectorDialog by remember { mutableStateOf(false) }
     var showSpinWheelModal by remember { mutableStateOf(false) }
     var showFixedSetSelectorModal by remember { mutableStateOf(false) }
+    var showEditSoldAmountDialog by remember { mutableStateOf(false) }
+    var playerToEditSoldAmount by remember { mutableStateOf<Player?>(null) }
+    var showRemovePlayerDialog by remember { mutableStateOf(false) }
 
     // Auto-select user assigned team if team captain
     LaunchedEffect(currentUser, teams) {
@@ -321,6 +325,23 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                 )
                             }
 
+                            if (player.status == PlayerStatus.SOLD && currentUser?.role == UserRole.ADMIN_AUCTIONEER) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        playerToEditSoldAmount = player
+                                        showEditSoldAmountDialog = true
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Edit Sold Amount ✏️", color = themeAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(8.dp))
 
                             // Highest Bidder Team Display
@@ -344,23 +365,39 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                     }
                 }
             } else {
-
-                // No active player state
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = cardBg),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = themeAccent, modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "Auction Stage Empty", color = textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Select a player from the roster to start bidding", color = textSub, fontSize = 13.sp)
-                    }
-                }
+                // Interactive Guide with icons and dummy illustration when no active player
+                EmptyStateGuideCard(
+                    mainIcon = Icons.Default.Gavel,
+                    badgeText = "AUCTION ARENA READY",
+                    title = "Auction Stage is Empty 🏏",
+                    description = "Draft players onto the auction stage using the Spin Wheel or Fixed Sets to start real-time bidding.",
+                    steps = listOf(
+                        GuideStep(
+                            stepNumber = 1,
+                            title = "Spin Wheel or Fix Sets",
+                            description = "Tap 'SPIN WHEEL' or 'SET' at the top to draft upcoming players onto the stage.",
+                            icon = Icons.Default.Casino
+                        ),
+                        GuideStep(
+                            stepNumber = 2,
+                            title = "Captains Ready & Live Bidding",
+                            description = "Captains tap ready, and bidding starts with live quick increments (+₹20L, +₹50L, +₹1Cr).",
+                            icon = Icons.Default.Bolt
+                        ),
+                        GuideStep(
+                            stepNumber = 3,
+                            title = "Admin Auction Controls",
+                            description = "Sell to highest bidder or mark unsold. Admin can edit sold amounts, undo bids, or undo sold players anytime.",
+                            icon = Icons.Default.Gavel
+                        )
+                    ),
+                    primaryButtonText = "SPIN WHEEL 🎡",
+                    onPrimaryClick = { showSpinWheelModal = true },
+                    secondaryButtonText = if (currentUser?.role == UserRole.ADMIN_AUCTIONEER) "SELECT SET 📝" else null,
+                    onSecondaryClick = if (currentUser?.role == UserRole.ADMIN_AUCTIONEER) { { showFixedSetSelectorModal = true } } else null,
+                    isDarkTheme = isDarkTheme,
+                    accentColor = themeAccent
+                )
             }
         }
 
@@ -667,7 +704,15 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                         Spacer(modifier = Modifier.height(10.dp))
 
+                        val tourneySoldPlayers = remember(players, activeTournament) {
+                            players.filter { it.tournamentId == activeTournament?.id && it.status == PlayerStatus.SOLD }
+                        }
+                        val canUndoBid = activePlayer != null && activePlayer?.status != PlayerStatus.SOLD && bids.any { it.playerId == activePlayer?.id }
+                        val canUndoSold = tourneySoldPlayers.isNotEmpty()
+                        val canEditSold = (activePlayer?.status == PlayerStatus.SOLD) || tourneySoldPlayers.isNotEmpty()
+
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Row 1: Sell Bid & Sell Base Price
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -699,13 +744,99 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                 }
                             }
 
-                            Button(
-                                onClick = { viewModel.markActivePlayerUnsold() },
-                                colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed),
+                            // Row 2: Mark Unsold & Undo Last Bid
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = activePlayer != null && activePlayer?.status != PlayerStatus.SOLD
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Text("MARK UNSOLD", fontWeight = FontWeight.Bold)
+                                Button(
+                                    onClick = { viewModel.markActivePlayerUnsold() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed),
+                                    modifier = Modifier.weight(1f),
+                                    enabled = activePlayer != null && activePlayer?.status != PlayerStatus.SOLD
+                                ) {
+                                    Icon(imageVector = Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("MARK UNSOLD", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (viewModel.undoLastBid()) {
+                                            Toast.makeText(context, "↩️ Last bid undone!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (canUndoBid) (if (isDarkTheme) Color(0xFFFF9800) else Color(0xFFE65100)) else Color.Gray.copy(alpha = 0.5f),
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    enabled = canUndoBid
+                                ) {
+                                    Icon(imageVector = Icons.AutoMirrored.Filled.Undo, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("UNDO BID", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+
+                            // Row 3: Edit Sold Amount & Undo Last Player Sold
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val target = if (activePlayer?.status == PlayerStatus.SOLD) activePlayer else tourneySoldPlayers.lastOrNull()
+                                        if (target != null) {
+                                            playerToEditSoldAmount = target
+                                            showEditSoldAmountDialog = true
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (canEditSold) (if (isDarkTheme) NeonBlue else LightPitchPrimary) else Color.Gray.copy(alpha = 0.5f),
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    enabled = canEditSold
+                                ) {
+                                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("EDIT SOLD ₹", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val restored = viewModel.undoLastSoldPlayer()
+                                        if (restored != null) {
+                                            Toast.makeText(context, "🔄 Undone sold player ${restored.name}! Restored to auction stage.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "No sold player found to undo", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (canUndoSold) (if (isDarkTheme) Color(0xFF9C27B0) else Color(0xFF6A1B9A)) else Color.Gray.copy(alpha = 0.5f),
+                                        contentColor = Color.White
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    enabled = canUndoSold
+                                ) {
+                                    Icon(imageVector = Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("UNDO SOLD", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+
+                            // Row 4: Remove Player from Pool
+                            if (activePlayer != null) {
+                                OutlinedButton(
+                                    onClick = { showRemovePlayerDialog = true },
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, UnsoldRed),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(imageVector = Icons.Default.Delete, contentDescription = null, tint = UnsoldRed, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("REMOVE CURRENT PLAYER FROM POOL 🗑️", color = UnsoldRed, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -843,6 +974,142 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                 activeTournament?.id?.let { viewModel.clearAllFixedSets(it) }
             },
             onDismiss = { showFixedSetSelectorModal = false }
+        )
+    }
+
+    // --- Admin Edit Sold Price Dialog ---
+    if (showEditSoldAmountDialog && playerToEditSoldAmount != null) {
+        val targetPlayer = playerToEditSoldAmount!!
+        val buyerTeam = teams.find { it.id == targetPlayer.soldToTeamId }
+        var inputAmountStr by remember(targetPlayer) {
+            mutableStateOf(String.format(java.util.Locale.US, "%.2f", targetPlayer.soldPrice ?: targetPlayer.currentBid))
+        }
+        var errorMsg by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = {
+                showEditSoldAmountDialog = false
+                playerToEditSoldAmount = null
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Edit Sold Amount", color = textMain, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Player: ${targetPlayer.name} (${targetPlayer.role.label})",
+                        color = textMain,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "Sold to: ${buyerTeam?.name ?: "Unknown Team"}",
+                        color = themeAccent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Enter the corrected final sold amount in Crores (₹ Cr). Team purse will adjust automatically.",
+                        color = textSub,
+                        fontSize = 11.sp
+                    )
+                    OutlinedTextField(
+                        value = inputAmountStr,
+                        onValueChange = {
+                            inputAmountStr = it
+                            errorMsg = null
+                        },
+                        label = { Text("Sold Amount (₹ Cr)") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = themeAccent,
+                            focusedTextColor = textMain,
+                            unfocusedTextColor = textMain
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (errorMsg != null) {
+                        Text(text = errorMsg!!, color = UnsoldRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newAmount = inputAmountStr.toDoubleOrNull()
+                        if (newAmount == null || newAmount <= 0) {
+                            errorMsg = "Please enter a valid positive number"
+                            return@Button
+                        }
+                        val success = viewModel.editPlayerSoldPrice(targetPlayer.id, newAmount)
+                        if (success) {
+                            Toast.makeText(context, "✅ Sold price for ${targetPlayer.name} updated to ${newAmount.formatIplCurrency()}!", Toast.LENGTH_SHORT).show()
+                            showEditSoldAmountDialog = false
+                            playerToEditSoldAmount = null
+                        } else {
+                            errorMsg = "Failed to update: Team may not have sufficient purse budget"
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White)
+                ) {
+                    Text("SAVE AMOUNT", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showEditSoldAmountDialog = false
+                        playerToEditSoldAmount = null
+                    }
+                ) {
+                    Text("CANCEL", color = textSub)
+                }
+            },
+            containerColor = cardBg
+        )
+    }
+
+    // --- Admin Remove Player Confirmation Dialog ---
+    if (showRemovePlayerDialog && activePlayer != null) {
+        val playerToRemove = activePlayer!!
+        AlertDialog(
+            onDismissRequest = { showRemovePlayerDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = UnsoldRed)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Remove Player?", color = textMain, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to remove '${playerToRemove.name}' from the tournament roster? If the player was sold, the purchase amount will be refunded to the buying team.",
+                    color = textSub,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deletePlayer(playerToRemove.id)
+                        Toast.makeText(context, "🗑️ Player ${playerToRemove.name} removed from pool", Toast.LENGTH_SHORT).show()
+                        showRemovePlayerDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White)
+                ) {
+                    Text("REMOVE", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemovePlayerDialog = false }) {
+                    Text("CANCEL", color = textSub)
+                }
+            },
+            containerColor = cardBg
         )
     }
 }

@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.formatIplCurrency
-import cricket.player.auction.ui.components.StatChip
+import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
@@ -104,25 +104,36 @@ fun TournamentDashboardScreen(
                 }
             }
         } else {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = cardBg),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(text = "No Active Tournament Selected", color = textMain, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onBackToHome,
-                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black)
-                    ) {
-                        Text("Select Tournament From Home", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
+            EmptyStateGuideCard(
+                mainIcon = Icons.Default.GridView,
+                badgeText = "WORKSPACE OVERVIEW",
+                title = "No Active Tournament Selected 📊",
+                description = "Select or create a tournament from the home page to inspect franchise purse allocations, squad rosters, and workspace tools.",
+                steps = listOf(
+                    GuideStep(
+                        stepNumber = 1,
+                        title = "Choose Tournament Workspace",
+                        description = "Return to the Home screen and choose or join a tournament workspace.",
+                        icon = Icons.Default.Home
+                    ),
+                    GuideStep(
+                        stepNumber = 2,
+                        title = "Auction & Squad Analysis",
+                        description = "Monitor remaining budgets, overseas slots, and player distributions across teams.",
+                        icon = Icons.Default.Assessment
+                    ),
+                    GuideStep(
+                        stepNumber = 3,
+                        title = "Live Activities & Backup",
+                        description = "Access Live Auction, Scorer, Points Table, and JSON backup exports directly.",
+                        icon = Icons.Default.PlayArrow
+                    )
+                ),
+                primaryButtonText = "SELECT TOURNAMENT FROM HOME 🏆",
+                onPrimaryClick = onBackToHome,
+                isDarkTheme = isDarkTheme,
+                accentColor = themeAccent
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))

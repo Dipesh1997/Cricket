@@ -82,12 +82,14 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.getPlayerCareerStats()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // Theme State
-    private val _isDarkTheme = MutableStateFlow(true)
+    // Theme State - Default is Light Theme unless manually changed in preferences
+    private val _isDarkTheme = MutableStateFlow(localRepository.deviceTourneyManager.isDarkTheme())
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
     fun toggleTheme() {
-        _isDarkTheme.value = !_isDarkTheme.value
+        val newTheme = !_isDarkTheme.value
+        _isDarkTheme.value = newTheme
+        localRepository.deviceTourneyManager.setDarkTheme(newTheme)
     }
 
     // Bidding Countdown Timer
@@ -317,6 +319,27 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     fun markActivePlayerUnsold() {
         val player = activePlayer.value ?: return
         localRepository.markUnsold(player.id)
+    }
+
+    fun editPlayerSoldPrice(playerId: String, newSoldPrice: Double): Boolean {
+        return localRepository.editPlayerSoldPrice(playerId, newSoldPrice)
+    }
+
+    fun undoLastBid(): Boolean {
+        val player = activePlayer.value ?: return false
+        val success = localRepository.undoLastBid(player.id)
+        if (success) {
+            resetBidTimer()
+        }
+        return success
+    }
+
+    fun undoLastSoldPlayer(): Player? {
+        val restored = localRepository.undoLastSoldPlayer(activeTournament.value?.id)
+        if (restored != null) {
+            resetBidTimer()
+        }
+        return restored
     }
 
     // --- Match & Live Scorer Actions ---

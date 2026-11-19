@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -22,7 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.PointsTableEntry
-import cricket.player.auction.ui.components.parseColorHex
+import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
@@ -87,19 +88,34 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
             Spacer(modifier = Modifier.height(8.dp))
 
             if (pointsTable.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = textSub, modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No match records found", color = textMain, fontSize = 14.sp)
-                        Text("Record live matches to update standings", color = textSub, fontSize = 12.sp)
-                    }
-                }
+                EmptyStateGuideCard(
+                    mainIcon = Icons.Default.Assessment,
+                    badgeText = "STANDINGS & NRR",
+                    title = "Points Table Awaiting Matches 📈",
+                    description = "Standings, Points, Won/Lost stats, and Net Run Rate (NRR) calculate automatically as tournament matches are completed.",
+                    steps = listOf(
+                        GuideStep(
+                            stepNumber = 1,
+                            title = "Play Tournament Matches",
+                            description = "Go to the Live Scorer tab to start matches between teams.",
+                            icon = Icons.Default.SportsCricket
+                        ),
+                        GuideStep(
+                            stepNumber = 2,
+                            title = "Automatic NRR Calculation",
+                            description = "Runs scored and overs batted vs conceded compute official Net Run Rate dynamically.",
+                            icon = Icons.Default.Assessment
+                        ),
+                        GuideStep(
+                            stepNumber = 3,
+                            title = "Leaderboard Qualification",
+                            description = "Top ranking franchises advance to the knockout stages and final trophy!",
+                            icon = Icons.Default.EmojiEvents
+                        )
+                    ),
+                    isDarkTheme = isDarkTheme,
+                    accentColor = themeAccent
+                )
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(pointsTable) { index, entry ->

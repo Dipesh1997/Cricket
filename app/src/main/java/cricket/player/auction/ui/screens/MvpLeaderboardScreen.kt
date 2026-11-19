@@ -22,9 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.PlayerCareerStats
-import cricket.player.auction.ui.components.DriveImage
-import cricket.player.auction.ui.components.StatChip
-import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
+import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
@@ -100,12 +98,34 @@ fun MvpLeaderboardScreen(viewModel: AuctionViewModel) {
             Spacer(modifier = Modifier.height(14.dp))
 
             if (displayedList.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No player history available yet", color = textSub)
-                }
+                EmptyStateGuideCard(
+                    mainIcon = Icons.Default.Star,
+                    badgeText = "CRICHEROES MVP AWARDS",
+                    title = "MVP Leaderboard Awaiting Matches ⭐",
+                    description = "Player career MVP points, Orange Cap (most runs), and Purple Cap (most wickets) calculate dynamically as matches are played.",
+                    steps = listOf(
+                        GuideStep(
+                            stepNumber = 1,
+                            title = "Batting & Bowling Impact",
+                            description = "Runs, boundaries, strike-rates, dot balls, and wickets contribute to CricHeroes points.",
+                            icon = Icons.Default.Star
+                        ),
+                        GuideStep(
+                            stepNumber = 2,
+                            title = "Orange & Purple Cap Race",
+                            description = "Dedicated tabs highlight top run-scorers and leading wicket-takers in real time.",
+                            icon = Icons.Default.EmojiEvents
+                        ),
+                        GuideStep(
+                            stepNumber = 3,
+                            title = "Tournament MVP Crown",
+                            description = "The highest ranked overall match-winner claims the prestigious Tournament MVP trophy!",
+                            icon = Icons.Default.MilitaryTech
+                        )
+                    ),
+                    isDarkTheme = isDarkTheme,
+                    accentColor = themeAccent
+                )
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     itemsIndexed(displayedList) { index, playerStats ->

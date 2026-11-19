@@ -27,6 +27,7 @@ import cricket.player.auction.model.Tournament
 import cricket.player.auction.model.formatIplCurrency
 import cricket.player.auction.ui.components.StatChip
 import cricket.player.auction.ui.theme.*
+import cricket.player.auction.ui.components.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 
 import androidx.compose.material.icons.filled.ContentCopy
@@ -233,38 +234,38 @@ fun TournamentScreen(
             }
 
             if (tournaments.isEmpty()) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = cardBg),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, tint = IplGold, modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "No Tournaments Joined Yet", color = textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Create your own tournament or join an existing tournament using an Admin/Invite code.", color = textSub, fontSize = 12.sp, textAlign = TextAlign.Center)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(
-                                onClick = { showCreateDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black)
-                            ) {
-                                Text("+ CREATE NEW", fontWeight = FontWeight.ExtraBold)
-                            }
-                            OutlinedButton(
-                                onClick = { showInviteCodeDialog = true },
-                                border = androidx.compose.foundation.BorderStroke(1.dp, IplGold)
-                            ) {
-                                Text("🔑 JOIN CODE", color = textMain, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
+                EmptyStateGuideCard(
+                    mainIcon = Icons.Default.EmojiEvents,
+                    badgeText = "START YOUR TOURNAMENT",
+                    title = "No Tournaments Joined Yet 🏆",
+                    description = "Welcome to Cricket Auction Arena! Create your custom tournament or join an existing league using an Admin, Scorer, or Captain invite code.",
+                    steps = listOf(
+                        GuideStep(
+                            stepNumber = 1,
+                            title = "Create Tournament or Join Code",
+                            description = "Tap '+ Create New' to setup name and purse budget, or enter an invite code to join.",
+                            icon = Icons.Default.EmojiEvents
+                        ),
+                        GuideStep(
+                            stepNumber = 2,
+                            title = "Add Teams & Player Pool",
+                            description = "Configure franchise short codes, purse values, and player base prices with photos.",
+                            icon = Icons.Default.Shield
+                        ),
+                        GuideStep(
+                            stepNumber = 3,
+                            title = "Live Auction & Cricbuzz Scorer",
+                            description = "Draft players in real-time, spin wheel, schedule matches, and calculate live MVP stats!",
+                            icon = Icons.Default.SportsCricket
+                        )
+                    ),
+                    primaryButtonText = "+ CREATE NEW 🏆",
+                    onPrimaryClick = { showCreateDialog = true },
+                    secondaryButtonText = "🔑 JOIN CODE",
+                    onSecondaryClick = { showInviteCodeDialog = true },
+                    isDarkTheme = isDarkTheme,
+                    accentColor = themeAccent
+                )
             } else {
                 if (isMasterAdmin) {
                     Surface(

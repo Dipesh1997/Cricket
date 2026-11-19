@@ -24,10 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.*
-import cricket.player.auction.ui.components.DriveImage
-import cricket.player.auction.ui.components.StatChip
-import cricket.player.auction.ui.components.getPlayerPlaceholderIcon
-import cricket.player.auction.ui.components.parseColorHex
+import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
 import cricket.player.auction.viewmodel.AuctionViewModel
 import kotlinx.coroutines.delay
@@ -478,33 +475,65 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = themeAccent, modifier = Modifier.size(52.dp))
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text("No Active Match Selected", color = textMain, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                if (tourneyMatches.isNotEmpty()) "Tap any match card below to inspect Cricbuzz scorecard, or create a new match."
-                                else "Setup a new match with Coin Toss & Captain decisions to start scoring.",
-                                color = textSub,
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center
+                        if (tourneyMatches.isEmpty()) {
+                            EmptyStateGuideCard(
+                                mainIcon = Icons.Default.SportsCricket,
+                                badgeText = "MATCH SCORER & SCORECARDS",
+                                title = "No Matches Scheduled Yet ⚡",
+                                description = "Schedule cricket matches between franchises with coin toss, live ball-by-ball commentary, and Cricbuzz-style scorecards.",
+                                steps = listOf(
+                                    GuideStep(
+                                        stepNumber = 1,
+                                        title = "Setup Match & Coin Toss",
+                                        description = "Choose Team A vs Team B, set overs (5, 10, 20 overs), and flip coin for live toss.",
+                                        icon = Icons.Default.Casino
+                                    ),
+                                    GuideStep(
+                                        stepNumber = 2,
+                                        title = "Live Ball-by-Ball Scoring",
+                                        description = "Record 0, 1, 2, 4, 6, Wides, No-Balls, and Wickets with undo support.",
+                                        icon = Icons.Default.SportsCricket
+                                    ),
+                                    GuideStep(
+                                        stepNumber = 3,
+                                        title = "Cricbuzz Scorecard & Standings",
+                                        description = "Full batter & bowler tables, partnerships, Net Run Rate, and Points Table update live.",
+                                        icon = Icons.Default.Assessment
+                                    )
+                                ),
+                                primaryButtonText = if (canScore) "+ TOSS & START MATCH 🏏" else null,
+                                onPrimaryClick = if (canScore) { { showCreateMatchModal = true } } else null,
+                                isDarkTheme = isDarkTheme,
+                                accentColor = themeAccent
                             )
-                            Spacer(modifier = Modifier.height(14.dp))
-                            if (canScore) {
-                                Button(
-                                    onClick = { showCreateMatchModal = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = themeAccent, modifier = Modifier.size(52.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text("No Active Match Selected", color = textMain, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Tap any match card below to inspect Cricbuzz scorecard, or create a new match.",
+                                    color = textSub,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                                if (canScore) {
+                                    Button(
+                                        onClick = { showCreateMatchModal = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                    }
                                 }
                             }
                         }
