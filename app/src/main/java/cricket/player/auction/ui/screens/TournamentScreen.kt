@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -132,11 +134,21 @@ fun TournamentScreen(
         },
         containerColor = screenBg
     ) { innerPadding ->
+        val emptyScrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
+                .then(
+                    if (tournaments.isEmpty()) {
+                        Modifier
+                            .verticalScroll(emptyScrollState)
+                            .padding(16.dp)
+                            .padding(bottom = 88.dp)
+                    } else {
+                        Modifier.padding(16.dp)
+                    }
+                )
         ) {
             Row(
                 modifier = Modifier

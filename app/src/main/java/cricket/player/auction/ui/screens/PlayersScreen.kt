@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.foundation.border
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -67,6 +70,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
     var selectedFilterRole by remember { mutableStateOf<PlayerRole?>(null) }
     var selectedStatusFilter by remember { mutableStateOf<PlayerStatus?>(null) }
     var showAddPlayerDialog by remember { mutableStateOf(false) }
+    var showNeedTeamsDialog by remember { mutableStateOf(false) }
     var editingPlayer by remember { mutableStateOf<Player?>(null) }
     var deletingPlayer by remember { mutableStateOf<Player?>(null) }
     var editingPhotoPlayer by remember { mutableStateOf<Player?>(null) }
@@ -84,7 +88,13 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
         floatingActionButton = {
             if (isAdmin) {
                 FloatingActionButton(
-                    onClick = { showAddPlayerDialog = true },
+                    onClick = {
+                        if (teams.size < 2) {
+                            showNeedTeamsDialog = true
+                        } else {
+                            showAddPlayerDialog = true
+                        }
+                    },
                     containerColor = themeAccent,
                     contentColor = Color.Black
                 ) {
@@ -94,11 +104,21 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
         },
         containerColor = screenBg
     ) { innerPadding ->
+        val emptyScrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
+                .then(
+                    if (filteredPlayers.isEmpty()) {
+                        Modifier
+                            .verticalScroll(emptyScrollState)
+                            .padding(16.dp)
+                            .padding(bottom = 88.dp)
+                    } else {
+                        Modifier.padding(16.dp)
+                    }
+                )
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -239,33 +259,69 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
 
             if (filteredPlayers.isEmpty()) {
                 if (players.isEmpty()) {
+                    val needsTeamsFirst = teams.size < 2
                     EmptyStateGuideCard(
-                        mainIcon = Icons.Default.Person,
-                        badgeText = "PLAYER ROSTER POOL",
-                        title = "Player Pool is Empty 🏏",
-                        description = "Add players with roles (Batsman, Bowler, All-Rounder, Wicket Keeper), photos, and base prices to draft them in auction.",
-                        steps = listOf(
-                            GuideStep(
-                                stepNumber = 1,
-                                title = "Add Players or Import Roster",
-                                description = "Tap '+ Add Player' to input name, role, country, and starting base price.",
-                                icon = Icons.Default.PersonAdd
-                            ),
-                            GuideStep(
-                                stepNumber = 2,
-                                title = "Organize Sets & Fixed Sets",
-                                description = "Group into Set 1 (Marquee), Set 2, or mark as Fixed Sets for the spin wheel.",
-                                icon = Icons.AutoMirrored.Filled.PlaylistAddCheck
-                            ),
-                            GuideStep(
-                                stepNumber = 3,
-                                title = "Draft into Auction Stage",
-                                description = "Select any player from the roster or spin the wheel in Auction Arena to start live bidding.",
-                                icon = Icons.Default.Gavel
+                        mainIcon = if (needsTeamsFirst) Icons.Default.Shield else Icons.Default.Person,
+                        badgeText = if (needsTeamsFirst) "STEP 1: CREATE 2 TEAMS FIRST" else "PLAYER ROSTER POOL",
+                        title = if (needsTeamsFirst) "Create 2 Teams First 🛡️" else "Player Pool is Empty 🏏",
+                        description = if (needsTeamsFirst) {
+                            "You must create at least 2 franchise teams in the Teams tab before you can add players to the tournament roster pool."
+                        } else {
+                            "Add players with roles (Batsman, Bowler, All-Rounder, Wicket Keeper), photos, and base prices to draft them in auction."
+                        },
+                        steps = if (needsTeamsFirst) {
+                            listOf(
+                                GuideStep(
+                                    stepNumber = 1,
+                                    title = "Create Team Franchises",
+                                    description = "Head over to the Teams tab and create at least 2 teams (e.g. MI, CSK).",
+                                    icon = Icons.Default.Shield
+                                ),
+                                GuideStep(
+                                    stepNumber = 2,
+                                    title = "Return to Add Players",
+                                    description = "Once 2 teams are registered, you can add players and assign them to sets.",
+                                    icon = Icons.Default.PersonAdd
+                                ),
+                                GuideStep(
+                                    stepNumber = 3,
+                                    title = "Conduct Live Auction",
+                                    description = "Start bidding or spin the wheel to build your dream franchise squads!",
+                                    icon = Icons.Default.Gavel
+                                )
                             )
-                        ),
-                        primaryButtonText = if (!isSpectator) "+ ADD FIRST PLAYER 👤" else null,
-                        onPrimaryClick = if (!isSpectator) { { showAddPlayerDialog = true } } else null,
+                        } else {
+                            listOf(
+                                GuideStep(
+                                    stepNumber = 1,
+                                    title = "Add Players or Import Roster",
+                                    description = "Tap '+ Add Player' to input name, role, country, and starting base price.",
+                                    icon = Icons.Default.PersonAdd
+                                ),
+                                GuideStep(
+                                    stepNumber = 2,
+                                    title = "Organize Sets & Fixed Sets",
+                                    description = "Group into Set 1 (Marquee), Set 2, or mark as Fixed Sets for the spin wheel.",
+                                    icon = Icons.AutoMirrored.Filled.PlaylistAddCheck
+                                ),
+                                GuideStep(
+                                    stepNumber = 3,
+                                    title = "Draft into Auction Stage",
+                                    description = "Select any player from the roster or spin the wheel in Auction Arena to start live bidding.",
+                                    icon = Icons.Default.Gavel
+                                )
+                            )
+                        },
+                        primaryButtonText = if (needsTeamsFirst) {
+                            "CREATE 2 TEAMS FIRST (${teams.size}/2) 🛡️"
+                        } else if (!isSpectator) {
+                            "+ ADD FIRST PLAYER 👤"
+                        } else null,
+                        onPrimaryClick = if (needsTeamsFirst) {
+                            { showNeedTeamsDialog = true }
+                        } else if (!isSpectator) {
+                            { showAddPlayerDialog = true }
+                        } else null,
                         isDarkTheme = isDarkTheme,
                         accentColor = themeAccent
                     )
@@ -448,6 +504,32 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
         }
     }
 }
+
+    // --- Need At Least 2 Teams Dialog ---
+    if (showNeedTeamsDialog) {
+        AlertDialog(
+            onDismissRequest = { showNeedTeamsDialog = false },
+            icon = { Icon(Icons.Default.Shield, contentDescription = null, tint = themeAccent, modifier = Modifier.size(36.dp)) },
+            title = { Text("Create Teams First 🛡️", color = textMain, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "A tournament requires at least 2 teams before adding players to the roster pool.\n\nPlease go to the Teams tab to create 2 teams first, then return here to add players.",
+                    color = textSub,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showNeedTeamsDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White)
+                ) {
+                    Text("OK, GOT IT", fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = cardBg
+        )
+    }
 
     // --- Add New Player Dialog ---
     if (showAddPlayerDialog) {

@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,11 +46,21 @@ fun PointsTableScreen(viewModel: AuctionViewModel) {
     Scaffold(
         containerColor = screenBg
     ) { innerPadding ->
+        val emptyScrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
+                .then(
+                    if (pointsTable.isEmpty()) {
+                        Modifier
+                            .verticalScroll(emptyScrollState)
+                            .padding(16.dp)
+                            .padding(bottom = 88.dp)
+                    } else {
+                        Modifier.padding(16.dp)
+                    }
+                )
         ) {
             Text(
                 text = activeTournament?.name ?: "Cricket Tournament",

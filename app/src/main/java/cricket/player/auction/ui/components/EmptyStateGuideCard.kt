@@ -60,14 +60,14 @@ fun EmptyStateGuideCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // --- Dummy Artwork & Illustration Banner ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp)
+                    .height(108.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(
                         Brush.verticalGradient(
@@ -84,13 +84,13 @@ fun EmptyStateGuideCard(
                 // Layered background decorative circles simulating pitch stadium lights
                 Box(
                     modifier = Modifier
-                        .size(110.dp)
+                        .size(96.dp)
                         .clip(CircleShape)
                         .background(accentColor.copy(alpha = 0.08f))
                 )
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(70.dp)
                         .clip(CircleShape)
                         .background(accentColor.copy(alpha = 0.15f))
                 )
@@ -102,7 +102,7 @@ fun EmptyStateGuideCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(50.dp)
                             .clip(CircleShape)
                             .background(accentColor.copy(alpha = 0.2f))
                             .border(2.dp, accentColor, CircleShape),
@@ -112,10 +112,10 @@ fun EmptyStateGuideCard(
                             imageVector = mainIcon,
                             contentDescription = null,
                             tint = accentColor,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Surface(
                         color = accentColor.copy(alpha = 0.15f),
                         shape = RoundedCornerShape(8.dp)
@@ -126,7 +126,7 @@ fun EmptyStateGuideCard(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
                 }

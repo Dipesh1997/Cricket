@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -87,11 +89,21 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
         },
         containerColor = screenBg
     ) { innerPadding ->
+        val emptyScrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
+                .then(
+                    if (teams.isEmpty()) {
+                        Modifier
+                            .verticalScroll(emptyScrollState)
+                            .padding(16.dp)
+                            .padding(bottom = 88.dp)
+                    } else {
+                        Modifier.padding(16.dp)
+                    }
+                )
         ) {
             // Top Header: Single row with title and team count chip
             Row(

@@ -4,6 +4,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -12,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -118,6 +122,20 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var selectedTeamBId by remember { mutableStateOf("") }
     var matchOversInput by remember { mutableStateOf("5") }
     var isLastPlayerBattingAllowed by remember { mutableStateOf(true) }
+
+    val attemptCreateMatch: () -> Unit = {
+        when {
+            teams.size < 2 -> {
+                Toast.makeText(context, "⚠️ Create at least 2 teams before starting a match.", Toast.LENGTH_LONG).show()
+            }
+            players.size < 2 -> {
+                Toast.makeText(context, "⚠️ Add at least 2 players to the tournament before starting a match.", Toast.LENGTH_LONG).show()
+            }
+            else -> {
+                showCreateMatchModal = true
+            }
+        }
+    }
 
     // Player Selection for Scorer
     var strikerId by remember { mutableStateOf<String?>(null) }
@@ -233,12 +251,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Sleek Single-Line Top Action Strip (Compact, High Efficiency)
+            // Sleek Single-Line Top Action Strip (Compact, High Efficiency, Horizontally Scrollable)
+            val topBarScrollState = rememberScrollState()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .horizontalScroll(topBarScrollState)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Left: Match Selector Dropdown
@@ -271,7 +291,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 text = mLabel,
                                 color = textMain,
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Icon(
@@ -309,7 +331,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 },
                                 onClick = {
                                     showMatchDropdown = false
-                                    showCreateMatchModal = true
+                                    attemptCreateMatch()
                                 }
                             )
                             HorizontalDivider(color = surfaceBg, thickness = 1.dp)
@@ -386,7 +408,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             ) {
                                 Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text(scorerCode, color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(scorerCode, color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                             }
                         }
                     }
@@ -394,7 +416,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     // + New Match Button (Scorers/Admins) or Spectator Tag
                     if (canScore) {
                         Surface(
-                            onClick = { showCreateMatchModal = true },
+                            onClick = { attemptCreateMatch() },
                             color = themeAccent,
                             shape = RoundedCornerShape(6.dp)
                         ) {
@@ -404,7 +426,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             ) {
                                 Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = if (isDarkTheme) Color.Black else Color.White, modifier = Modifier.size(12.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("New Match", color = if (isDarkTheme) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("New Match", color = if (isDarkTheme) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
                             }
                         }
                     } else if (isSpectator) {
@@ -419,7 +441,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             ) {
                                 Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
                                 Spacer(modifier = Modifier.width(3.dp))
-                                Text("Spectator", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Spectator", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                             }
                         }
                     }
@@ -438,11 +460,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             ) {
                                 Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
                                 Spacer(modifier = Modifier.width(2.dp))
-                                Text("Scorecard", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Scorecard", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                             }
                         }
 
-                        // YouTube Live Stream Action Chip
+                        // YouTube Live Stream Action Chip (Single-Line, Non-wrapping)
                         val hasStream = activeMatch.liveStreamUrl.isNotBlank()
                         Surface(
                             onClick = {
@@ -472,7 +494,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     text = if (hasStream) "Live Stream 🔴" else "YouTube Live",
                                     color = textMain,
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -496,7 +520,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         ) {
                                             Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent, modifier = Modifier.size(11.dp))
                                             Spacer(modifier = Modifier.width(2.dp))
-                                            Text("Edit ✏️", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Text("Edit ✏️", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                                         }
                                     }
                                 } else {
@@ -510,7 +534,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         ) {
                                             Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
                                             Spacer(modifier = Modifier.width(2.dp))
-                                            Text("Locked 🔒", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Text("Locked 🔒", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                                         }
                                     }
                                 }
@@ -549,16 +573,25 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentPadding = PaddingValues(bottom = 96.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     item {
                         if (tourneyMatches.isEmpty()) {
+                            val needsTeams = teams.size < 2
+                            val needsPlayers = players.size < 2
                             EmptyStateGuideCard(
-                                mainIcon = Icons.Default.SportsCricket,
-                                badgeText = "MATCH SCORER & SCORECARDS",
-                                title = "No Matches Scheduled Yet ⚡",
-                                description = "Schedule cricket matches between franchises with coin toss, live ball-by-ball commentary, and Cricbuzz-style scorecards.",
+                                mainIcon = if (needsTeams) Icons.Default.Shield else if (needsPlayers) Icons.Default.Person else Icons.Default.SportsCricket,
+                                badgeText = if (needsTeams) "STEP 1: 2 TEAMS REQUIRED" else if (needsPlayers) "STEP 2: 2 PLAYERS REQUIRED" else "MATCH SCORER & SCORECARDS",
+                                title = if (needsTeams) "Create 2 Teams First 🛡️" else if (needsPlayers) "Add Players First 🏏" else "No Matches Scheduled Yet ⚡",
+                                description = if (needsTeams) {
+                                    "Create at least 2 franchise teams in the Teams tab before you can schedule and start a cricket match."
+                                } else if (needsPlayers) {
+                                    "Add at least 2 players to the tournament before scheduling and scoring a cricket match."
+                                } else {
+                                    "Schedule cricket matches between franchises with coin toss, live ball-by-ball commentary, and Cricbuzz-style scorecards."
+                                },
                                 steps = listOf(
                                     GuideStep(
                                         stepNumber = 1,
@@ -579,8 +612,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         icon = Icons.Default.Assessment
                                     )
                                 ),
-                                primaryButtonText = if (canScore) "+ TOSS & START MATCH 🏏" else null,
-                                onPrimaryClick = if (canScore) { { showCreateMatchModal = true } } else null,
+                                primaryButtonText = if (needsTeams) {
+                                    "CREATE 2 TEAMS FIRST (${teams.size}/2) 🛡️"
+                                } else if (needsPlayers) {
+                                    "ADD PLAYERS FIRST (${players.size}/2) 👤"
+                                } else if (canScore) {
+                                    "+ TOSS & START MATCH 🏏"
+                                } else null,
+                                onPrimaryClick = if (canScore) attemptCreateMatch else null,
                                 isDarkTheme = isDarkTheme,
                                 accentColor = themeAccent
                             )
@@ -604,7 +643,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 Spacer(modifier = Modifier.height(14.dp))
                                 if (canScore) {
                                     Button(
-                                        onClick = { showCreateMatchModal = true },
+                                        onClick = { attemptCreateMatch() },
                                         colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
@@ -800,7 +839,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
-                                            onClick = { showCreateMatchModal = true },
+                                            onClick = { attemptCreateMatch() },
                                             colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                                             shape = RoundedCornerShape(8.dp),
                                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
@@ -1216,7 +1255,36 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         Text(bEcon, color = textMain, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1.0f))
                                     }
                                 } else {
-                                    Text("Select Bowler to begin over", color = textSub, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
+                                    Surface(
+                                        onClick = { showChangeBowlerModal = true },
+                                        color = IplGold.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.6f)),
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(imageVector = Icons.Default.PauseCircle, contentDescription = null, tint = IplGold, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "⏸️ Scoring Paused (Over Ended)",
+                                                    color = IplGold,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Text(
+                                                text = "SELECT BOWLER 🏏",
+                                                color = if (isDarkTheme) IplGold else LightPitchPrimary,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.ExtraBold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1903,13 +1971,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
         }
         AlertDialog(
             onDismissRequest = {
-                // Prevent dismissing without selecting a bowler
-                if (bowlerId != null) {
-                    showChangeBowlerModal = false
-                }
+                // Pause scoring on dismiss / back press
+                showChangeBowlerModal = false
+                bowlerId = null
+                Toast.makeText(context, "⏸️ Scoring paused. Select bowler when ready to resume.", Toast.LENGTH_SHORT).show()
             },
             properties = DialogProperties(
-                dismissOnBackPress = false,
+                dismissOnBackPress = true,
                 dismissOnClickOutside = false
             ),
             title = {
@@ -1959,6 +2027,18 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     Text("CONTINUE MATCH", fontWeight = FontWeight.Bold)
                 }
             },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showChangeBowlerModal = false
+                        bowlerId = null
+                        Toast.makeText(context, "⏸️ Scoring paused. Select bowler when ready to resume.", Toast.LENGTH_SHORT).show()
+                    },
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.Gray)
+                ) {
+                    Text("Back / Pause ⏸️", color = textSub, fontWeight = FontWeight.Bold)
+                }
+            },
             containerColor = cardBg
         )
     }
@@ -1976,12 +2056,47 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Attach an optional YouTube Live stream link to broadcast alongside real-time match scores.\nSupports youtube.com/watch?v=..., youtu.be/..., youtube.com/live/..., or Video ID.",
+                        text = "Broadcast your cricket match on YouTube and display the live stream right next to real-time scores.",
                         color = textSub,
                         fontSize = 12.sp
                     )
+
+                    // Button to create and start live streaming on YouTube
+                    Button(
+                        onClick = {
+                            val liveDashIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://studio.youtube.com/channel/live")).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            try {
+                                context.startActivity(liveDashIntent)
+                            } catch (e: Exception) {
+                                val altIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/live_dashboard")).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(altIntent)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Create Stream & Go Live 🔴", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    }
+
+                    HorizontalDivider(color = surfaceBg, thickness = 1.dp)
+
+                    Text(
+                        text = "Once live, copy & paste the YouTube Live URL or Video ID below:",
+                        color = textSub,
+                        fontSize = 11.sp
+                    )
+
                     OutlinedTextField(
                         value = streamUrlInput,
                         onValueChange = { streamUrlInput = it },
@@ -2109,6 +2224,10 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
     // --- Create Match Setup Dialog ---
     if (showCreateMatchModal) {
+        val teamAPlayers = players.filter { it.soldToTeamId == selectedTeamAId }
+        val teamBPlayers = players.filter { it.soldToTeamId == selectedTeamBId }
+        val hasSquadPlayers = teamAPlayers.isNotEmpty() && teamBPlayers.isNotEmpty()
+
         AlertDialog(
             onDismissRequest = { showCreateMatchModal = false },
             title = { Text("Setup New Cricket Match", color = textMain, fontWeight = FontWeight.Bold) },
@@ -2130,6 +2249,47 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         teams = teams.filter { it.id != selectedTeamAId },
                         onTeamSelected = { selectedTeamBId = it.id }
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Team 1 Squad: ${teamAPlayers.size} players",
+                            color = if (teamAPlayers.isNotEmpty()) BidGreen else UnsoldRed,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Team 2 Squad: ${teamBPlayers.size} players",
+                            color = if (teamBPlayers.isNotEmpty()) BidGreen else UnsoldRed,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (!hasSquadPlayers && selectedTeamAId.isNotBlank() && selectedTeamBId.isNotBlank()) {
+                        Surface(
+                            color = UnsoldRed.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, UnsoldRed.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = UnsoldRed, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Each team must have at least 1 player in its squad before starting the match. Draft players in auction or add players to teams in the Teams tab.",
+                                    color = UnsoldRed,
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
 
                     OutlinedTextField(
                         value = matchOversInput,
@@ -2176,13 +2336,15 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
-                        if (selectedTeamAId.isNotBlank() && selectedTeamBId.isNotBlank()) {
+                        if (selectedTeamAId.isNotBlank() && selectedTeamBId.isNotBlank() && hasSquadPlayers) {
                             showCreateMatchModal = false
                             showCoinTossModal = true
+                        } else if (!hasSquadPlayers) {
+                            Toast.makeText(context, "⚠️ Both teams must have at least 1 player to start a match!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
-                    enabled = selectedTeamAId.isNotBlank() && selectedTeamBId.isNotBlank()
+                    enabled = selectedTeamAId.isNotBlank() && selectedTeamBId.isNotBlank() && hasSquadPlayers
                 ) {
                     Text("TOSS COIN & DECIDE 🪙", fontWeight = FontWeight.ExtraBold)
                 }
@@ -2567,7 +2729,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         Button(
                             onClick = {
                                 showDeclareWinnerPopup = false
-                                showCreateMatchModal = true
+                                attemptCreateMatch()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = surfaceBg, contentColor = textMain),
                             border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent),
