@@ -78,8 +78,8 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // CricHeroes MVP Leaderboard StateFlow
-    val mvpLeaderboard: StateFlow<List<PlayerCareerStats>> = combine(players, ballRecords) { _, _ ->
-        localRepository.getPlayerCareerStats()
+    val mvpLeaderboard: StateFlow<List<PlayerCareerStats>> = combine(players, ballRecords, activeTournamentId) { _, _, tId ->
+        localRepository.getPlayerCareerStats(tId)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Theme State - Default is Light Theme unless manually changed in preferences
@@ -386,6 +386,10 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
 
     fun resumeMatch(matchId: String) {
         localRepository.resumeMatch(matchId)
+    }
+
+    fun updateMatchLiveStreamUrl(matchId: String, liveStreamUrl: String) {
+        localRepository.updateMatchLiveStreamUrl(matchId, liveStreamUrl)
     }
 
     fun isMatchEditable(match: Match): Boolean {

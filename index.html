@@ -238,6 +238,7 @@
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-sm" onclick="openModal('createMatchModal')">+ New Match</button>
           <button class="btn btn-sm btn-secondary" onclick="openModal('scorecardModal')">Scorecard</button>
+          <button class="btn btn-sm" style="background-color: rgba(255,0,0,0.2); border: 1px solid #FF0000; color: #FFF;" onclick="promptSetLiveStream()">📺 YouTube Live</button>
           <button class="btn btn-sm" style="background-color: #d32f2f; color:#FFF;" onclick="endCurrentInnings()">🏁 End Innings</button>
           <button class="btn btn-sm" id="headerUndoInningsBtn" style="background-color: rgba(0,210,255,0.2); border: 1px solid var(--color-blue); color: var(--color-blue); display: none;" onclick="undoEndInnings()">↩️ Undo Innings</button>
           <button class="btn btn-sm btn-danger" onclick="openModal('directEndMatchModal')">⚡ Direct End Match</button>
@@ -253,6 +254,9 @@
           📋 COPY SCORER CODE
         </button>
       </div>
+
+      <!-- Optional YouTube Live Stream Container -->
+      <div id="ytLiveStreamContainer" style="display: none; margin-bottom: 12px;"></div>
 
       <div class="card" id="activeMatchCard">
         <div style="display: flex; justify-content: space-between; align-items: center;">

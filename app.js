@@ -1207,6 +1207,40 @@ function copyScorerCodeFromTab() {
   copyText(code, "Scorer Invite Code");
 }
 
+function extractYouTubeVideoId(input) {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (trimmed.length === 11 && !trimmed.includes('/') && !trimmed.includes('?') && !trimmed.includes('&')) {
+    return trimmed;
+  }
+  const youtuBe = trimmed.match(/(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  if (youtuBe) return youtuBe[1];
+  const watch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  if (watch) return watch[1];
+  const live = trimmed.match(/(?:live|embed)\/([a-zA-Z0-9_-]{11})/);
+  if (live) return live[1];
+  return null;
+}
+
+function updateMatchLiveStreamUrl(url) {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+  match.liveStreamUrl = (url || "").trim();
+  saveToFirebase();
+  renderLiveScorer();
+  showToast("📺 YouTube Live stream updated!");
+}
+
+function promptSetLiveStream() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+  const current = match.liveStreamUrl || "";
+  const input = prompt("Enter YouTube Live stream link, video URL, or Video ID (leave blank to remove):", current);
+  if (input !== null) {
+    updateMatchLiveStreamUrl(input);
+  }
+}
+
 function renderLiveScorer() {
   const activeTourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
   const tabCodeEl = document.getElementById("tabScorerCodeVal");
@@ -1232,6 +1266,37 @@ function renderLiveScorer() {
   document.getElementById("scorerBattingTeamName").innerText = `${battingTeam ? battingTeam.name : 'Batting Team'} (Inn ${currentInnings})`;
   document.getElementById("scorerScoreText").innerText = `${runs} / ${wkts}`;
   document.getElementById("scorerOversText").innerText = `(${overs} / ${activeMatch.totalOvers || 20} Overs)`;
+
+  const streamCard = document.getElementById("ytLiveStreamContainer");
+  if (streamCard) {
+    if (activeMatch.liveStreamUrl) {
+      const vidId = extractYouTubeVideoId(activeMatch.liveStreamUrl);
+      streamCard.style.display = "block";
+      streamCard.innerHTML = `
+        <div style="background: var(--bg-card); border: 1px solid rgba(255,0,0,0.4); border-radius: 12px; padding: 10px; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 0.85rem; color: #FFF;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FF0000;"></span>
+              YOUTUBE LIVE STREAM 🔴
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-sm btn-secondary" onclick="window.open('${vidId ? 'https://www.youtube.com/watch?v=' + vidId : activeMatch.liveStreamUrl}', '_blank')" style="font-size: 0.75rem;">Watch on YouTube ↗</button>
+              <button class="btn btn-sm btn-secondary" onclick="promptSetLiveStream()" style="font-size: 0.75rem;">Edit</button>
+            </div>
+          </div>
+          ${vidId ? `
+            <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
+              <iframe style="position: absolute; top:0; left: 0; width: 100%; height: 100%; border: 0;" src="https://www.youtube-nocookie.com/embed/${vidId}?autoplay=1&playsinline=1" allowfullscreen></iframe>
+            </div>
+          ` : `
+            <p style="font-size: 0.8rem; color: var(--color-text-sub);">Stream URL: <a href="${activeMatch.liveStreamUrl}" target="_blank" style="color: var(--color-gold);">${activeMatch.liveStreamUrl}</a></p>
+          `}
+        </div>
+      `;
+    } else {
+      streamCard.style.display = "none";
+    }
+  }
 
   const targetBox = document.getElementById("targetRequirementBox");
   if (targetBox) {
@@ -1801,9 +1866,14 @@ function renderMvpLeaderboard() {
   const container = document.getElementById("mvpLeaderboardContainer");
   if (!container) return;
 
-  const balls = state.ballRecords || [];
-  const playerStats = state.players.map(p => {
-    const team = state.teams.find(t => t.id === p.teamId);
+  const activeTId = state.activeTournamentId;
+  const tourneyMatches = state.matches.filter(m => !activeTId || m.tournamentId === activeTId);
+  const matchIds = new Set(tourneyMatches.map(m => m.id));
+  const balls = (state.ballRecords || []).filter(b => !activeTId || matchIds.has(b.matchId));
+  const tourneyPlayers = state.players.filter(p => !activeTId || p.tournamentId === activeTId);
+
+  const playerStats = tourneyPlayers.map(p => {
+    const team = state.teams.find(t => t.id === (p.soldToTeamId || p.teamId));
     const battingBalls = balls.filter(b => b.strikerId === p.id);
     const bowlingBalls = balls.filter(b => b.bowlerId === p.id);
 

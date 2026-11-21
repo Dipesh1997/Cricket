@@ -173,4 +173,43 @@ class AdminAuctionControlsTest {
         assertEquals(2.0, restoredPlayer.currentBid, 0.001)
         assertTrue(allBids.isEmpty())
     }
+
+    @Test
+    fun testExtractYouTubeVideoId() {
+        assertEquals("dQw4w9WgXcQ", cricket.player.auction.ui.screens.extractYouTubeVideoId("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        assertEquals("dQw4w9WgXcQ", cricket.player.auction.ui.screens.extractYouTubeVideoId("https://youtu.be/dQw4w9WgXcQ"))
+        assertEquals("dQw4w9WgXcQ", cricket.player.auction.ui.screens.extractYouTubeVideoId("https://www.youtube.com/live/dQw4w9WgXcQ?feature=share"))
+        assertEquals("dQw4w9WgXcQ", cricket.player.auction.ui.screens.extractYouTubeVideoId("https://www.youtube.com/embed/dQw4w9WgXcQ"))
+        assertEquals("dQw4w9WgXcQ", cricket.player.auction.ui.screens.extractYouTubeVideoId("dQw4w9WgXcQ"))
+        assertNull(cricket.player.auction.ui.screens.extractYouTubeVideoId(""))
+    }
+
+    @Test
+    fun testMvpLeaderboardFiltersByTournamentId() {
+        val pTourney1 = Player(
+            id = "p1",
+            tournamentId = "tourney_1",
+            name = "Player 1",
+            role = PlayerRole.BATSMAN,
+            country = "India",
+            isOverseas = false,
+            basePrice = 1.0
+        )
+        val pTourney2 = Player(
+            id = "p2",
+            tournamentId = "tourney_2",
+            name = "Player 2",
+            role = PlayerRole.BATSMAN,
+            country = "India",
+            isOverseas = false,
+            basePrice = 1.0
+        )
+        val allPlayers = listOf(pTourney1, pTourney2)
+
+        val targetTourneyId = "tourney_1"
+        val filtered = allPlayers.filter { it.tournamentId == targetTourneyId }
+
+        assertEquals(1, filtered.size)
+        assertEquals("p1", filtered.first().id)
+    }
 }

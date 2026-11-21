@@ -31,9 +31,34 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 import android.widget.Toast
+import android.content.Intent
+import android.net.Uri
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+
+fun extractYouTubeVideoId(input: String): String? {
+    val trimmed = input.trim()
+    if (trimmed.isBlank()) return null
+    if (trimmed.length == 11 && !trimmed.contains("/") && !trimmed.contains("?") && !trimmed.contains("&")) {
+        return trimmed
+    }
+    val youtuBeRegex = Regex("""(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})""")
+    youtuBeRegex.find(trimmed)?.let { return it.groupValues[1] }
+
+    val watchRegex = Regex("""[?&]v=([a-zA-Z0-9_-]{11})""")
+    watchRegex.find(trimmed)?.let { return it.groupValues[1] }
+
+    val liveRegex = Regex("""(?:live|embed)/([a-zA-Z0-9_-]{11})""")
+    liveRegex.find(trimmed)?.let { return it.groupValues[1] }
+
+    return null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +107,10 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var showEndInningsConfirmModal by remember { mutableStateOf(false) }
     var showUndoEndInningsConfirmModal by remember { mutableStateOf(false) }
     var showChangeBowlerModal by remember { mutableStateOf(false) }
+    var lastCompletedOverBowlerId by remember { mutableStateOf<String?>(null) }
+    var showLiveStreamDialog by remember { mutableStateOf(false) }
+    var showLiveStreamCard by remember { mutableStateOf(true) }
+    var streamUrlInput by remember { mutableStateOf("") }
     var showDirectEndMatchModal by remember { mutableStateOf(false) }
 
     // Match Setup Inputs
@@ -169,8 +198,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             if (nonStrikerId == null || battingPlayers.none { it.id == nonStrikerId }) {
                 nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
             }
+            val legalBallsCount = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+            val isOverJustEnded = legalBallsCount > 0 && (legalBallsCount % 6 == 0)
             if (bowlerId == null || bowlingPlayers.none { it.id == bowlerId }) {
-                bowlerId = bowlingPlayers.firstOrNull()?.id
+                if (showChangeBowlerModal || isOverJustEnded) {
+                    // Do NOT auto-assign bowler when an over has just ended or when waiting for bowler change!
+                } else {
+                    bowlerId = bowlingPlayers.firstOrNull()?.id
+                }
             }
         }
     }
@@ -404,6 +439,41 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
                                 Spacer(modifier = Modifier.width(2.dp))
                                 Text("Scorecard", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // YouTube Live Stream Action Chip
+                        val hasStream = activeMatch.liveStreamUrl.isNotBlank()
+                        Surface(
+                            onClick = {
+                                if (hasStream) {
+                                    showLiveStreamCard = !showLiveStreamCard
+                                } else {
+                                    streamUrlInput = ""
+                                    showLiveStreamDialog = true
+                                }
+                            },
+                            color = if (hasStream) Color(0xFFFF0000).copy(alpha = 0.15f) else surfaceBg,
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (hasStream) Color(0xFFFF0000) else themeAccent)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayCircle,
+                                    contentDescription = null,
+                                    tint = if (hasStream) Color(0xFFFF0000) else themeAccent,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (hasStream) "Live Stream 🔴" else "YouTube Live",
+                                    color = textMain,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 
@@ -756,6 +826,138 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
+                    // --- Optional YouTube Live Streaming Video Player Card ---
+                    if (activeMatch != null && activeMatch.liveStreamUrl.isNotBlank()) {
+                        val streamVideoId = extractYouTubeVideoId(activeMatch.liveStreamUrl)
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = cardBg),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF0000).copy(alpha = 0.5f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    // Header row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.clickable { showLiveStreamCard = !showLiveStreamCard }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFFFF0000))
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "YOUTUBE LIVE STREAM 🔴",
+                                                color = textMain,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = if (showLiveStreamCard) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                contentDescription = null,
+                                                tint = textSub,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            // Open external in YouTube App
+                                            IconButton(
+                                                onClick = {
+                                                    val ytUrl = if (streamVideoId != null) "https://www.youtube.com/watch?v=$streamVideoId" else activeMatch.liveStreamUrl
+                                                    try {
+                                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(ytUrl)).apply {
+                                                            setPackage("com.google.android.youtube")
+                                                        }
+                                                        context.startActivity(intent)
+                                                    } catch (e: Exception) {
+                                                        val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ytUrl))
+                                                        context.startActivity(webIntent)
+                                                    }
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.OpenInNew,
+                                                    contentDescription = "Open in YouTube",
+                                                    tint = themeAccent,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+
+                                            // Edit / Remove Stream (if canScore)
+                                            if (canScore) {
+                                                IconButton(
+                                                    onClick = {
+                                                        streamUrlInput = activeMatch.liveStreamUrl
+                                                        showLiveStreamDialog = true
+                                                    },
+                                                    modifier = Modifier.size(24.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Edit,
+                                                        contentDescription = "Edit Stream URL",
+                                                        tint = textSub,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // If expanded and videoId is valid, show embedded player:
+                                    if (showLiveStreamCard && streamVideoId != null) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        AndroidView(
+                                            factory = { ctx ->
+                                                WebView(ctx).apply {
+                                                    layoutParams = android.view.ViewGroup.LayoutParams(
+                                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                                                    )
+                                                    settings.javaScriptEnabled = true
+                                                    settings.domStorageEnabled = true
+                                                    settings.mediaPlaybackRequiresUserGesture = false
+                                                    webChromeClient = WebChromeClient()
+                                                    webViewClient = WebViewClient()
+                                                    loadUrl("https://www.youtube-nocookie.com/embed/$streamVideoId?autoplay=1&playsinline=1&modestbranding=1&rel=0")
+                                                }
+                                            },
+                                            update = { webView ->
+                                                val embedUrl = "https://www.youtube-nocookie.com/embed/$streamVideoId?autoplay=1&playsinline=1&modestbranding=1&rel=0"
+                                                if (webView.url != embedUrl) {
+                                                    webView.loadUrl(embedUrl)
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(180.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        )
+                                    } else if (showLiveStreamCard) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "Live Stream Link: ${activeMatch.liveStreamUrl}",
+                                            color = textSub,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // --- Cricbuzz-Style Unified On-Crease & Bowler Card ---
                     item {
                         Card(
@@ -1068,7 +1270,16 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             ExtraType.values().forEach { extra ->
                                                 val isSel = selectedExtraType == extra
                                                 Surface(
-                                                    onClick = { selectedExtraType = if (isSel) ExtraType.NONE else extra },
+                                                    onClick = {
+                                                        val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                                        val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                                                        if (bowlerId == null || isOverEndedWaitingForBowler) {
+                                                            showChangeBowlerModal = true
+                                                            Toast.makeText(context, "⚠️ Over completed! Please select the bowler for the next over.", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            selectedExtraType = if (isSel) ExtraType.NONE else extra
+                                                        }
+                                                    },
                                                     color = if (isSel) NeonBlue else surfaceBg,
                                                     shape = RoundedCornerShape(4.dp)
                                                 ) {
@@ -1095,7 +1306,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         runsList.forEach { run ->
                                             Button(
                                                 onClick = {
-                                                    if (strikerId != null && bowlerId != null && isEditable) {
+                                                    val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                                    val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                                                    if (bowlerId == null || isOverEndedWaitingForBowler) {
+                                                        showChangeBowlerModal = true
+                                                        Toast.makeText(context, "⚠️ Over completed! Please select the bowler for the next over.", Toast.LENGTH_SHORT).show()
+                                                        return@Button
+                                                    }
+                                                    if (strikerId != null && isEditable) {
                                                         // Auto-resume if match was completed
                                                         if (match.status == MatchStatus.COMPLETED) {
                                                             viewModel.resumeMatch(match.id)
@@ -1139,8 +1357,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                             newStriker = newNonStriker
                                                             newNonStriker = temp
 
-                                                            showChangeBowlerModal = true
+                                                            lastCompletedOverBowlerId = bowlerId
                                                             bowlerId = null
+                                                            showChangeBowlerModal = true
                                                         }
 
                                                         strikerId = newStriker
@@ -1173,6 +1392,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                         // Wicket Button
                                         Button(
                                             onClick = {
+                                                val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                                val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                                                if (bowlerId == null || isOverEndedWaitingForBowler) {
+                                                    showChangeBowlerModal = true
+                                                    Toast.makeText(context, "⚠️ Over ended! Please select the bowler for the next over.", Toast.LENGTH_SHORT).show()
+                                                    return@Button
+                                                }
                                                 if (match.status == MatchStatus.COMPLETED) {
                                                     viewModel.resumeMatch(match.id)
                                                 }
@@ -1657,30 +1883,149 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
     // --- Over Completed / Bowler Change Modal ---
     if (showChangeBowlerModal) {
+        val eligibleBowlers = remember(bowlingPlayers, lastCompletedOverBowlerId) {
+            val filtered = bowlingPlayers.filter { it.id != lastCompletedOverBowlerId }
+            if (filtered.isNotEmpty()) filtered else bowlingPlayers
+        }
         AlertDialog(
-            onDismissRequest = { showChangeBowlerModal = false },
-            title = { Text("OVER COMPLETED! ⚡", color = IplGold, fontWeight = FontWeight.Bold) },
+            onDismissRequest = {
+                // Prevent dismissing without selecting a bowler
+                if (bowlerId != null) {
+                    showChangeBowlerModal = false
+                }
+            },
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            ),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = IplGold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("OVER COMPLETED! ⚡", color = IplGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("The over is complete! Strike has been rotated automatically.", color = textMain, fontSize = 13.sp)
-                    Text("Select new bowler for the next over from ${bowlingTeam?.name ?: "opponent team"}:", color = textSub, fontSize = 12.sp)
+                    Text("Select new bowler for the next over from ${bowlingTeam?.name ?: "bowling team"}:", color = textSub, fontSize = 12.sp)
 
                     DropdownPlayerPicker(
                         selectedPlayer = bowler,
-                        players = bowlingPlayers,
+                        players = eligibleBowlers,
                         onPlayerSelected = {
                             bowlerId = it.id
                         }
                     )
+                    if (lastCompletedOverBowlerId != null) {
+                        val prevBowlerName = bowlingPlayers.find { it.id == lastCompletedOverBowlerId }?.name
+                        if (prevBowlerName != null) {
+                            Text(
+                                text = "ℹ️ $prevBowlerName just bowled the last over (cannot bowl consecutive overs).",
+                                color = textSub,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
-                    onClick = { showChangeBowlerModal = false },
+                    onClick = {
+                        if (bowlerId != null) {
+                            showChangeBowlerModal = false
+                            Toast.makeText(context, "🎯 Bowler set: ${bowler?.name ?: "New Bowler"}", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "⚠️ Please select a bowler first", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
                     enabled = bowlerId != null
                 ) {
                     Text("CONTINUE MATCH", fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = cardBg
+        )
+    }
+
+    // --- Optional YouTube Live Stream Setup Dialog ---
+    if (showLiveStreamDialog && activeMatch != null) {
+        val currentMatch = activeMatch
+        AlertDialog(
+            onDismissRequest = { showLiveStreamDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Color(0xFFFF0000))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("YouTube Live Streaming", color = textMain, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Attach an optional YouTube Live stream link to broadcast alongside real-time match scores.\nSupports youtube.com/watch?v=..., youtu.be/..., youtube.com/live/..., or Video ID.",
+                        color = textSub,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = streamUrlInput,
+                        onValueChange = { streamUrlInput = it },
+                        label = { Text("YouTube Live URL or Video ID") },
+                        placeholder = { Text("https://youtube.com/live/...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = themeAccent,
+                            unfocusedBorderColor = surfaceBg
+                        )
+                    )
+                    val parsedId = extractYouTubeVideoId(streamUrlInput)
+                    if (parsedId != null) {
+                        Text(
+                            text = "✅ Valid YouTube Video ID: $parsedId",
+                            color = BidGreen,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else if (streamUrlInput.isNotBlank()) {
+                        Text(
+                            text = "ℹ️ Will save link and open in YouTube browser/app.",
+                            color = themeAccent,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateMatchLiveStreamUrl(currentMatch.id, streamUrlInput.trim())
+                        showLiveStreamDialog = false
+                        showLiveStreamCard = true
+                        Toast.makeText(context, "📺 YouTube Live Stream updated!", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White)
+                ) {
+                    Text("Save Stream", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (currentMatch.liveStreamUrl.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                viewModel.updateMatchLiveStreamUrl(currentMatch.id, "")
+                                showLiveStreamDialog = false
+                                Toast.makeText(context, "🗑️ Live stream removed", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Remove", color = UnsoldRed)
+                        }
+                    }
+                    TextButton(onClick = { showLiveStreamDialog = false }) {
+                        Text("Cancel", color = textSub)
+                    }
                 }
             },
             containerColor = cardBg
@@ -2086,8 +2431,9 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 val temp = strikerId
                                 strikerId = nonStrikerId
                                 nonStrikerId = temp
-                                showChangeBowlerModal = true
+                                lastCompletedOverBowlerId = bowlerId
                                 bowlerId = null
+                                showChangeBowlerModal = true
                             }
 
                             showWicketModal = false

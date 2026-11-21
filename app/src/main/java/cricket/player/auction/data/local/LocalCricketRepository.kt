@@ -1095,6 +1095,13 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
+    fun updateMatchLiveStreamUrl(matchId: String, liveStreamUrl: String) {
+        _matches.value = _matches.value.map { m ->
+            if (m.id == matchId) m.copy(liveStreamUrl = liveStreamUrl.trim()) else m
+        }
+        persistAsync()
+    }
+
     // --- Captain Invites ---
     fun generateCaptainInvite(teamId: String): CaptainInvite {
         val code = UUID.randomUUID().toString().take(6).uppercase()
@@ -1438,10 +1445,26 @@ class LocalCricketRepository(context: Context) {
         return entries.sortedWith(compareByDescending<PointsTableEntry> { it.points }.thenByDescending { it.netRunRate })
     }
 
-    // --- Multi-Tournament Player Career & CricHeroes MVP Stats ---
-    fun getPlayerCareerStats(): List<PlayerCareerStats> {
-        val allPlayers = _players.value
-        val allBalls = _ballRecords.value
+    // --- Tournament Player Career & CricHeroes MVP Stats ---
+    fun getPlayerCareerStats(tournamentId: String? = null): List<PlayerCareerStats> {
+        val targetTournamentId = tournamentId ?: _activeTournamentId.value
+        val allPlayers = if (!targetTournamentId.isNullOrBlank()) {
+            _players.value.filter { it.tournamentId == targetTournamentId }
+        } else {
+            _players.value
+        }
+        val tourneyMatchIds = if (!targetTournamentId.isNullOrBlank()) {
+            _matches.value.filter { it.tournamentId == targetTournamentId }.map { it.id }.toSet()
+        } else {
+            emptySet()
+        }
+        val allBalls = if (tourneyMatchIds.isNotEmpty()) {
+            _ballRecords.value.filter { it.matchId in tourneyMatchIds }
+        } else if (!targetTournamentId.isNullOrBlank()) {
+            emptyList()
+        } else {
+            _ballRecords.value
+        }
 
         val statsMap = mutableMapOf<String, PlayerCareerStats>()
 

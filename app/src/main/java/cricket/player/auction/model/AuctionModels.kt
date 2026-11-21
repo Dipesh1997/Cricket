@@ -146,7 +146,8 @@ data class Match(
     val currentNonStrikerId: String? = null,
     val currentBowlerId: String? = null,
     val matchDate: Long = System.currentTimeMillis(),
-    val resultSummary: String = ""
+    val resultSummary: String = "",
+    val liveStreamUrl: String = ""
 )
 
 data class BallRecord(
