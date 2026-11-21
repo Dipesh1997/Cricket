@@ -519,15 +519,23 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 Surface(
                                     onClick = { showEndInningsConfirmModal = true },
                                     color = UnsoldRed.copy(alpha = 0.9f),
-                                    shape = RoundedCornerShape(6.dp)
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.heightIn(min = 32.dp)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text(if (currentInnings == 1) "End Inn" else "End Inn 2", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = if (currentInnings == 1) "End Innings" else "End Innings 2",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
                                     }
                                 }
                             }
@@ -1407,26 +1415,32 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed),
                                             shape = RoundedCornerShape(8.dp),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(1.1f).height(38.dp),
+                                            modifier = Modifier.weight(1.05f).height(42.dp),
                                             enabled = isEditable
                                         ) {
                                             Icon(imageVector = Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(13.dp))
                                             Spacer(modifier = Modifier.width(3.dp))
-                                            Text("WICKET", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                                            Text("WICKET", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, maxLines = 1, softWrap = false)
                                         }
 
                                         // End Innings Button
                                         Button(
                                             onClick = { showEndInningsConfirmModal = true },
-                                            colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed.copy(alpha = 0.8f), contentColor = Color.White),
+                                            colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed.copy(alpha = 0.85f), contentColor = Color.White),
                                             shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(1.1f).height(38.dp),
+                                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp),
+                                            modifier = Modifier.weight(1.2f).height(42.dp),
                                             enabled = isEditable && match.status != MatchStatus.COMPLETED
                                         ) {
                                             Icon(imageVector = Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(13.dp))
                                             Spacer(modifier = Modifier.width(2.dp))
-                                            Text(if (currentInnings == 1) "END INN" else "END INN 2", fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                            Text(
+                                                text = if (currentInnings == 1) "END INNINGS" else "END INN 2",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                         }
 
                                         // Undo Ball Button
@@ -1447,12 +1461,12 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                             colors = ButtonDefaults.buttonColors(containerColor = surfaceBg, contentColor = textMain),
                                             shape = RoundedCornerShape(8.dp),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(1f).height(38.dp),
+                                            modifier = Modifier.weight(1f).height(42.dp),
                                             enabled = isEditable && matchBalls.isNotEmpty()
                                         ) {
                                             Icon(imageVector = Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(13.dp))
                                             Spacer(modifier = Modifier.width(2.dp))
-                                            Text("UNDO", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            Text("UNDO", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
                                         }
 
                                         // Undo End Innings or Reopen
@@ -1463,12 +1477,12 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                 border = androidx.compose.foundation.BorderStroke(1.dp, NeonBlue),
                                                 shape = RoundedCornerShape(8.dp),
                                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                                                modifier = Modifier.weight(0.9f).height(38.dp),
+                                                modifier = Modifier.weight(0.9f).height(42.dp),
                                                 enabled = isEditable
                                             ) {
                                                 Icon(imageVector = Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(12.dp))
                                                 Spacer(modifier = Modifier.width(2.dp))
-                                                Text("Undo Inn", fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                                Text("Undo Inn", fontWeight = FontWeight.Bold, fontSize = 9.sp, maxLines = 1, softWrap = false)
                                             }
                                         }
                                     }

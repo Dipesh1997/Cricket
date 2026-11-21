@@ -220,11 +220,12 @@ fun TournamentScreen(
                         onClick = { showInviteCodeDialog = true },
                         colors = ButtonDefaults.buttonColors(containerColor = IplGold, contentColor = Color.Black),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        modifier = Modifier.height(42.dp)
                     ) {
                         Text(
                             text = "ENTER CODE 🔑",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 1,
                             softWrap = false
@@ -397,25 +398,30 @@ fun TournamentScreen(
                                             color = if (isDarkTheme) IplGold.copy(alpha = 0.15f) else LightPitchSurface,
                                             shape = RoundedCornerShape(8.dp),
                                             border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent.copy(alpha = 0.4f)),
-                                            modifier = Modifier.clickable {
-                                                clipboardManager.setText(AnnotatedString(tourney.adminCode))
-                                                Toast.makeText(context, "🔑 Admin Code ${tourney.adminCode} copied!", Toast.LENGTH_SHORT).show()
-                                            }
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .heightIn(min = 40.dp)
+                                                .clickable {
+                                                    clipboardManager.setText(AnnotatedString(tourney.adminCode))
+                                                    Toast.makeText(context, "🔑 Admin Code ${tourney.adminCode} copied!", Toast.LENGTH_SHORT).show()
+                                                }
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = themeAccent, modifier = Modifier.size(13.dp))
+                                                Spacer(modifier = Modifier.width(5.dp))
                                                 Text(
                                                     text = "ADMIN: ${tourney.adminCode}",
                                                     color = textMain,
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    softWrap = false
                                                 )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.weight(1f))
+                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = themeAccent, modifier = Modifier.size(13.dp))
                                             }
                                         }
                                     }
@@ -425,28 +431,71 @@ fun TournamentScreen(
                                             color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
                                             shape = RoundedCornerShape(8.dp),
                                             border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.4f)),
-                                            modifier = Modifier.clickable {
-                                                clipboardManager.setText(AnnotatedString(tourney.scorerInviteCode))
-                                                Toast.makeText(context, "🔑 Scorer Code ${tourney.scorerInviteCode} copied!", Toast.LENGTH_SHORT).show()
-                                            }
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .heightIn(min = 40.dp)
+                                                .clickable {
+                                                    clipboardManager.setText(AnnotatedString(tourney.scorerInviteCode))
+                                                    Toast.makeText(context, "🔑 Scorer Code ${tourney.scorerInviteCode} copied!", Toast.LENGTH_SHORT).show()
+                                                }
                                         ) {
                                             Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(13.dp))
+                                                Spacer(modifier = Modifier.width(5.dp))
                                                 Text(
                                                     text = "SCORER: ${tourney.scorerInviteCode}",
                                                     color = textMain,
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold
+                                                    fontWeight = FontWeight.Bold,
+                                                    maxLines = 1,
+                                                    softWrap = false
                                                 )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
+                                                Spacer(modifier = Modifier.weight(1f))
+                                                Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(13.dp))
                                             }
                                         }
                                     }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Button(
+                                    onClick = {
+                                        viewModel.selectTournament(tourney.id)
+                                        onTournamentClick(tourney)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isActive) (if (isDarkTheme) IplGold else LightPitchPrimary) else (if (isDarkTheme) StadiumSurface else LightPitchSurface),
+                                        contentColor = if (isActive) (if (isDarkTheme) Color.Black else Color.White) else textMain
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.GridView,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isActive) "OPEN ACTIVE WORKSPACE ⚡" else "ENTER WORKSPACE 🏆",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 }
                             }
                         }

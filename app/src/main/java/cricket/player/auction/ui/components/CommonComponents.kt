@@ -159,8 +159,10 @@ fun StatChip(
             Text(
                 text = text,
                 color = effectiveTextColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

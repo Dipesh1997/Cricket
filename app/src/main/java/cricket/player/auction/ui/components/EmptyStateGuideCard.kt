@@ -238,12 +238,16 @@ fun EmptyStateGuideCard(
                             contentColor = if (isDarkTheme) Color.Black else Color.White
                         ),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
                     ) {
                         Text(
                             text = primaryButtonText,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
@@ -252,13 +256,17 @@ fun EmptyStateGuideCard(
                             onClick = onSecondaryClick,
                             shape = RoundedCornerShape(12.dp),
                             border = androidx.compose.foundation.BorderStroke(1.2.dp, accentColor),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
                         ) {
                             Text(
                                 text = secondaryButtonText,
                                 color = textMain,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
