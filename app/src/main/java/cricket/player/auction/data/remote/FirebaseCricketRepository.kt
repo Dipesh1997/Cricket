@@ -125,7 +125,9 @@ class FirebaseCricketRepository(
                     // Check if local has data to sync
                     scope.launch {
                         val localSchema = dbManager.loadDatabase().sanitized()
-                        val validTourneys = localSchema.tournaments.filter { !it.isOfflineOnly && !it.id.startsWith("demo_") }
+                        val validTourneys = localSchema.tournaments.filter { 
+                            !it.isOfflineOnly && !it.id.startsWith("demo_") && it.id != "t1" && it.id != "tournament_1" && !it.name.equals("IPL 2026 Mega Auction", ignoreCase = true)
+                        }
                         if (validTourneys.isNotEmpty()) {
                             syncDatabaseToFirebase(localSchema.copy(tournaments = validTourneys))
                         }
@@ -142,13 +144,16 @@ class FirebaseCricketRepository(
 
                 for (tSnap in snapshot.children) {
                     val tId = tSnap.key ?: continue
+                    if (tId == "t1" || tId == "tournament_1" || tId.startsWith("demo_")) continue
                     val infoSnap = tSnap.child("info")
                     val t = if (infoSnap.exists()) {
                         parseTournament(infoSnap, tId)
                     } else {
                         parseTournament(tSnap, tId)
                     }
-                    if (t != null) tournamentsList.add(t)
+                    if (t != null && !t.name.equals("IPL 2026 Mega Auction", ignoreCase = true)) {
+                        tournamentsList.add(t)
+                    }
 
                     // Teams
                     val teamsSnap = tSnap.child("teams")
@@ -248,8 +253,12 @@ class FirebaseCricketRepository(
 
                 // Push each tournament as a vertical, expandable object hierarchy
                 for (tourney in schema.tournaments) {
-                    // Skip offline-only / demo tournaments from Firebase Realtime Database
-                    if (tourney.isOfflineOnly || tourney.id.startsWith("demo_")) continue
+                    // Skip offline-only / demo / legacy default tournaments from Firebase Realtime Database
+                    if (tourney.isOfflineOnly || 
+                        tourney.id.startsWith("demo_") || 
+                        tourney.id == "t1" || 
+                        tourney.id == "tournament_1" || 
+                        tourney.name.equals("IPL 2026 Mega Auction", ignoreCase = true)) continue
 
                     val tRef = database.reference.child("tournaments").child(tourney.id)
 

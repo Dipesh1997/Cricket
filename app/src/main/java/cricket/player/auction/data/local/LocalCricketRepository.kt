@@ -36,15 +36,20 @@ class LocalCricketRepository(context: Context) {
     fun isDemoOrOffline(tournamentId: String?): Boolean {
         if (tournamentId.isNullOrBlank()) return false
         if (tournamentId.startsWith("demo_")) return true
-        return _tournaments.value.find { it.id == tournamentId }?.isOfflineOnly == true
+        if (tournamentId == "t1" || tournamentId == "tournament_1") return true
+        val tourney = _tournaments.value.find { it.id == tournamentId }
+        if (tourney?.isOfflineOnly == true) return true
+        if (tourney?.name?.equals("IPL 2026 Mega Auction", ignoreCase = true) == true) return true
+        return false
     }
 
     // Expose all tournaments if Master Admin is active, or only tournaments this device created or joined!
     val userTournaments: StateFlow<List<Tournament>> = combine(_tournaments, _myTournamentIds, _isMasterAdminMode, _hideDemoData) { all, myIds, isMaster, hideDemo ->
+        val nonLegacy = all.filterNot { it.id == "t1" || it.id == "tournament_1" || it.name.equals("IPL 2026 Mega Auction", ignoreCase = true) }
         val base = if (isMaster) {
-            all
+            nonLegacy
         } else {
-            all.filter { it.id in myIds }
+            nonLegacy.filter { it.id in myIds }
         }
         if (hideDemo) base.filter { !it.isOfflineOnly && !it.id.startsWith("demo_") } else base
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -147,11 +152,12 @@ class LocalCricketRepository(context: Context) {
                 _myTournamentIds.value = validLocalIds
             }
 
-            // CRITICAL: Only push to Firebase if local database actually has data.
+            // CRITICAL: Only push to Firebase if local database actually has valid non-legacy data.
             // On fresh install / after reinstall, local schema is empty.
             // Pushing an empty schema would wipe out the user's existing cloud data!
-            if (schema.tournaments.isNotEmpty() || schema.teams.isNotEmpty() || schema.players.isNotEmpty()) {
-                firebaseRepo.syncDatabaseToFirebase(schema)
+            val nonLegacyTourneys = schema.tournaments.filterNot { isDemoOrOffline(it.id) || it.id == "t1" || it.id == "tournament_1" || it.name.equals("IPL 2026 Mega Auction", ignoreCase = true) }
+            if (nonLegacyTourneys.isNotEmpty()) {
+                firebaseRepo.syncDatabaseToFirebase(schema.copy(tournaments = nonLegacyTourneys))
             }
         }
     }

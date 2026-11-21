@@ -274,11 +274,13 @@ function applyStructuredFirebaseData(data) {
   const myTourneyIds = getMyTournamentIds();
 
   Object.keys(data).forEach(tId => {
+    if (tId === "t1" || tId === "tournament_1" || tId.startsWith("demo_")) return;
     const tObj = data[tId];
     if (!tObj) return;
 
     // Tournament Info
     const info = tObj.info || tObj;
+    if (info.name === "IPL 2026 Mega Auction") return;
     tourneysList.push({
       id: tId,
       name: info.name || "Tournament",
@@ -440,7 +442,7 @@ function saveToFirebase() {
   try {
     // 3. Vertical tournament objects
     state.tournaments.forEach(tourney => {
-      if (tourney.isOfflineOnly || (tourney.id && tourney.id.startsWith("demo_"))) return;
+      if (tourney.isOfflineOnly || (tourney.id && tourney.id.startsWith("demo_")) || tourney.id === "t1" || tourney.id === "tournament_1" || tourney.name === "IPL 2026 Mega Auction") return;
       const tRef = db.ref("tournaments/" + tourney.id);
 
     // Info node
