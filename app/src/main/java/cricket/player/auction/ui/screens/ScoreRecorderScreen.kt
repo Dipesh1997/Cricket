@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.*
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
+import cricket.player.auction.util.CricketShareHelper
 import cricket.player.auction.viewmodel.AuctionViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -101,6 +103,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
         activeMatch?.let { viewModel.isMatchEditable(it) } ?: true
     }
 
+    var isViewingLiveMatch by remember { mutableStateOf(false) }
+    var matchFilter by remember { mutableStateOf("ALL") }
     var showCreateMatchModal by remember { mutableStateOf(false) }
     var showCoinTossModal by remember { mutableStateOf(false) }
     var showWicketModal by remember { mutableStateOf(false) }
@@ -251,336 +255,130 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Sleek Single-Line Top Action Strip (Compact, High Efficiency, Horizontally Scrollable)
-            val topBarScrollState = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(topBarScrollState)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left: Match Selector Dropdown
-                var showMatchDropdown by remember { mutableStateOf(false) }
-                Box {
-                    Surface(
-                        onClick = { showMatchDropdown = true },
-                        color = surfaceBg,
-                        shape = RoundedCornerShape(8.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isEditable && activeMatch?.status != MatchStatus.COMPLETED) BidGreen else if (isEditable) themeAccent else Color.Gray.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val tA = teams.find { it.id == activeMatch?.teamAId }
-                            val tB = teams.find { it.id == activeMatch?.teamBId }
-                            val allTourneyList = if (tourneyMatches.isNotEmpty()) tourneyMatches else matches
-                            val mIdx = allTourneyList.indexOfFirst { it.id == activeMatch?.id }
-                            val matchNumStr = if (mIdx >= 0) "Match ${mIdx + 1}" else if (activeMatch != null) "Match" else "Select Match"
-                            val mLabel = if (activeMatch != null) {
-                                "$matchNumStr: ${tA?.shortCode ?: "A"} v ${tB?.shortCode ?: "B"}"
-                            } else {
-                                "Select Match"
-                            }
-                            Text(
-                                text = mLabel,
-                                color = textMain,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = themeAccent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = showMatchDropdown,
-                        onDismissRequest = { showMatchDropdown = false },
-                        modifier = Modifier.background(cardBg)
-                    ) {
-                        if (canScore) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.AddCircle,
-                                            contentDescription = null,
-                                            tint = themeAccent,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "+ Create New Match",
-                                            color = themeAccent,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showMatchDropdown = false
-                                    attemptCreateMatch()
-                                }
-                            )
-                            HorizontalDivider(color = surfaceBg, thickness = 1.dp)
-                        }
-
-                        if (tourneyMatches.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text("No matches created yet", color = textSub, fontSize = 11.sp) },
-                                onClick = { showMatchDropdown = false }
-                            )
-                        } else {
-                            tourneyMatches.forEachIndexed { index, m ->
-                                val mA = teams.find { it.id == m.teamAId }
-                                val mB = teams.find { it.id == m.teamBId }
-                                val mEditable = viewModel.isMatchEditable(m)
-                                val isSelected = m.id == activeMatch?.id
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "Match ${index + 1}: ${mA?.shortCode ?: "T1"} vs ${mB?.shortCode ?: "T2"}",
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isSelected) themeAccent else textMain,
-                                                fontSize = 12.sp
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            val statusBadge = when {
-                                                m.status != MatchStatus.COMPLETED -> "LIVE 🔴"
-                                                mEditable -> "Editable ✏️"
-                                                else -> "Locked 🔒"
-                                            }
-                                            Text(
-                                                text = statusBadge,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (m.status != MatchStatus.COMPLETED) BidGreen else if (mEditable) themeAccent else Color.Gray
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        viewModel.selectActiveMatch(m.id)
-                                        showMatchDropdown = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Right: Action Buttons (+ New, Scorecard, Key, Reopen/Resume, End)
+            if (!isViewingLiveMatch || activeMatch == null) {
+                // ==========================================
+                // 🏏 CRICBUZZ SCORECARD MASTER PAGE
+                // ==========================================
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Scorer Invite Code Mini Chip
-                    val scorerCode = activeTournament?.scorerInviteCode ?: ""
-                    if (scorerCode.isNotBlank()) {
-                        Surface(
-                            onClick = {
-                                clipboardManager.setText(AnnotatedString(scorerCode))
-                                Toast.makeText(context, "📋 Scorer Code '$scorerCode' copied!", Toast.LENGTH_SHORT).show()
-                            },
-                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
-                            shape = RoundedCornerShape(6.dp),
-                            border = androidx.compose.foundation.BorderStroke(0.8.dp, accentNavy.copy(alpha = 0.5f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(scorerCode, color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-                            }
-                        }
-                    }
-
-                    // + New Match Button (Scorers/Admins) or Spectator Tag
-                    if (canScore) {
-                        Surface(
-                            onClick = { attemptCreateMatch() },
+                    Column {
+                        Text(
+                            text = "CRICBUZZ MATCHES 🏏",
                             color = themeAccent,
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = if (isDarkTheme) Color.Black else Color.White, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("New Match", color = if (isDarkTheme) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
-                            }
-                        }
-                    } else if (isSpectator) {
-                        Surface(
-                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
-                            shape = RoundedCornerShape(6.dp),
-                            border = androidx.compose.foundation.BorderStroke(0.8.dp, accentNavy.copy(alpha = 0.4f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("Spectator", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-                            }
-                        }
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "${tourneyMatches.size} ${if (tourneyMatches.size == 1) "Match" else "Matches"} in Tournament",
+                            color = textSub,
+                            fontSize = 11.sp
+                        )
                     }
 
-                    if (activeMatch != null) {
-                        // Scorecard Button
-                        Surface(
-                            onClick = { selectedMatchForScorecard = activeMatch },
-                            color = surfaceBg,
-                            shape = RoundedCornerShape(6.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val scorerCode = activeTournament?.scorerInviteCode ?: ""
+                        if (scorerCode.isNotBlank()) {
+                            Surface(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(scorerCode))
+                                    Toast.makeText(context, "📋 Scorer Code '$scorerCode' copied!", Toast.LENGTH_SHORT).show()
+                                },
+                                color = (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.4f))
                             ) {
-                                Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("Scorecard", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-                            }
-                        }
-
-                        // YouTube Live Stream Action Chip (Single-Line, Non-wrapping)
-                        val hasStream = activeMatch.liveStreamUrl.isNotBlank()
-                        Surface(
-                            onClick = {
-                                if (hasStream) {
-                                    showLiveStreamCard = !showLiveStreamCard
-                                } else {
-                                    streamUrlInput = ""
-                                    showLiveStreamDialog = true
-                                }
-                            },
-                            color = if (hasStream) Color(0xFFFF0000).copy(alpha = 0.15f) else surfaceBg,
-                            shape = RoundedCornerShape(6.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (hasStream) Color(0xFFFF0000) else themeAccent),
-                            modifier = Modifier.wrapContentWidth().heightIn(min = 28.dp, max = 34.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.wrapContentWidth().padding(horizontal = 7.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayCircle,
-                                    contentDescription = null,
-                                    tint = if (hasStream) Color(0xFFFF0000) else themeAccent,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = if (hasStream) "Live Stream 🔴" else "YouTube Live",
-                                    color = textMain,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.wrapContentWidth()
-                                )
-                            }
-                        }
-
-                        // Status actions: Resume/Edit or End (Only for scorer / admin)
-                        if (canScore) {
-                            if (activeMatch.status == MatchStatus.COMPLETED) {
-                                if (isEditable) {
-                                    Surface(
-                                        onClick = {
-                                            viewModel.resumeMatch(activeMatch.id)
-                                            Toast.makeText(context, "✏️ Match reopened for editing!", Toast.LENGTH_SHORT).show()
-                                        },
-                                        color = themeAccent.copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(6.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent, modifier = Modifier.size(11.dp))
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text("Edit ✏️", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-                                        }
-                                    }
-                                } else {
-                                    Surface(
-                                        color = Color.Gray.copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(6.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text("Locked 🔒", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-                                        }
-                                    }
-                                }
-                            } else {
-                                // Live match actions
-                                Surface(
-                                    onClick = { showEndInningsConfirmModal = true },
-                                    color = UnsoldRed.copy(alpha = 0.9f),
-                                    shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.heightIn(min = 32.dp)
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(
-                                            text = if (currentInnings == 1) "End Innings" else "End Innings 2",
-                                            color = Color.White,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
+                                    Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(scorerCode, color = textMain, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
+                            }
+                        }
+
+                        if (canScore) {
+                            Button(
+                                onClick = { attemptCreateMatch() },
+                                colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("New Match", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
                             }
                         }
                     }
                 }
-            }
 
-            if (activeMatch == null) {
+                // Filter Tabs: All, Live, Completed
+                if (tourneyMatches.isNotEmpty()) {
+                    val liveCount = tourneyMatches.count { it.status != MatchStatus.COMPLETED }
+                    val completedCount = tourneyMatches.count { it.status == MatchStatus.COMPLETED }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            selected = matchFilter == "ALL",
+                            onClick = { matchFilter = "ALL" },
+                            label = { Text("All (${tourneyMatches.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = themeAccent,
+                                selectedLabelColor = if (isDarkTheme) Color.Black else Color.White,
+                                containerColor = surfaceBg,
+                                labelColor = textMain
+                            )
+                        )
+                        FilterChip(
+                            selected = matchFilter == "LIVE",
+                            onClick = { matchFilter = "LIVE" },
+                            label = { Text("Live ($liveCount) 🔴", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BidGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = surfaceBg,
+                                labelColor = textMain
+                            )
+                        )
+                        FilterChip(
+                            selected = matchFilter == "COMPLETED",
+                            onClick = { matchFilter = "COMPLETED" },
+                            label = { Text("Completed ($completedCount) 🏆", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = if (isDarkTheme) NeonBlue else LightPitchPrimary,
+                                selectedLabelColor = Color.White,
+                                containerColor = surfaceBg,
+                                labelColor = textMain
+                            )
+                        )
+                    }
+                }
+
+                // Master List / Cards View
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentPadding = PaddingValues(bottom = 96.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    item {
-                        if (tourneyMatches.isEmpty()) {
+                    if (tourneyMatches.isEmpty()) {
+                        item {
                             val needsTeams = teams.size < 2
                             val needsPlayers = players.size < 2
                             EmptyStateGuideCard(
@@ -625,78 +423,425 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 isDarkTheme = isDarkTheme,
                                 accentColor = themeAccent
                             )
+                        }
+                    } else {
+                        val filteredList = when (matchFilter) {
+                            "LIVE" -> tourneyMatches.filter { it.status != MatchStatus.COMPLETED }
+                            "COMPLETED" -> tourneyMatches.filter { it.status == MatchStatus.COMPLETED }
+                            else -> tourneyMatches
+                        }
+
+                        if (filteredList.isEmpty()) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = if (matchFilter == "LIVE") "No Live Matches Right Now 🔴" else "No Completed Matches Yet 🏆",
+                                        color = textSub,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         } else {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, tint = themeAccent, modifier = Modifier.size(52.dp))
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text("No Active Match Selected", color = textMain, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    "Tap any match card below to inspect Cricbuzz scorecard, or create a new match.",
-                                    color = textSub,
-                                    fontSize = 12.sp,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(14.dp))
-                                if (canScore) {
-                                    Button(
-                                        onClick = { attemptCreateMatch() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = if (isDarkTheme) Color.Black else Color.White),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Casino, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("TOSS COIN & CREATE MATCH", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            items(filteredList) { m ->
+                                val mEditable = viewModel.isMatchEditable(m)
+                                val tA = teams.find { it.id == m.teamAId }
+                                val tB = teams.find { it.id == m.teamBId }
+                                MatchHistoryCard(
+                                    match = m,
+                                    teams = teams,
+                                    isEditable = mEditable,
+                                    isDarkTheme = isDarkTheme,
+                                    cardBg = cardBg,
+                                    surfaceBg = surfaceBg,
+                                    textMain = textMain,
+                                    textSub = textSub,
+                                    themeAccent = themeAccent,
+                                    onEnterLiveClick = {
+                                        viewModel.selectActiveMatch(m.id)
+                                        strikerId = null
+                                        nonStrikerId = null
+                                        bowlerId = null
+                                        isViewingLiveMatch = true
+                                    },
+                                    onScorecardClick = {
+                                        selectedMatchForScorecard = m
+                                    },
+                                    onShareClick = {
+                                        CricketShareHelper.shareMatchScorecard(context, m, tA, tB, ballRecords, players)
                                     }
-                                }
-                            }
-                        }
-                    }
-
-                    if (tourneyMatches.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "TOURNAMENT MATCHES (${tourneyMatches.size})",
-                                    color = themeAccent,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 12.sp
                                 )
-                                Text("Tap card for Cricbuzz table", color = textSub, fontSize = 10.sp)
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                        }
-
-                        items(tourneyMatches) { m ->
-                            val mEditable = viewModel.isMatchEditable(m)
-                            MatchHistoryCard(
-                                match = m,
-                                teams = teams,
-                                isEditable = mEditable,
-                                isDarkTheme = isDarkTheme,
-                                cardBg = cardBg,
-                                surfaceBg = surfaceBg,
-                                textMain = textMain,
-                                textSub = textSub,
-                                themeAccent = themeAccent,
-                                onClick = {
-                                    selectedMatchForScorecard = m
-                                }
-                            )
                         }
                     }
                 }
-            } else if (activeMatch != null) {
+            } else {
+                // ==========================================
+                // 🔴 LIVE MATCH SCORER (ISOLATED TO 2 PLAYING TEAMS)
+                // ==========================================
+                val topBarScrollState = rememberScrollState()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(topBarScrollState)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 1. Back to Master Page Button
+                    Surface(
+                        onClick = { isViewingLiveMatch = false },
+                        color = (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "All Matches",
+                                tint = if (isDarkTheme) NeonBlue else LightPitchPrimary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "All Matches",
+                                color = textMain,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+
+                    // 2. Match Selector Dropdown
+                    var showMatchDropdown by remember { mutableStateOf(false) }
+                    Box {
+                        Surface(
+                            onClick = { showMatchDropdown = true },
+                            color = surfaceBg,
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isEditable && activeMatch.status != MatchStatus.COMPLETED) BidGreen else if (isEditable) themeAccent else Color.Gray.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val tA = teams.find { it.id == activeMatch.teamAId }
+                                val tB = teams.find { it.id == activeMatch.teamBId }
+                                val allTourneyList = if (tourneyMatches.isNotEmpty()) tourneyMatches else matches
+                                val mIdx = allTourneyList.indexOfFirst { it.id == activeMatch.id }
+                                val matchNumStr = if (mIdx >= 0) "Match ${mIdx + 1}" else "Match"
+                                val mLabel = "$matchNumStr: ${tA?.shortCode ?: "A"} v ${tB?.shortCode ?: "B"}"
+                                Text(
+                                    text = mLabel,
+                                    color = textMain,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = null,
+                                    tint = themeAccent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = showMatchDropdown,
+                            onDismissRequest = { showMatchDropdown = false },
+                            modifier = Modifier.background(cardBg)
+                        ) {
+                            if (canScore) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.AddCircle,
+                                                contentDescription = null,
+                                                tint = themeAccent,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "+ Create New Match",
+                                                color = themeAccent,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showMatchDropdown = false
+                                        attemptCreateMatch()
+                                    }
+                                )
+                                HorizontalDivider(color = surfaceBg, thickness = 1.dp)
+                            }
+
+                            if (tourneyMatches.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("No matches created yet", color = textSub, fontSize = 11.sp) },
+                                    onClick = { showMatchDropdown = false }
+                                )
+                            } else {
+                                tourneyMatches.forEachIndexed { index, m ->
+                                    val mA = teams.find { it.id == m.teamAId }
+                                    val mB = teams.find { it.id == m.teamBId }
+                                    val mEditable = viewModel.isMatchEditable(m)
+                                    val isSelected = m.id == activeMatch.id
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Match ${index + 1}: ${mA?.shortCode ?: "T1"} vs ${mB?.shortCode ?: "T2"}",
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSelected) themeAccent else textMain,
+                                                    fontSize = 12.sp
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                val statusBadge = when {
+                                                    m.status != MatchStatus.COMPLETED -> "LIVE 🔴"
+                                                    mEditable -> "Editable ✏️"
+                                                    else -> "Locked 🔒"
+                                                }
+                                                Text(
+                                                    text = statusBadge,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (m.status != MatchStatus.COMPLETED) BidGreen else if (mEditable) themeAccent else Color.Gray
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.selectActiveMatch(m.id)
+                                            strikerId = null
+                                            nonStrikerId = null
+                                            bowlerId = null
+                                            showMatchDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Scorer Invite Code Mini Chip
+                    val scorerCode = activeTournament?.scorerInviteCode ?: ""
+                    if (scorerCode.isNotBlank()) {
+                        Surface(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(scorerCode))
+                                Toast.makeText(context, "📋 Scorer Code '$scorerCode' copied!", Toast.LENGTH_SHORT).show()
+                            },
+                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.8.dp, accentNavy.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(scorerCode, color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                            }
+                        }
+                    }
+
+                    // 4. + New Match Button (Scorers/Admins) or Spectator Tag
+                    if (canScore) {
+                        Surface(
+                            onClick = { attemptCreateMatch() },
+                            color = themeAccent,
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = if (isDarkTheme) Color.Black else Color.White, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("New Match", color = if (isDarkTheme) Color.Black else Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
+                            }
+                        }
+                    } else if (isSpectator) {
+                        Surface(
+                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.8.dp, accentNavy.copy(alpha = 0.4f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = accentNavy, modifier = Modifier.size(11.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Spectator", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                            }
+                        }
+                    }
+
+                    // 5. Scorecard Button
+                    Surface(
+                        onClick = { selectedMatchForScorecard = activeMatch },
+                        color = surfaceBg,
+                        shape = RoundedCornerShape(6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = themeAccent, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("Scorecard", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                    }
+
+                    // 6. Share Button
+                    Surface(
+                        onClick = {
+                            val tA = teams.find { it.id == activeMatch.teamAId }
+                            val tB = teams.find { it.id == activeMatch.teamBId }
+                            CricketShareHelper.shareMatchScorecard(context, activeMatch, tA, tB, ballRecords, players)
+                        },
+                        color = surfaceBg,
+                        shape = RoundedCornerShape(6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Share, contentDescription = "Share", tint = themeAccent, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("Share", color = textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                        }
+                    }
+
+                    // 7. YouTube Live Stream Action Chip (Single-Line, Non-wrapping)
+                    val hasStream = activeMatch.liveStreamUrl.isNotBlank()
+                    Surface(
+                        onClick = {
+                            if (hasStream) {
+                                showLiveStreamCard = !showLiveStreamCard
+                            } else {
+                                streamUrlInput = ""
+                                showLiveStreamDialog = true
+                            }
+                        },
+                        color = if (hasStream) Color(0xFFFF0000).copy(alpha = 0.15f) else surfaceBg,
+                        shape = RoundedCornerShape(6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (hasStream) Color(0xFFFF0000) else themeAccent),
+                        modifier = Modifier.wrapContentWidth().heightIn(min = 28.dp, max = 34.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.wrapContentWidth().padding(horizontal = 7.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayCircle,
+                                contentDescription = null,
+                                tint = if (hasStream) Color(0xFFFF0000) else themeAccent,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (hasStream) "Live Stream 🔴" else "YouTube Live",
+                                color = textMain,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.wrapContentWidth()
+                            )
+                        }
+                    }
+
+                    // 8. Status actions: Resume/Edit or End (Only for scorer / admin)
+                    if (canScore) {
+                        if (activeMatch.status == MatchStatus.COMPLETED) {
+                            if (isEditable) {
+                                Surface(
+                                    onClick = {
+                                        viewModel.resumeMatch(activeMatch.id)
+                                        Toast.makeText(context, "✏️ Match reopened for editing!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    color = themeAccent.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = themeAccent, modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("Edit ✏️", color = themeAccent, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                                    }
+                                }
+                            } else {
+                                Surface(
+                                    color = Color.Gray.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("Locked 🔒", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                                    }
+                                }
+                            }
+                        } else {
+                            // Live match actions
+                            Surface(
+                                onClick = { showEndInningsConfirmModal = true },
+                                color = UnsoldRed.copy(alpha = 0.9f),
+                                shape = RoundedCornerShape(6.dp),
+                                modifier = Modifier.heightIn(min = 32.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(imageVector = Icons.Default.Flag, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = if (currentInnings == 1) "End Innings" else "End Innings 2",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 val match = activeMatch
                 val tossWinnerTeam = teams.find { it.id == match.tossWinnerTeamId }
                 val winnerTeam = teams.find { it.id == match.winnerTeamId }
@@ -1654,49 +1799,6 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             }
                         }
                     }
-
-                    // --- Tournament Match Cards History List ---
-                    if (tourneyMatches.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "MATCHES & CARDS HISTORY (${tourneyMatches.size})",
-                                    color = themeAccent,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 11.sp
-                                )
-                                Text(
-                                    text = "Tap card to open Cricbuzz table",
-                                    color = textSub,
-                                    fontSize = 9.sp
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-
-                        items(tourneyMatches) { m ->
-                            val mEditable = viewModel.isMatchEditable(m)
-                            MatchHistoryCard(
-                                match = m,
-                                teams = teams,
-                                isEditable = mEditable,
-                                isDarkTheme = isDarkTheme,
-                                cardBg = cardBg,
-                                surfaceBg = surfaceBg,
-                                textMain = textMain,
-                                textSub = textSub,
-                                themeAccent = themeAccent,
-                                onClick = {
-                                    selectedMatchForScorecard = m
-                                }
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -2389,6 +2491,10 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         tossDecision = decision
                     )
                     showCoinTossModal = false
+                    isViewingLiveMatch = true
+                    strikerId = null
+                    nonStrikerId = null
+                    bowlerId = null
                 }
             )
         }
@@ -2806,7 +2912,15 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 15.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(
+                                onClick = {
+                                    CricketShareHelper.shareMatchScorecard(context, targetMatch, teamA, teamB, ballRecords, players)
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Share, contentDescription = "Share Scorecard", tint = themeAccent, modifier = Modifier.size(16.dp))
+                            }
                             FilterChip(
                                 selected = selectedScorecardInnings == 1,
                                 onClick = { selectedScorecardInnings = 1 },
@@ -3084,6 +3198,18 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             Text("UNDO LAST BALL & EDIT MATCH ✏️", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
                         }
                     }
+                    OutlinedButton(
+                        onClick = {
+                            CricketShareHelper.shareMatchScorecard(context, targetMatch, teamA, teamB, ballRecords, players)
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.Share, contentDescription = null, tint = themeAccent, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("SHARE SCORECARD 📤", fontWeight = FontWeight.Bold, color = themeAccent, fontSize = 11.sp)
+                    }
                     TextButton(
                         onClick = { selectedMatchForScorecard = null },
                         modifier = Modifier.fillMaxWidth()
@@ -3097,7 +3223,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     }
 }
 
-// --- Clickable Match History Card ---
+// --- Clickable Cricbuzz-Style Match History Card ---
 @Composable
 fun MatchHistoryCard(
     match: Match,
@@ -3109,7 +3235,10 @@ fun MatchHistoryCard(
     textMain: Color,
     textSub: Color,
     themeAccent: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit = {},
+    onEnterLiveClick: () -> Unit = onClick,
+    onScorecardClick: () -> Unit = onClick,
+    onShareClick: (() -> Unit)? = null
 ) {
     val teamA = teams.find { it.id == match.teamAId }
     val teamB = teams.find { it.id == match.teamBId }
@@ -3120,14 +3249,14 @@ fun MatchHistoryCard(
         shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (!isCompleted) BidGreen.copy(alpha = 0.5f) else surfaceBg
+            if (!isCompleted) BidGreen.copy(alpha = 0.6f) else surfaceBg
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable { onEnterLiveClick() }
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Header: Status badge & editable tag
+            // Header: Status badge, Overs tag & editable tag
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -3139,11 +3268,24 @@ fun MatchHistoryCard(
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
-                            text = if (!isCompleted) "● LIVE" else "COMPLETED 🏆",
+                            text = if (!isCompleted) "● LIVE (INN ${match.currentInnings})" else "COMPLETED 🏆",
                             color = if (!isCompleted) BidGreen else themeAccent,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.ExtraBold,
                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    Surface(
+                        color = surfaceBg,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "${match.totalOvers} Ov Match",
+                            color = textSub,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
 
@@ -3163,14 +3305,23 @@ fun MatchHistoryCard(
                     }
                 }
 
-                Text(
-                    text = "Tap for scorecard →",
-                    color = textSub,
-                    fontSize = 10.sp
-                )
+                if (onShareClick != null) {
+                    IconButton(
+                        onClick = onShareClick,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Share, contentDescription = "Share Match", tint = themeAccent, modifier = Modifier.size(14.dp))
+                    }
+                } else {
+                    Text(
+                        text = "Tap for Live →",
+                        color = textSub,
+                        fontSize = 10.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Scores for both teams:
             // Team A
@@ -3185,19 +3336,19 @@ fun MatchHistoryCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(20.dp)
+                            .size(22.dp)
                             .clip(CircleShape)
                             .background(parseColorHex(teamA?.primaryColorHex.orEmpty())),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(teamA?.shortCode?.take(2) ?: "T1", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = teamA?.name ?: "Team A",
                         color = textMain,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -3206,11 +3357,11 @@ fun MatchHistoryCard(
                     text = "${match.teamARuns}/${match.teamAWickets} (${match.teamAOversBatted} ov)",
                     color = textMain,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 13.sp
+                    fontSize = 14.sp
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Team B
             Row(
@@ -3224,19 +3375,19 @@ fun MatchHistoryCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(20.dp)
+                            .size(22.dp)
                             .clip(CircleShape)
                             .background(parseColorHex(teamB?.primaryColorHex.orEmpty())),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(teamB?.shortCode?.take(2) ?: "T2", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = teamB?.name ?: "Team B",
                         color = textMain,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -3245,22 +3396,92 @@ fun MatchHistoryCard(
                     text = "${match.teamBRuns}/${match.teamBWickets} (${match.teamBOversBatted} ov)",
                     color = textMain,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 13.sp
+                    fontSize = 14.sp
                 )
             }
 
-            if (match.resultSummary.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                HorizontalDivider(color = surfaceBg, thickness = 0.8.dp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "🏆 ${match.resultSummary}",
-                    color = if (isCompleted) BidGreen else themeAccent,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // Result or Live Equation Summary
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = surfaceBg, thickness = 0.8.dp)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            val statusMessage = when {
+                match.resultSummary.isNotBlank() -> "🏆 ${match.resultSummary}"
+                !isCompleted && match.currentInnings == 2 -> {
+                    val target = match.teamARuns + 1
+                    val needed = (target - match.teamBRuns).coerceAtLeast(0)
+                    val totalBalls = match.totalOvers * 6
+                    val fullOvers = match.teamBOversBatted.toInt()
+                    val partialBalls = ((match.teamBOversBatted * 10).toInt() % 10)
+                    val ballsBowled = (fullOvers * 6) + partialBalls
+                    val ballsLeft = (totalBalls - ballsBowled).coerceAtLeast(0)
+                    "🎯 ${teamB?.name ?: "Team B"} need $needed runs in $ballsLeft balls"
+                }
+                !isCompleted -> "⚡ Innings 1: ${teamA?.name ?: "Team A"} batting (${match.teamAOversBatted} ov)"
+                else -> "🏆 Match Completed"
+            }
+
+            Text(
+                text = statusMessage,
+                color = if (isCompleted) BidGreen else themeAccent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // Card Action Buttons (Enter Live Scorer, Scorecard, Share)
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = onEnterLiveClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!isCompleted) BidGreen else themeAccent,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(imageVector = Icons.Default.SportsCricket, contentDescription = null, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (!isCompleted) "LIVE SCORER 🏏" else "VIEW MATCH 🏏",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onScorecardClick,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, themeAccent)
+                ) {
+                    Icon(imageVector = Icons.Default.Assessment, contentDescription = null, tint = themeAccent, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "Scorecard",
+                        color = themeAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                }
+
+                if (onShareClick != null) {
+                    OutlinedButton(
+                        onClick = onShareClick,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.5f))
+                    ) {
+                        Icon(imageVector = Icons.Default.Share, contentDescription = "Share", tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(13.dp))
+                    }
+                }
             }
         }
     }

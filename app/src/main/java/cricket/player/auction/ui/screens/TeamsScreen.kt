@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.Shield
@@ -43,6 +44,7 @@ import cricket.player.auction.model.PlayerRole
 import cricket.player.auction.model.PlayerStatus
 import cricket.player.auction.model.Team
 import cricket.player.auction.model.UserRole
+import cricket.player.auction.util.CricketShareHelper
 import cricket.player.auction.model.formatIplCurrency
 import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
@@ -137,6 +139,37 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                         maxLines = 1
                     )
                 }
+
+                if (teams.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        onClick = {
+                            CricketShareHelper.shareAllTeams(
+                                context = context,
+                                tournamentName = activeTournament?.name.orEmpty(),
+                                teams = teams,
+                                players = players
+                            )
+                        },
+                        color = (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Share, contentDescription = "Share All Teams", tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Share All",
+                                color = textMain,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
 
             if (isSpectator) {
@@ -216,6 +249,9 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                             onRegenerateCodeClick = {
                                 val newCode = viewModel.regenerateTeamInviteCode(team.id)
                                 Toast.makeText(context, "🔑 New Code $newCode generated for ${team.name}!", Toast.LENGTH_SHORT).show()
+                            },
+                            onShareClick = {
+                                CricketShareHelper.shareTeam(context, team, squad)
                             }
                         )
                     }
@@ -238,7 +274,18 @@ fun TeamsScreen(viewModel: AuctionViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(text = team.name, color = textMain, fontWeight = FontWeight.Bold)
-                    StatChip(text = team.remainingPurse.formatIplCurrency(), backgroundColor = IplGold.copy(alpha = 0.2f), textColor = IplGold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatChip(text = team.remainingPurse.formatIplCurrency(), backgroundColor = IplGold.copy(alpha = 0.2f), textColor = IplGold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = {
+                                CricketShareHelper.shareTeam(context, team, squadPlayers)
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Share, contentDescription = "Share Squad", tint = themeAccent, modifier = Modifier.size(16.dp))
+                        }
+                    }
                 }
             },
             text = {
@@ -754,7 +801,8 @@ fun TeamPurseCard(
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onRemoveCaptainClick: (() -> Unit)? = null,
-    onRegenerateCodeClick: (() -> Unit)? = null
+    onRegenerateCodeClick: (() -> Unit)? = null,
+    onShareClick: (() -> Unit)? = null
 ) {
     val teamColor = parseColorHex(team.primaryColorHex)
     val context = LocalContext.current
@@ -938,6 +986,30 @@ fun TeamPurseCard(
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "Reset Code 🔄",
+                                    color = if (isDarkTheme) NeonBlue else LightPitchPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    if (onShareClick != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.4f)),
+                            modifier = Modifier.clickable { onShareClick() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Share, contentDescription = "Share Team", tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Share",
                                     color = if (isDarkTheme) NeonBlue else LightPitchPrimary,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
