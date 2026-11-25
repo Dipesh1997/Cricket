@@ -58,18 +58,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val isDarkTheme by viewModel.isDarkTheme.collectAsState()
             DisposableEffect(isDarkTheme) {
-                enableEdgeToEdge(
-                    statusBarStyle = if (isDarkTheme) {
-                        androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-                    } else {
-                        androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
-                    },
-                    navigationBarStyle = if (isDarkTheme) {
-                        androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-                    } else {
-                        androidx.activity.SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
-                    }
-                )
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.isAppearanceLightStatusBars = !isDarkTheme
+                insetsController.isAppearanceLightNavigationBars = !isDarkTheme
                 onDispose {}
             }
             CricketTheme(darkTheme = isDarkTheme) {

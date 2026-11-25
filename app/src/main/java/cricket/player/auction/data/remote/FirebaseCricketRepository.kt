@@ -17,6 +17,15 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
+data class ParsedTournamentData(
+    val tournament: Tournament?,
+    val teams: List<Team>,
+    val players: List<Player>,
+    val matches: List<Match>,
+    val ballRecords: List<BallRecord>,
+    val bids: List<Bid>
+)
+
 class FirebaseCricketRepository(
     private val context: Context,
     private val dbManager: LocalDatabaseManager
@@ -39,6 +48,15 @@ class FirebaseCricketRepository(
 
     private var activeListener: ValueEventListener? = null
     private var activeRef: DatabaseReference? = null
+
+    // Master Mode Listener State (only active when explicitly called from hidden help card)
+    private var isMasterAdminActive = false
+    private var masterTourneysRef: DatabaseReference? = null
+    private var masterTourneysListener: ValueEventListener? = null
+
+    // Per-tournament listeners (scoped strictly to tournaments owned/joined on this device)
+    private val deviceTourneyListeners = java.util.concurrent.ConcurrentHashMap<String, ValueEventListener>()
+    private val deviceTourneyDataMap = java.util.concurrent.ConcurrentHashMap<String, ParsedTournamentData>()
 
     val deviceId: String by lazy {
         try {
@@ -118,14 +136,121 @@ class FirebaseCricketRepository(
 
         registerDeviceInfo()
 
-        // Listen to structured vertical "tournaments" branch
+        // 1. Listen ONLY to this device's claimed/created tournaments
+        val deviceTourneysRef = rootRef.child("devices").child(deviceId).child("myTournaments")
+        activeRef = deviceTourneysRef
+
+        val deviceListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val map = mutableMapOf<String, String>()
+                val remoteIds = mutableSetOf<String>()
+                for (child in snapshot.children) {
+                    val tId = child.key ?: continue
+                    val role = child.child("role").getValue(String::class.java) ?: "ADMIN"
+                    map[tId] = role
+                    remoteIds.add(tId)
+                }
+                onDeviceTournamentsRemoteUpdated?.invoke(map)
+
+                // Manage single tournament listeners strictly for this device's tournaments
+                for (tId in remoteIds) {
+                    listenToTournament(tId)
+                }
+
+                // Remove listeners for tournaments no longer in myTournaments
+                val iterator = deviceTourneyListeners.iterator()
+                while (iterator.hasNext()) {
+                    val entry = iterator.next()
+                    if (entry.key !in remoteIds) {
+                        rootRef.child("tournaments").child(entry.key).removeEventListener(entry.value)
+                        deviceTourneyDataMap.remove(entry.key)
+                        iterator.remove()
+                    }
+                }
+
+                if (!isMasterAdminActive) {
+                    publishDeviceTourneysSchema()
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                error.toException().printStackTrace()
+            }
+        }
+
+        activeListener = deviceListener
+        deviceTourneysRef.addValueEventListener(deviceListener)
+    }
+
+    @Synchronized
+    fun listenToTournament(tId: String) {
+        if (tId.isBlank() || tId == "t1" || tId == "tournament_1" || tId.startsWith("demo_")) return
+        if (deviceTourneyListeners.containsKey(tId)) return
+
+        val singleRef = rootRef.child("tournaments").child(tId)
+        val singleListener = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                if (!snap.exists()) {
+                    deviceTourneyDataMap.remove(tId)
+                } else {
+                    val parsed = parseTournamentData(snap, tId)
+                    if (parsed != null) {
+                        deviceTourneyDataMap[tId] = parsed
+                    } else {
+                        deviceTourneyDataMap.remove(tId)
+                    }
+                }
+                if (!isMasterAdminActive) {
+                    publishDeviceTourneysSchema()
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                error.toException().printStackTrace()
+            }
+        }
+
+        deviceTourneyListeners[tId] = singleListener
+        singleRef.addValueEventListener(singleListener)
+    }
+
+    private fun publishDeviceTourneysSchema() {
+        val allData = deviceTourneyDataMap.values.toList()
+        val tournamentsList = allData.mapNotNull { it.tournament }
+        val teamsList = allData.flatMap { it.teams }
+        val playersList = allData.flatMap { it.players }
+        val matchesList = allData.flatMap { it.matches }
+        val ballRecordsList = allData.flatMap { it.ballRecords }
+        val bidsList = allData.flatMap { it.bids }
+
+        if (tournamentsList.isNotEmpty() || teamsList.isNotEmpty() || playersList.isNotEmpty()) {
+            val remoteSchema = DatabaseSchema(
+                tournaments = tournamentsList,
+                teams = teamsList,
+                players = playersList,
+                matches = matchesList,
+                ballRecords = ballRecordsList,
+                bids = bidsList,
+                captainInvites = emptyList(),
+                activeTournamentId = tournamentsList.firstOrNull()?.id ?: ""
+            )
+            scope.launch {
+                onSchemaRemoteUpdated?.invoke(remoteSchema)
+            }
+        }
+    }
+
+    @Synchronized
+    fun attachMasterModeListener() {
+        isMasterAdminActive = true
+        if (masterTourneysListener != null) return
+
         val tourneysRef = rootRef.child("tournaments")
-        activeRef = tourneysRef
+        masterTourneysRef = tourneysRef
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 if (!snapshot.exists() || !snapshot.hasChildren()) {
-                    // Check if local has data to sync
                     scope.launch {
                         val localSchema = dbManager.loadDatabase().sanitized()
                         val validTourneys = localSchema.tournaments.filter { 
@@ -147,60 +272,13 @@ class FirebaseCricketRepository(
 
                 for (tSnap in snapshot.children) {
                     val tId = tSnap.key ?: continue
-                    if (tId == "t1" || tId == "tournament_1" || tId.startsWith("demo_")) continue
-                    val infoSnap = tSnap.child("info")
-                    val t = if (infoSnap.exists()) {
-                        parseTournament(infoSnap, tId)
-                    } else {
-                        parseTournament(tSnap, tId)
-                    }
-                    if (t != null && !t.name.equals("IPL 2026 Mega Auction", ignoreCase = true)) {
-                        tournamentsList.add(t)
-                    }
-
-                    // Teams
-                    val teamsSnap = tSnap.child("teams")
-                    for (c in teamsSnap.children) {
-                        parseTeam(c, tId)?.let { teamsList.add(it) }
-                    }
-
-                    // Players
-                    val playersSnap = tSnap.child("players")
-                    for (c in playersSnap.children) {
-                        parsePlayer(c, tId)?.let { playersList.add(it) }
-                    }
-
-                    // Matches
-                    val matchesSnap = tSnap.child("matches")
-                    for (c in matchesSnap.children) {
-                        parseMatch(c, tId)?.let { matchesList.add(it) }
-                    }
-
-                    // Ball Records
-                    val ballsSnap = tSnap.child("ballRecords")
-                    for (c in ballsSnap.children) {
-                        parseBallRecord(c)?.let { ballRecordsList.add(it) }
-                    }
-
-                    // Bids
-                    val bidsSnap = tSnap.child("bids")
-                    for (c in bidsSnap.children) {
-                        parseBid(c)?.let { bidsList.add(it) }
-                    }
-
-                    // Auction State
-                    val auctionSnap = tSnap.child("auctionState")
-                    if (auctionSnap.exists()) {
-                        val readyMap = mutableMapOf<String, Boolean>()
-                        val readySnap = auctionSnap.child("readyCaptains")
-                        for (rChild in readySnap.children) {
-                            val teamK = rChild.key
-                            val isR = rChild.getValue(Boolean::class.java) ?: false
-                            if (teamK != null) readyMap[teamK] = isR
-                        }
-                        val isStarted = auctionSnap.child("isBiddingStarted").getValue(Boolean::class.java) ?: false
-                        onAuctionStateRemoteUpdated?.invoke(tId, readyMap, isStarted)
-                    }
+                    val parsed = parseTournamentData(tSnap, tId) ?: continue
+                    parsed.tournament?.let { tournamentsList.add(it) }
+                    teamsList.addAll(parsed.teams)
+                    playersList.addAll(parsed.players)
+                    matchesList.addAll(parsed.matches)
+                    ballRecordsList.addAll(parsed.ballRecords)
+                    bidsList.addAll(parsed.bids)
                 }
 
                 if (tournamentsList.isNotEmpty() || teamsList.isNotEmpty() || playersList.isNotEmpty()) {
@@ -225,26 +303,79 @@ class FirebaseCricketRepository(
             }
         }
 
-        activeListener = listener
+        masterTourneysListener = listener
         tourneysRef.addValueEventListener(listener)
+    }
 
-        // Listen to this device's claimed/created tournaments
-        val deviceTourneysRef = rootRef.child("devices").child(deviceId).child("myTournaments")
-        deviceTourneysRef.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val map = mutableMapOf<String, String>()
-                for (child in snapshot.children) {
-                    val tId = child.key ?: continue
-                    val role = child.child("role").getValue(String::class.java) ?: "ADMIN"
-                    map[tId] = role
-                }
-                onDeviceTournamentsRemoteUpdated?.invoke(map)
-            }
+    @Synchronized
+    fun detachMasterModeListener() {
+        isMasterAdminActive = false
+        masterTourneysListener?.let { l ->
+            masterTourneysRef?.removeEventListener(l)
+        }
+        masterTourneysListener = null
+        masterTourneysRef = null
 
-            override fun onCancelled(error: DatabaseError) {
-                error.toException().printStackTrace()
+        // Immediately publish only device tournaments to clear foreign ones from UI
+        publishDeviceTourneysSchema()
+    }
+
+    fun parseTournamentData(tSnap: DataSnapshot, tId: String): ParsedTournamentData? {
+        if (tId == "t1" || tId == "tournament_1" || tId.startsWith("demo_")) return null
+        val infoSnap = tSnap.child("info")
+        val t = if (infoSnap.exists()) {
+            parseTournament(infoSnap, tId)
+        } else {
+            parseTournament(tSnap, tId)
+        }
+        if (t == null || t.name.equals("IPL 2026 Mega Auction", ignoreCase = true)) return null
+
+        val teamsList = mutableListOf<Team>()
+        for (c in tSnap.child("teams").children) {
+            parseTeam(c, tId)?.let { teamsList.add(it) }
+        }
+
+        val playersList = mutableListOf<Player>()
+        for (c in tSnap.child("players").children) {
+            parsePlayer(c, tId)?.let { playersList.add(it) }
+        }
+
+        val matchesList = mutableListOf<Match>()
+        for (c in tSnap.child("matches").children) {
+            parseMatch(c, tId)?.let { matchesList.add(it) }
+        }
+
+        val ballRecordsList = mutableListOf<BallRecord>()
+        for (c in tSnap.child("ballRecords").children) {
+            parseBallRecord(c)?.let { ballRecordsList.add(it) }
+        }
+
+        val bidsList = mutableListOf<Bid>()
+        for (c in tSnap.child("bids").children) {
+            parseBid(c)?.let { bidsList.add(it) }
+        }
+
+        val auctionSnap = tSnap.child("auctionState")
+        if (auctionSnap.exists()) {
+            val readyMap = mutableMapOf<String, Boolean>()
+            val readySnap = auctionSnap.child("readyCaptains")
+            for (rChild in readySnap.children) {
+                val teamK = rChild.key
+                val isR = rChild.getValue(Boolean::class.java) ?: false
+                if (teamK != null) readyMap[teamK] = isR
             }
-        })
+            val isStarted = auctionSnap.child("isBiddingStarted").getValue(Boolean::class.java) ?: false
+            onAuctionStateRemoteUpdated?.invoke(tId, readyMap, isStarted)
+        }
+
+        return ParsedTournamentData(
+            tournament = t,
+            teams = teamsList,
+            players = playersList,
+            matches = matchesList,
+            ballRecords = ballRecordsList,
+            bids = bidsList
+        )
     }
 
     fun syncDatabaseToFirebase(schema: DatabaseSchema) {
@@ -456,6 +587,7 @@ class FirebaseCricketRepository(
 
     fun registerDeviceTournament(tournamentId: String, role: String, tourneyName: String) {
         if (tournamentId.isBlank()) return
+        listenToTournament(tournamentId)
         scope.launch {
             try {
                 rootRef.child("devices").child(deviceId)
@@ -474,6 +606,11 @@ class FirebaseCricketRepository(
 
     fun removeDeviceTournament(tournamentId: String) {
         if (tournamentId.isBlank()) return
+        val l = deviceTourneyListeners.remove(tournamentId)
+        if (l != null) {
+            rootRef.child("tournaments").child(tournamentId).removeEventListener(l)
+        }
+        deviceTourneyDataMap.remove(tournamentId)
         scope.launch {
             try {
                 rootRef.child("devices").child(deviceId)
@@ -485,6 +622,11 @@ class FirebaseCricketRepository(
     }
 
     fun deleteTournament(tournamentId: String) {
+        val l = deviceTourneyListeners.remove(tournamentId)
+        if (l != null) {
+            rootRef.child("tournaments").child(tournamentId).removeEventListener(l)
+        }
+        deviceTourneyDataMap.remove(tournamentId)
         scope.launch {
             try {
                 rootRef.child("tournaments").child(tournamentId).removeValue()

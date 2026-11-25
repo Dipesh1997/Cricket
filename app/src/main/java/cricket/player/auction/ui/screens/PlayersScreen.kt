@@ -114,7 +114,7 @@ fun PlayersScreen(viewModel: AuctionViewModel) {
                         Modifier
                             .verticalScroll(emptyScrollState)
                             .padding(16.dp)
-                            .padding(bottom = 88.dp)
+                            .padding(bottom = 120.dp)
                     } else {
                         Modifier.padding(16.dp)
                     }

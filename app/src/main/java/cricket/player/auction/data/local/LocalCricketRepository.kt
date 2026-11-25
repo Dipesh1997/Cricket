@@ -632,6 +632,17 @@ class LocalCricketRepository(context: Context) {
         val newState = !_isMasterAdminMode.value
         deviceTourneyManager.setMasterAdminMode(newState)
         _isMasterAdminMode.value = newState
+        if (newState) {
+            firebaseRepo.attachMasterModeListener()
+        } else {
+            firebaseRepo.detachMasterModeListener()
+            scope.launch {
+                val schema = dbManager.loadDatabase().sanitized()
+                val myIds = _myTournamentIds.value
+                val deviceTourneys = schema.tournaments.filter { it.id in myIds }
+                _tournaments.value = deviceTourneys
+            }
+        }
         return newState
     }
 

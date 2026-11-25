@@ -270,10 +270,6 @@ fun HelpGuideDialog(
                         if (tapCount >= 5) {
                             tapCount = 0
                             onToggleMasterAdmin?.invoke()
-                        } else if (tapCount in 2..4) {
-                            val remaining = 5 - tapCount
-                            val actionStr = if (isMasterAdmin) "disable" else "unlock"
-                            Toast.makeText(context, "Tap $remaining more time${if (remaining > 1) "s" else ""} to $actionStr Master Admin Mode 👑", Toast.LENGTH_SHORT).show()
                         }
                     }
                 )

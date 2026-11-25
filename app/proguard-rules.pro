@@ -7,9 +7,9 @@
 -keepattributes InnerClasses
 -keepattributes SourceFile,LineNumberTable
 
-# Preserve Firebase Realtime Database and Auth connections & POJO reflection
--keep class com.google.firebase.** { *; }
+# Preserve Firebase annotations and POJO reflection
 -dontwarn com.google.firebase.**
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
 -keepclassmembers class * {
     @com.google.firebase.database.PropertyName <fields>;
@@ -19,10 +19,9 @@
     @com.google.firebase.database.Exclude <methods>;
 }
 
--keep class com.google.firebase.database.** { *; }
--keepclassmembers class com.google.firebase.database.** { *; }
--keep class com.google.firebase.auth.** { *; }
--keepclassmembers class com.google.firebase.auth.** { *; }
+-keep @interface com.google.firebase.database.PropertyName
+-keep @interface com.google.firebase.database.IgnoreExtraProperties
+-keep @interface com.google.firebase.database.Exclude
 
 # Keep all Cricket data models, local schemas, and remote data classes intact
 -keep class cricket.player.auction.model.** { *; }

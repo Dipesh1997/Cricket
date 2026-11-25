@@ -137,6 +137,9 @@ function toggleMasterAdminMode() {
   } catch (_e) {}
   if (!current) {
     state.currentUser.role = "ADMIN_AUCTIONEER";
+    attachMasterModeWeb();
+  } else {
+    detachMasterModeWeb();
   }
   renderAll();
   showToast(!current ? "🔓 MASTER ADMIN UNLOCKED: All tournaments visible with full control!" : "🔒 Master Admin Mode Disabled: Restored device view");
@@ -232,28 +235,60 @@ function applySchemaData(data) {
 }
 
 // --- REALTIME LISTENER FOR VERTICAL FIREBASE STRUCTURE ---
+let masterTourneysRef = null;
+const singleTourneyListeners = {};
+
 function listenToFirebase() {
   if (!db) return;
   try {
-    const tourneysRef = db.ref("v2/tournaments");
+    const deviceId = getBrowserDeviceId();
+    registerBrowserDevice();
 
-    tourneysRef.on("value", (snapshot) => {
-      const data = snapshot.val();
-      if (data && typeof data === 'object') {
-        applyStructuredFirebaseData(data);
-      } else {
-        // Cloud is empty. Clean up legacy flat data if present
-        cleanLegacyFirebaseNodes();
-      }
-    }, (err) => {
-      console.warn("Firebase tournaments listener notice:", err);
+    // Listen only to this device's claimed/joined tournaments
+    db.ref("v2/devices/" + deviceId + "/myTournaments").on("value", (snap) => {
+      const data = snap.val() || {};
+      const currentIds = Object.keys(data);
+      currentIds.forEach(tId => {
+        listenToSingleTournament(tId);
+      });
     });
 
-    // Also clean legacy flat nodes immediately
-    cleanLegacyFirebaseNodes();
+    if (isMasterAdminMode()) {
+      attachMasterModeWeb();
+    }
   } catch (err) {
     console.warn("listenToFirebase notice:", err);
   }
+}
+
+function listenToSingleTournament(tId) {
+  if (!db || !tId || singleTourneyListeners[tId]) return;
+  singleTourneyListeners[tId] = true;
+  db.ref("v2/tournaments/" + tId).on("value", (snap) => {
+    const tData = snap.val();
+    if (tData) {
+      applyStructuredFirebaseData({ [tId]: tData });
+    }
+  });
+}
+
+function attachMasterModeWeb() {
+  if (!db || masterTourneysRef) return;
+  masterTourneysRef = db.ref("v2/tournaments");
+  masterTourneysRef.on("value", (snapshot) => {
+    const data = snapshot.val();
+    if (data && typeof data === 'object') {
+      applyStructuredFirebaseData(data);
+    }
+  });
+}
+
+function detachMasterModeWeb() {
+  if (masterTourneysRef) {
+    masterTourneysRef.off();
+    masterTourneysRef = null;
+  }
+  renderAll();
 }
 
 function cleanLegacyFirebaseNodes() {

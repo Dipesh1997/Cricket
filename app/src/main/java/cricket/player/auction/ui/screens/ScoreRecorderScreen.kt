@@ -477,10 +477,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             },
                             color = if (hasStream) Color(0xFFFF0000).copy(alpha = 0.15f) else surfaceBg,
                             shape = RoundedCornerShape(6.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (hasStream) Color(0xFFFF0000) else themeAccent)
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (hasStream) Color(0xFFFF0000) else themeAccent),
+                            modifier = Modifier.wrapContentWidth().heightIn(min = 28.dp, max = 34.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                                modifier = Modifier.wrapContentWidth().padding(horizontal = 7.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -496,7 +497,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
-                                    softWrap = false
+                                    softWrap = false,
+                                    modifier = Modifier.wrapContentWidth()
                                 )
                             }
                         }
