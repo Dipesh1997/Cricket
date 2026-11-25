@@ -856,62 +856,6 @@ fun TeamPurseCard(
                                 )
                             }
                         }
-
-                        // Team Invite Code & Reset
-                        if (team.inviteCode.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    color = if (isDarkTheme) IplGold.copy(alpha = 0.15f) else LightPitchSurface,
-                                    shape = RoundedCornerShape(6.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) IplGold else LightPitchPrimary).copy(alpha = 0.4f)),
-                                    modifier = Modifier.clickable {
-                                        clipboardManager.setText(AnnotatedString(team.inviteCode))
-                                        Toast.makeText(context, "🔑 Code ${team.inviteCode} copied to clipboard!", Toast.LENGTH_SHORT).show()
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (isDarkTheme) IplGold else LightPitchPrimary, modifier = Modifier.size(11.dp))
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(
-                                            text = "INVITE: ${team.inviteCode}",
-                                            color = textMain,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = if (isDarkTheme) IplGold else LightPitchPrimary, modifier = Modifier.size(11.dp))
-                                    }
-                                }
-
-                                if (isAdmin && onRegenerateCodeClick != null) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Surface(
-                                        color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
-                                        shape = RoundedCornerShape(6.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.4f)),
-                                        modifier = Modifier.clickable { onRegenerateCodeClick() }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(11.dp))
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text(
-                                                text = "Reset",
-                                                color = textMain,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -927,12 +871,78 @@ fun TeamPurseCard(
                     if (isAdmin) {
                         Spacer(modifier = Modifier.width(2.dp))
 
-                        IconButton(onClick = onEditClick) {
-                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Team", tint = themeAccent, modifier = Modifier.size(18.dp))
+                        IconButton(
+                            onClick = onEditClick,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit Team", tint = themeAccent, modifier = Modifier.size(16.dp))
                         }
 
-                        IconButton(onClick = onDeleteClick) {
-                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Team", tint = UnsoldRed, modifier = Modifier.size(18.dp))
+                        IconButton(
+                            onClick = onDeleteClick,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Team", tint = UnsoldRed, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+
+            // Team Invite Code & Reset (Full Width Dedicated Row)
+            if (team.inviteCode.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Surface(
+                        color = if (isDarkTheme) IplGold.copy(alpha = 0.15f) else LightPitchSurface,
+                        shape = RoundedCornerShape(6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) IplGold else LightPitchPrimary).copy(alpha = 0.4f)),
+                        modifier = Modifier.clickable {
+                            clipboardManager.setText(AnnotatedString(team.inviteCode))
+                            Toast.makeText(context, "🔑 Code ${team.inviteCode} copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (isDarkTheme) IplGold else LightPitchPrimary, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "INVITE: ${team.inviteCode}",
+                                color = textMain,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = if (isDarkTheme) IplGold else LightPitchPrimary, modifier = Modifier.size(12.dp))
+                        }
+                    }
+
+                    if (isAdmin && onRegenerateCodeClick != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = if (isDarkTheme) NeonBlue.copy(alpha = 0.15f) else LightPitchSurface,
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, (if (isDarkTheme) NeonBlue else LightPitchPrimary).copy(alpha = 0.4f)),
+                            modifier = Modifier.clickable { onRegenerateCodeClick() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = if (isDarkTheme) NeonBlue else LightPitchPrimary, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Reset Code 🔄",
+                                    color = if (isDarkTheme) NeonBlue else LightPitchPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

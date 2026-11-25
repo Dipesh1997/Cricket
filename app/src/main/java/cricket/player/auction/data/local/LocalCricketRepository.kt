@@ -187,10 +187,39 @@ class LocalCricketRepository(context: Context) {
             }
             _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
         } else {
-            // Merge: remote updates override matching IDs, local-only entities are preserved
+            // Merge: remote updates override matching IDs, local-only entities are preserved.
+            // Protect local SOLD state and spent purse against being overwritten by stale/lagging remote snapshots.
+            val localPlayersMap = _players.value.associateBy { it.id }
+            val mergedPlayers = (remoteSchema.players.map { rPlayer ->
+                val localP = localPlayersMap[rPlayer.id]
+                if (localP != null) {
+                    if (localP.status == PlayerStatus.SOLD && (rPlayer.status != PlayerStatus.SOLD || rPlayer.soldToTeamId.isNullOrBlank())) {
+                        localP
+                    } else if (localP.currentBid > rPlayer.currentBid) {
+                        localP
+                    } else {
+                        rPlayer
+                    }
+                } else {
+                    rPlayer
+                }
+            } + _players.value).distinctBy { it.id }
+
+            val localTeamsMap = _teams.value.associateBy { it.id }
+            val mergedTeams = (remoteSchema.teams.map { rTeam ->
+                val localT = localTeamsMap[rTeam.id]
+                if (localT != null) {
+                    if (localT.spentPurse > rTeam.spentPurse) {
+                        rTeam.copy(spentPurse = localT.spentPurse)
+                    } else {
+                        rTeam
+                    }
+                } else {
+                    rTeam
+                }
+            } + _teams.value).distinctBy { it.id }
+
             val mergedTourneys = (remoteTournaments + currentTournaments).distinctBy { it.id }
-            val mergedTeams = (remoteSchema.teams + _teams.value).distinctBy { it.id }
-            val mergedPlayers = (remoteSchema.players + _players.value).distinctBy { it.id }
             val mergedBids = (remoteSchema.bids + _bids.value).distinctBy { it.id }
             val mergedMatches = (remoteSchema.matches + _matches.value).distinctBy { it.id }
             val mergedBallRecords = (remoteSchema.ballRecords + _ballRecords.value).distinctBy { it.id }

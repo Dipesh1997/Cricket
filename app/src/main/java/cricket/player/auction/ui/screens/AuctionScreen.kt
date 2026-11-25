@@ -66,16 +66,20 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     var showRemovePlayerDialog by remember { mutableStateOf(false) }
     var isRecentlySoldExpanded by remember { mutableStateOf(true) }
 
-    // Auto-select user assigned team if team captain
+    // Auto-select user assigned team if team captain or default to the first tournament team
     LaunchedEffect(currentUser, teams) {
         if (currentUser?.role == UserRole.TEAM_CAPTAIN && currentUser?.assignedTeamId != null) {
             selectedBiddingTeamId = currentUser?.assignedTeamId
-        } else if (selectedBiddingTeamId == null && teams.isNotEmpty()) {
+        } else if (teams.isNotEmpty() && (selectedBiddingTeamId == null || teams.none { it.id == selectedBiddingTeamId })) {
             selectedBiddingTeamId = teams.first().id
         }
     }
 
-    val currentBiddingTeam = teams.find { it.id == selectedBiddingTeamId }
+    val effectiveBiddingTeam = (if (currentUser?.role == UserRole.TEAM_CAPTAIN && currentUser?.assignedTeamId != null) {
+        teams.find { it.id == currentUser?.assignedTeamId }
+    } else {
+        teams.find { it.id == selectedBiddingTeamId }
+    }) ?: teams.firstOrNull()
 
     LazyColumn(
         modifier = Modifier
@@ -589,7 +593,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                 enabled = !isTeamLocked
                             ) {
                                 Text(
-                                    text = if (isTeamLocked) "🔒 ${currentBiddingTeam?.name ?: "My Team"}" else (currentBiddingTeam?.name ?: "Select Team"),
+                                    text = if (isTeamLocked) "🔒 ${effectiveBiddingTeam?.name ?: "My Team"}" else (effectiveBiddingTeam?.name ?: "Select Team"),
                                     color = themeAccent,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -599,10 +603,10 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                             }
                         }
 
-                        if (currentBiddingTeam != null) {
+                        if (effectiveBiddingTeam != null) {
                             PurseProgressBar(
-                                spent = currentBiddingTeam.spentPurse,
-                                total = currentBiddingTeam.totalPurse,
+                                spent = effectiveBiddingTeam.spentPurse,
+                                total = effectiveBiddingTeam.totalPurse,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
@@ -620,8 +624,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                         val activeP = activePlayer
                         val isAuctionReady = joinedCaptainTeams.isEmpty() || isBiddingStarted || areAllCaptainsReady
-                        val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD && currentBiddingTeam != null && isAuctionReady
-                        val availablePurse = currentBiddingTeam?.remainingPurse ?: 0.0
+                        val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD && effectiveBiddingTeam != null && isAuctionReady
+                        val availablePurse = effectiveBiddingTeam?.remainingPurse ?: 0.0
 
                         if (!isAuctionReady) {
                             Surface(
@@ -651,8 +655,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     availablePurse = availablePurse,
                                     isEnabled = isBidEnabled,
                                     onClick = {
-                                        if (currentBiddingTeam != null) {
-                                            viewModel.placeBid(currentBiddingTeam.id, 0.20)
+                                        if (effectiveBiddingTeam != null) {
+                                            viewModel.placeBid(effectiveBiddingTeam.id, 0.20)
                                         }
                                     }
                                 )
@@ -664,8 +668,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     availablePurse = availablePurse,
                                     isEnabled = isBidEnabled,
                                     onClick = {
-                                        if (currentBiddingTeam != null) {
-                                            viewModel.placeBid(currentBiddingTeam.id, 0.50)
+                                        if (effectiveBiddingTeam != null) {
+                                            viewModel.placeBid(effectiveBiddingTeam.id, 0.50)
                                         }
                                     }
                                 )
@@ -677,8 +681,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     availablePurse = availablePurse,
                                     isEnabled = isBidEnabled,
                                     onClick = {
-                                        if (currentBiddingTeam != null) {
-                                            viewModel.placeBid(currentBiddingTeam.id, 1.00)
+                                        if (effectiveBiddingTeam != null) {
+                                            viewModel.placeBid(effectiveBiddingTeam.id, 1.00)
                                         }
                                     }
                                 )
@@ -721,7 +725,13 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Button(
-                                    onClick = { viewModel.sellActivePlayer() },
+                                    onClick = {
+                                        val buyerName = highestBidderTeam?.name ?: effectiveBiddingTeam?.name ?: "Highest Bidder"
+                                        val pName = activePlayer?.name ?: "Player"
+                                        if (viewModel.sellActivePlayer()) {
+                                            Toast.makeText(context, "🎉 $pName SOLD to $buyerName!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
                                     colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.Black),
                                     modifier = Modifier.weight(1f),
                                     enabled = activePlayer != null && highestBidderTeam != null && activePlayer?.status != PlayerStatus.SOLD
@@ -733,13 +743,17 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                                 Button(
                                     onClick = {
-                                        if (currentBiddingTeam != null) {
-                                            viewModel.sellActivePlayerAtBasePrice(currentBiddingTeam.id)
+                                        if (effectiveBiddingTeam != null) {
+                                            val buyerName = effectiveBiddingTeam.name
+                                            val pName = activePlayer?.name ?: "Player"
+                                            if (viewModel.sellActivePlayerAtBasePrice(effectiveBiddingTeam.id)) {
+                                                Toast.makeText(context, "🎉 $pName SOLD to $buyerName at Base Price!", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                                     modifier = Modifier.weight(1f),
-                                    enabled = activePlayer != null && currentBiddingTeam != null && activePlayer?.status != PlayerStatus.SOLD
+                                    enabled = activePlayer != null && effectiveBiddingTeam != null && activePlayer?.status != PlayerStatus.SOLD
                                 ) {
                                     Icon(imageVector = Icons.Default.Sell, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -1075,10 +1089,11 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     if (showTeamSelectorDialog) {
         AlertDialog(
             onDismissRequest = { showTeamSelectorDialog = false },
-            title = { Text("Select Bidding Team", color = textMain) },
+            title = { Text("Select Bidding Team", color = textMain, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     teams.forEach { team ->
+                        val isSelected = team.id == effectiveBiddingTeam?.id
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1086,18 +1101,33 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     selectedBiddingTeamId = team.id
                                     showTeamSelectorDialog = false
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = team.name, color = textMain, fontWeight = FontWeight.Bold)
-                            Text(text = team.remainingPurse.formatIplCurrency(), color = themeAccent)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (isSelected) {
+                                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = themeAccent, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                Text(
+                                    text = team.name,
+                                    color = if (isSelected) themeAccent else textMain,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold
+                                )
+                            }
+                            Text(text = team.remainingPurse.formatIplCurrency(), color = themeAccent, fontSize = 12.sp)
                         }
-                        HorizontalDivider(color = textSub.copy(alpha = 0.3f))
+                        HorizontalDivider(color = textSub.copy(alpha = 0.2f))
                     }
                 }
             },
             confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showTeamSelectorDialog = false }) {
+                    Text("Close", color = textSub)
+                }
+            },
             containerColor = cardBg
         )
     }
