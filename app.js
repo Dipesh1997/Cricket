@@ -112,7 +112,7 @@ function registerMyTournament(tourneyId) {
   }
   const deviceId = getBrowserDeviceId();
   try {
-    db.ref("devices/" + deviceId + "/myTournaments/" + tourneyId).set(true);
+    db.ref("v2/devices/" + deviceId + "/myTournaments/" + tourneyId).set(true);
   } catch (_e) {}
 }
 
@@ -156,7 +156,7 @@ function registerBrowserDevice() {
     lastSeenTimestamp: Date.now()
   };
   try {
-    db.ref("devices/" + deviceId + "/device_info").set(deviceInfo);
+    db.ref("v2/devices/" + deviceId + "/device_info").set(deviceInfo);
   } catch (e) {
     console.error("Device registration error:", e);
   }
@@ -235,7 +235,7 @@ function applySchemaData(data) {
 function listenToFirebase() {
   if (!db) return;
   try {
-    const tourneysRef = db.ref("tournaments");
+    const tourneysRef = db.ref("v2/tournaments");
 
     tourneysRef.on("value", (snapshot) => {
       const data = snapshot.val();
@@ -443,7 +443,7 @@ function saveToFirebase() {
     // 3. Vertical tournament objects
     state.tournaments.forEach(tourney => {
       if (tourney.isOfflineOnly || (tourney.id && tourney.id.startsWith("demo_")) || tourney.id === "t1" || tourney.id === "tournament_1" || tourney.name === "IPL 2026 Mega Auction") return;
-      const tRef = db.ref("tournaments/" + tourney.id);
+      const tRef = db.ref("v2/tournaments/" + tourney.id);
 
     // Info node
     tRef.child("info").set({
@@ -579,7 +579,7 @@ function saveToFirebase() {
 
   // Device heartbeat
   try {
-    db.ref("devices/" + deviceId + "/lastSeenTimestamp").set(Date.now());
+    db.ref("v2/devices/" + deviceId + "/lastSeenTimestamp").set(Date.now());
   } catch (_e) {}
 }
 
@@ -628,7 +628,7 @@ function toggleCaptainReady() {
 
   const tId = state.activeTournamentId;
   if (tId) {
-    db.ref("tournaments/" + tId + "/auctionState/readyCaptains/" + myTeamId).set(newReady);
+    db.ref("v2/tournaments/" + tId + "/auctionState/readyCaptains/" + myTeamId).set(newReady);
   }
   renderAuctionArena();
   showToast(newReady ? "✅ You are marked as READY!" : "⏳ Marked as NOT READY");
@@ -647,7 +647,7 @@ function startAuctionBidding(force = false) {
   if (!tId) return;
   const auctionState = getActiveAuctionState();
   auctionState.isBiddingStarted = true;
-  db.ref("tournaments/" + tId + "/auctionState/isBiddingStarted").set(true);
+  db.ref("v2/tournaments/" + tId + "/auctionState/isBiddingStarted").set(true);
   renderAuctionArena();
   showToast("🚀 Auction Bidding has STARTED! Bids are now open!");
 }
@@ -658,7 +658,7 @@ function resetAuctionBidding() {
   const auctionState = getActiveAuctionState();
   auctionState.isBiddingStarted = false;
   auctionState.readyCaptains = {};
-  db.ref("tournaments/" + tId + "/auctionState").set({
+  db.ref("v2/tournaments/" + tId + "/auctionState").set({
     isBiddingStarted: false,
     readyCaptains: {}
   });
@@ -2191,7 +2191,7 @@ function deleteTournament(tourneyId) {
   }
 
   if (db) {
-    db.ref("tournaments/" + tourneyId).remove().catch(() => {});
+    db.ref("v2/tournaments/" + tourneyId).remove().catch(() => {});
   }
 
   saveToFirebase();

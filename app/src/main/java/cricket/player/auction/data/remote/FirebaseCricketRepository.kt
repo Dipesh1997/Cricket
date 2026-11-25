@@ -32,6 +32,9 @@ class FirebaseCricketRepository(
         }
         instance
     }
+    private val rootRef: DatabaseReference by lazy {
+        database.reference.child("v2")
+    }
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private var activeListener: ValueEventListener? = null
@@ -102,7 +105,7 @@ class FirebaseCricketRepository(
                     "lastSeenTimestamp" to System.currentTimeMillis(),
                     "lastSeenDate" to dateFormat.format(Date())
                 )
-                database.reference.child("devices").child(deviceId).updateChildren(deviceInfo)
+                rootRef.child("devices").child(deviceId).updateChildren(deviceInfo)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -116,7 +119,7 @@ class FirebaseCricketRepository(
         registerDeviceInfo()
 
         // Listen to structured vertical "tournaments" branch
-        val tourneysRef = database.reference.child("tournaments")
+        val tourneysRef = rootRef.child("tournaments")
         activeRef = tourneysRef
 
         val listener = object : ValueEventListener {
@@ -226,7 +229,7 @@ class FirebaseCricketRepository(
         tourneysRef.addValueEventListener(listener)
 
         // Listen to this device's claimed/created tournaments
-        val deviceTourneysRef = database.reference.child("devices").child(deviceId).child("myTournaments")
+        val deviceTourneysRef = rootRef.child("devices").child(deviceId).child("myTournaments")
         deviceTourneysRef.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val map = mutableMapOf<String, String>()
@@ -260,7 +263,7 @@ class FirebaseCricketRepository(
                         tourney.id == "tournament_1" || 
                         tourney.name.equals("IPL 2026 Mega Auction", ignoreCase = true)) continue
 
-                    val tRef = database.reference.child("tournaments").child(tourney.id)
+                    val tRef = rootRef.child("tournaments").child(tourney.id)
 
                     // 1. Info node
                     val infoMap = mapOf(
@@ -399,7 +402,7 @@ class FirebaseCricketRepository(
 
                     // Record on device only if created by this device
                     if (tourney.creatorDeviceId.isNotBlank() && tourney.creatorDeviceId == deviceId) {
-                        database.reference.child("devices").child(deviceId)
+                        rootRef.child("devices").child(deviceId)
                             .child("myTournaments").child(tourney.id)
                             .setValue(mapOf(
                                 "id" to tourney.id,
@@ -411,7 +414,7 @@ class FirebaseCricketRepository(
                 }
 
                 // Update device telemetry lastSynced
-                database.reference.child("devices").child(deviceId)
+                rootRef.child("devices").child(deviceId)
                     .child("lastSyncedTimestamp").setValue(System.currentTimeMillis())
 
             } catch (e: Exception) {
@@ -424,7 +427,7 @@ class FirebaseCricketRepository(
         if (tournamentId.isBlank() || teamId.isBlank()) return
         scope.launch {
             try {
-                database.reference.child("tournaments")
+                rootRef.child("tournaments")
                     .child(tournamentId)
                     .child("auctionState")
                     .child("readyCaptains")
@@ -440,7 +443,7 @@ class FirebaseCricketRepository(
         if (tournamentId.isBlank()) return
         scope.launch {
             try {
-                database.reference.child("tournaments")
+                rootRef.child("tournaments")
                     .child(tournamentId)
                     .child("auctionState")
                     .child("isBiddingStarted")
@@ -455,7 +458,7 @@ class FirebaseCricketRepository(
         if (tournamentId.isBlank()) return
         scope.launch {
             try {
-                database.reference.child("devices").child(deviceId)
+                rootRef.child("devices").child(deviceId)
                     .child("myTournaments").child(tournamentId)
                     .setValue(mapOf(
                         "id" to tournamentId,
@@ -473,7 +476,7 @@ class FirebaseCricketRepository(
         if (tournamentId.isBlank()) return
         scope.launch {
             try {
-                database.reference.child("devices").child(deviceId)
+                rootRef.child("devices").child(deviceId)
                     .child("myTournaments").child(tournamentId).removeValue()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -484,8 +487,8 @@ class FirebaseCricketRepository(
     fun deleteTournament(tournamentId: String) {
         scope.launch {
             try {
-                database.reference.child("tournaments").child(tournamentId).removeValue()
-                database.reference.child("devices").child(deviceId).child("myTournaments").child(tournamentId).removeValue()
+                rootRef.child("tournaments").child(tournamentId).removeValue()
+                rootRef.child("devices").child(deviceId).child("myTournaments").child(tournamentId).removeValue()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -495,7 +498,7 @@ class FirebaseCricketRepository(
     fun clearUserDatabase() {
         scope.launch {
             try {
-                database.reference.child("tournaments").removeValue()
+                rootRef.child("tournaments").removeValue()
             } catch (e: Exception) {
                 e.printStackTrace()
             }

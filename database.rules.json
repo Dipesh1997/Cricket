@@ -1,0 +1,27 @@
+{
+  "rules": {
+    "tournaments": {
+      ".read": false,
+      ".write": false
+    },
+    "devices": {
+      ".read": false,
+      ".write": false
+    },
+    "v2": {
+      "tournaments": {
+        ".read": true,
+        "$tournament_id": {
+          ".read": true,
+          ".write": "data.exists() || (!data.exists() && $tournament_id.matches(/^t_[0-9]{13}$/) && $tournament_id !== 't1' && !$tournament_id.beginsWith('demo_'))"
+        }
+      },
+      "devices": {
+        ".read": true,
+        "$device_id": {
+          ".write": true
+        }
+      }
+    }
+  }
+}
