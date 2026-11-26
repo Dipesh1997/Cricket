@@ -424,6 +424,23 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.resumeMatch(matchId)
     }
 
+    data class ScorerLaunchRequest(
+        val mode: String = "CLASSIC",
+        val openLive: Boolean = true,
+        val openYouTubeDialog: Boolean = false
+    )
+
+    private val _pendingScorerLaunch = MutableStateFlow<ScorerLaunchRequest?>(null)
+    val pendingScorerLaunch: StateFlow<ScorerLaunchRequest?> = _pendingScorerLaunch.asStateFlow()
+
+    fun requestScorerLaunch(mode: String = "CLASSIC", openLive: Boolean = true, openYouTubeDialog: Boolean = false) {
+        _pendingScorerLaunch.value = ScorerLaunchRequest(mode, openLive, openYouTubeDialog)
+    }
+
+    fun consumeScorerLaunch() {
+        _pendingScorerLaunch.value = null
+    }
+
     fun updateMatchLiveStreamUrl(matchId: String, liveStreamUrl: String) {
         localRepository.updateMatchLiveStreamUrl(matchId, liveStreamUrl)
     }

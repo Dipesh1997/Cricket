@@ -54,7 +54,8 @@ fun ClassicCrichuntScorerView(
     onStartChase: () -> Unit,
     onEndInnings: () -> Unit,
     onDirectEndMatch: () -> Unit,
-    onUndoEndInnings: () -> Unit
+    onUndoEndInnings: () -> Unit,
+    onOpenYouTubeStream: () -> Unit = {}
 ) {
     val navyHeaderBg = Color(0xFF0A1D37)
     val crichuntBlue4 = Color(0xFF1976D2)
@@ -709,6 +710,19 @@ fun ClassicCrichuntScorerView(
             title = { Text("Match Actions", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            showMoreActionsDialog = false
+                            onOpenYouTubeStream()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F), contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (match.liveStreamUrl.isNotBlank()) "📺 Edit / View YouTube Live Stream" else "📺 Host YouTube Live Stream",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Button(
                         onClick = {
                             showMoreActionsDialog = false

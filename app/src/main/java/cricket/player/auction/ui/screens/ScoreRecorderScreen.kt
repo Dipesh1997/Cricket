@@ -96,6 +96,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val accentNavy = if (isDarkTheme) NeonBlue else LightPitchPrimary
 
     val matches by viewModel.matches.collectAsState()
+    val pendingScorerLaunch by viewModel.pendingScorerLaunch.collectAsState()
     val tourneyMatches = remember(matches, activeTournament) {
         matches.filter { it.tournamentId == activeTournament?.id }
     }
@@ -121,6 +122,21 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var showLiveStreamCard by remember { mutableStateOf(true) }
     var streamUrlInput by remember { mutableStateOf("") }
     var showDirectEndMatchModal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pendingScorerLaunch) {
+        val req = pendingScorerLaunch
+        if (req != null) {
+            scorerUiMode = req.mode
+            if (req.openLive && activeMatch != null) {
+                isViewingLiveMatch = true
+            }
+            if (req.openYouTubeDialog) {
+                streamUrlInput = activeMatch?.liveStreamUrl ?: ""
+                showLiveStreamDialog = true
+            }
+            viewModel.consumeScorerLaunch()
+        }
+    }
 
     // Match Setup Inputs
     var selectedTeamAId by remember { mutableStateOf("") }
@@ -1009,7 +1025,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         onStartChase = { viewModel.endActiveInnings() },
                         onEndInnings = { showEndInningsConfirmModal = true },
                         onDirectEndMatch = { showDirectEndMatchModal = true },
-                        onUndoEndInnings = { showUndoEndInningsConfirmModal = true }
+                        onUndoEndInnings = { showUndoEndInningsConfirmModal = true },
+                        onOpenYouTubeStream = {
+                            streamUrlInput = match.liveStreamUrl
+                            showLiveStreamDialog = true
+                        }
                     )
                 } else {
                     LazyColumn(

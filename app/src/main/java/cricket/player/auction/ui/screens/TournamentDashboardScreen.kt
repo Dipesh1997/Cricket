@@ -3,6 +3,7 @@ package cricket.player.auction.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,13 +13,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import cricket.player.auction.model.formatIplCurrency
 import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
@@ -43,6 +49,8 @@ fun TournamentDashboardScreen(
     val players by viewModel.players.collectAsState()
     val matches by viewModel.matches.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+    val context = LocalContext.current
+    var showDemoQuizTeamId by remember { mutableStateOf<String?>(null) }
 
     val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -144,7 +152,103 @@ fun TournamentDashboardScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // --- Demo Mode Feature Playground (Test Quiz, Spectator, Live Scorer & YouTube Hosting without online data) ---
+        if (tourney != null && (tourney.isOfflineOnly || tourney.id.startsWith("demo_"))) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.2.dp, NeonBlue.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🎮 DEMO MODE FEATURE PLAYGROUND",
+                            color = NeonBlue,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            text = "ALL UNLOCKED",
+                            color = BidGreen,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                    Text(
+                        text = "Preview every live feature instantly using pre-loaded demo data:",
+                        color = textSub,
+                        fontSize = 10.sp
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            Button(
+                                onClick = {
+                                    viewModel.ensureCaptainQuizIfNeeded(tourney.id)
+                                    val quizTeamId = tourney.captainQuizSession?.team1Id ?: teams.firstOrNull()?.id
+                                    if (quizTeamId != null) {
+                                        showDemoQuizTeamId = quizTeamId
+                                    } else {
+                                        onNavigateToSubPage("auction")
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("🧠 5-Q Captain Quiz", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
+                        item {
+                            Button(
+                                onClick = {
+                                    viewModel.requestScorerLaunch(mode = "SPECTATOR", openLive = true)
+                                    onNavigateToSubPage("scorer")
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF009270), contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("👁️ Spectator (Cricbuzz)", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
+                        item {
+                            Button(
+                                onClick = {
+                                    viewModel.requestScorerLaunch(mode = "CLASSIC", openLive = true)
+                                    onNavigateToSubPage("scorer")
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("🏏 Live Scorer (Crichunt)", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
+                        item {
+                            Button(
+                                onClick = {
+                                    viewModel.requestScorerLaunch(mode = "CLASSIC", openLive = true, openYouTubeDialog = true)
+                                    onNavigateToSubPage("scorer")
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F), contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("📺 YouTube Hosting", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         Text(
             text = "TOURNAMENT SUB-PAGES & WORKSPACE",
@@ -204,6 +308,28 @@ fun TournamentDashboardScreen(
                     }
                 }
             }
+        }
+    }
+
+    val demoQuizSession = activeTournament?.captainQuizSession
+    if (showDemoQuizTeamId != null && activeTournament != null && demoQuizSession != null && demoQuizSession.questions.isNotEmpty()) {
+        val quizTeam = teams.find { it.id == showDemoQuizTeamId }
+        if (quizTeam != null) {
+            CaptainMathQuizDialog(
+                team = quizTeam,
+                questions = demoQuizSession.questions,
+                isDarkTheme = isDarkTheme,
+                onSubmit = { correctCount, timeTakenMs ->
+                    viewModel.submitCaptainQuizResult(activeTournament!!.id, quizTeam.id, correctCount, timeTakenMs)
+                    showDemoQuizTeamId = null
+                    Toast.makeText(
+                        context,
+                        "🧠 ${quizTeam.shortCode} scored $correctCount/5 in ${String.format("%.1f", timeTakenMs / 1000.0)}s!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                },
+                onDismiss = { showDemoQuizTeamId = null }
+            )
         }
     }
 }

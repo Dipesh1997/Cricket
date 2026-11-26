@@ -427,51 +427,103 @@ class LocalCricketRepository(context: Context) {
             adminCode = "DEMOADM1",
             spectatorInviteCode = "DEMOSPEC",
             isOfflineOnly = true,
-            creatorDeviceId = firebaseRepo.deviceId
+            creatorDeviceId = firebaseRepo.deviceId,
+            autoAssignLastPlayerAtAvg = true
         )
 
-        // 4 Demo Teams
-        val team1 = Team(id = "team_${tourneyId}_1", tournamentId = tourneyId, name = "Mumbai Strikers", shortCode = "MS", primaryColorHex = "#004BA0", totalPurse = 100.0, inviteCode = "CAPTMS1")
-        val team2 = Team(id = "team_${tourneyId}_2", tournamentId = tourneyId, name = "Chennai Superstars", shortCode = "CS", primaryColorHex = "#F9CD05", totalPurse = 100.0, inviteCode = "CAPTCS1")
+        // 4 Demo Teams (MS & CS already picked 1 player each from Set 1 so 2 players & 2 teams remain for Quiz!)
+        val team1 = Team(id = "team_${tourneyId}_1", tournamentId = tourneyId, name = "Mumbai Strikers", shortCode = "MS", primaryColorHex = "#004BA0", totalPurse = 100.0, spentPurse = 12.0, inviteCode = "CAPTMS1")
+        val team2 = Team(id = "team_${tourneyId}_2", tournamentId = tourneyId, name = "Chennai Superstars", shortCode = "CS", primaryColorHex = "#F9CD05", totalPurse = 100.0, spentPurse = 10.0, inviteCode = "CAPTCS1")
         val team3 = Team(id = "team_${tourneyId}_3", tournamentId = tourneyId, name = "Bangalore Challengers", shortCode = "BC", primaryColorHex = "#EC1C24", totalPurse = 100.0, inviteCode = "CAPTBC1")
         val team4 = Team(id = "team_${tourneyId}_4", tournamentId = tourneyId, name = "Kolkata Riders", shortCode = "KR", primaryColorHex = "#3A225D", totalPurse = 100.0, inviteCode = "CAPTKR1")
         val demoTeams = listOf(team1, team2, team3, team4)
 
-        // 20 Demo Players across Batsmen, Bowlers, All-rounders, Wicket Keepers
+        // 20 Demo Players (Set 1 has 4 fixed-set players: 2 sold to MS/CS, 2 UP_NEXT for BC/KR Quiz & Auto-Assign!)
         val demoPlayers = listOf(
-            Player(id = "p_${tourneyId}_1", tournamentId = tourneyId, name = "Virat Kohli", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 7263, Avg: 37.2, SR: 130.0", setName = "Set 1 - Marquee"),
-            Player(id = "p_${tourneyId}_2", tournamentId = tourneyId, name = "Rohit Sharma", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 6211, Avg: 29.5, SR: 130.8", setName = "Set 1 - Marquee"),
-            Player(id = "p_${tourneyId}_3", tournamentId = tourneyId, name = "Jasprit Bumrah", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Wkts: 145, Econ: 7.39, Avg: 23.3", setName = "Set 1 - Marquee"),
-            Player(id = "p_${tourneyId}_4", tournamentId = tourneyId, name = "Hardik Pandya", role = PlayerRole.ALL_ROUNDER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2309, Wkts: 53, SR: 145.8", setName = "Set 1 - Marquee"),
-            Player(id = "p_${tourneyId}_5", tournamentId = tourneyId, name = "MS Dhoni", role = PlayerRole.WICKET_KEEPER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 5082, Avg: 38.8, Catches: 142", setName = "Set 2 - Keepers"),
+            Player(id = "p_${tourneyId}_1", tournamentId = tourneyId, name = "Virat Kohli", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, currentBid = 12.0, highestBidderTeamId = team1.id, status = PlayerStatus.SOLD, soldPrice = 12.0, soldToTeamId = team1.id, stats = "Runs: 7263, Avg: 37.2, SR: 130.0", setName = "Set 1 - Marquee", isFixedSet = true),
+            Player(id = "p_${tourneyId}_2", tournamentId = tourneyId, name = "Rohit Sharma", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, currentBid = 10.0, highestBidderTeamId = team2.id, status = PlayerStatus.SOLD, soldPrice = 10.0, soldToTeamId = team2.id, stats = "Runs: 6211, Avg: 29.5, SR: 130.8", setName = "Set 1 - Marquee", isFixedSet = true),
+            Player(id = "p_${tourneyId}_3", tournamentId = tourneyId, name = "Jasprit Bumrah", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Wkts: 145, Econ: 7.39, Avg: 23.3", setName = "Set 1 - Marquee", isFixedSet = true),
+            Player(id = "p_${tourneyId}_4", tournamentId = tourneyId, name = "Hardik Pandya", role = PlayerRole.ALL_ROUNDER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2309, Wkts: 53, SR: 145.8", setName = "Set 1 - Marquee", isFixedSet = true),
+            Player(id = "p_${tourneyId}_5", tournamentId = tourneyId, name = "MS Dhoni", role = PlayerRole.WICKET_KEEPER, country = "India", isOverseas = false, basePrice = 2.0, status = PlayerStatus.SOLD, soldPrice = 8.0, soldToTeamId = team2.id, currentBid = 8.0, highestBidderTeamId = team2.id, stats = "Runs: 5082, Avg: 38.8, Catches: 142", setName = "Set 2 - Keepers"),
             Player(id = "p_${tourneyId}_6", tournamentId = tourneyId, name = "Jos Buttler", role = PlayerRole.WICKET_KEEPER, country = "England", isOverseas = true, basePrice = 2.0, stats = "Runs: 3223, SR: 148.3, 5x 100s", setName = "Set 2 - Keepers"),
             Player(id = "p_${tourneyId}_7", tournamentId = tourneyId, name = "Rishabh Pant", role = PlayerRole.WICKET_KEEPER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2838, SR: 148.0, 1x 100", setName = "Set 2 - Keepers"),
             Player(id = "p_${tourneyId}_8", tournamentId = tourneyId, name = "KL Rahul", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 4163, Avg: 46.8, SR: 134.4", setName = "Set 2 - Keepers"),
             Player(id = "p_${tourneyId}_9", tournamentId = tourneyId, name = "Glenn Maxwell", role = PlayerRole.ALL_ROUNDER, country = "Australia", isOverseas = true, basePrice = 2.0, stats = "Runs: 2719, SR: 157.0, Wkts: 31", setName = "Set 3 - All-Rounders"),
-            Player(id = "p_${tourneyId}_10", tournamentId = tourneyId, name = "Ravindra Jadeja", role = PlayerRole.ALL_ROUNDER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2692, Wkts: 152, Econ: 7.60", setName = "Set 3 - All-Rounders"),
+            Player(id = "p_${tourneyId}_10", tournamentId = tourneyId, name = "Ravindra Jadeja", role = PlayerRole.ALL_ROUNDER, country = "India", isOverseas = false, basePrice = 2.0, status = PlayerStatus.SOLD, soldPrice = 6.0, soldToTeamId = team2.id, currentBid = 6.0, highestBidderTeamId = team2.id, stats = "Runs: 2692, Wkts: 152, Econ: 7.60", setName = "Set 3 - All-Rounders"),
             Player(id = "p_${tourneyId}_11", tournamentId = tourneyId, name = "Andre Russell", role = PlayerRole.ALL_ROUNDER, country = "West Indies", isOverseas = true, basePrice = 2.0, stats = "Runs: 2262, SR: 174.0, Wkts: 96", setName = "Set 3 - All-Rounders"),
             Player(id = "p_${tourneyId}_12", tournamentId = tourneyId, name = "Rashid Khan", role = PlayerRole.BOWLER, country = "Afghanistan", isOverseas = true, basePrice = 2.0, stats = "Wkts: 139, Econ: 6.67, Avg: 20.7", setName = "Set 3 - All-Rounders"),
             Player(id = "p_${tourneyId}_13", tournamentId = tourneyId, name = "Mitchell Starc", role = PlayerRole.BOWLER, country = "Australia", isOverseas = true, basePrice = 2.0, stats = "Wkts: 51, Econ: 7.98, Avg: 22.8", setName = "Set 4 - Fast Bowlers"),
             Player(id = "p_${tourneyId}_14", tournamentId = tourneyId, name = "Trent Boult", role = PlayerRole.BOWLER, country = "New Zealand", isOverseas = true, basePrice = 2.0, stats = "Wkts: 105, Econ: 8.29, Powerplay: 50w", setName = "Set 4 - Fast Bowlers"),
             Player(id = "p_${tourneyId}_15", tournamentId = tourneyId, name = "Kagiso Rabada", role = PlayerRole.BOWLER, country = "South Africa", isOverseas = true, basePrice = 2.0, stats = "Wkts: 106, Econ: 8.42, Strike Rate: 14.8", setName = "Set 4 - Fast Bowlers"),
             Player(id = "p_${tourneyId}_16", tournamentId = tourneyId, name = "Mohammed Shami", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 2.0, stats = "Wkts: 127, Econ: 8.44, Purple Cap 2023", setName = "Set 4 - Fast Bowlers"),
-            Player(id = "p_${tourneyId}_17", tournamentId = tourneyId, name = "Suryakumar Yadav", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 3249, SR: 143.3, 360-degree hitter", setName = "Set 5 - Batters"),
+            Player(id = "p_${tourneyId}_17", tournamentId = tourneyId, name = "Suryakumar Yadav", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, status = PlayerStatus.SOLD, soldPrice = 7.0, soldToTeamId = team1.id, currentBid = 7.0, highestBidderTeamId = team1.id, stats = "Runs: 3249, SR: 143.3, 360-degree hitter", setName = "Set 5 - Batters"),
             Player(id = "p_${tourneyId}_18", tournamentId = tourneyId, name = "Shubman Gill", role = PlayerRole.BATSMAN, country = "India", isOverseas = false, basePrice = 2.0, stats = "Runs: 2790, Avg: 37.7, Orange Cap 2023", setName = "Set 5 - Batters"),
             Player(id = "p_${tourneyId}_19", tournamentId = tourneyId, name = "David Warner", role = PlayerRole.BATSMAN, country = "Australia", isOverseas = true, basePrice = 2.0, stats = "Runs: 6397, Avg: 41.5, 3x Orange Cap", setName = "Set 5 - Batters"),
-            Player(id = "p_${tourneyId}_20", tournamentId = tourneyId, name = "Bhuvneshwar Kumar", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 1.5, stats = "Wkts: 170, Econ: 7.39, 2x Purple Cap", setName = "Set 5 - Batters")
+            Player(id = "p_${tourneyId}_20", tournamentId = tourneyId, name = "Bhuvneshwar Kumar", role = PlayerRole.BOWLER, country = "India", isOverseas = false, basePrice = 1.5, status = PlayerStatus.SOLD, soldPrice = 4.0, soldToTeamId = team1.id, currentBid = 4.0, highestBidderTeamId = team1.id, stats = "Wkts: 170, Econ: 7.39, 2x Purple Cap", setName = "Set 5 - Batters")
+        )
+
+        // Pre-populate a Live Demo Match (MS vs CS, 5 overs, Innings 2 chase + YouTube Live Stream URL)
+        val demoMatchId = "match_${tourneyId}_1"
+        val demoMatch = Match(
+            id = demoMatchId,
+            tournamentId = tourneyId,
+            teamAId = team1.id,
+            teamBId = team2.id,
+            totalOvers = 5,
+            teamARuns = 38,
+            teamAWickets = 1,
+            teamAOversBatted = 5.0,
+            teamBRuns = 16,
+            teamBWickets = 0,
+            teamBOversBatted = 1.3,
+            currentInnings = 2,
+            status = MatchStatus.LIVE_INNINGS_2,
+            tossWinnerTeamId = team1.id,
+            tossDecision = "BAT",
+            liveStreamUrl = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+        )
+        val demoBalls = listOf(
+            // Innings 1 sample balls (MS batting: Virat & SKY vs Jadeja)
+            BallRecord(id = "b_${tourneyId}_1", matchId = demoMatchId, innings = 1, overNumber = 0, ballNumber = 1, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_17", bowlerId = "p_${tourneyId}_10", runsScored = 4, commentary = "4 runs"),
+            BallRecord(id = "b_${tourneyId}_2", matchId = demoMatchId, innings = 1, overNumber = 0, ballNumber = 2, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_17", bowlerId = "p_${tourneyId}_10", runsScored = 6, commentary = "6 runs"),
+            BallRecord(id = "b_${tourneyId}_3", matchId = demoMatchId, innings = 1, overNumber = 0, ballNumber = 3, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_17", bowlerId = "p_${tourneyId}_10", runsScored = 1, commentary = "1 run"),
+            BallRecord(id = "b_${tourneyId}_4", matchId = demoMatchId, innings = 1, overNumber = 0, ballNumber = 4, strikerId = "p_${tourneyId}_17", nonStrikerId = "p_${tourneyId}_1", bowlerId = "p_${tourneyId}_10", runsScored = 6, commentary = "6 runs"),
+            BallRecord(id = "b_${tourneyId}_5", matchId = demoMatchId, innings = 1, overNumber = 0, ballNumber = 5, strikerId = "p_${tourneyId}_17", nonStrikerId = "p_${tourneyId}_1", bowlerId = "p_${tourneyId}_10", runsScored = 0, isWicket = true, dismissalType = DismissalType.BOWLED, dismissedPlayerId = "p_${tourneyId}_17", commentary = "OUT! Bowled"),
+            BallRecord(id = "b_${tourneyId}_6", matchId = demoMatchId, innings = 1, overNumber = 0, ballNumber = 6, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_20", bowlerId = "p_${tourneyId}_10", runsScored = 2, commentary = "2 runs"),
+            BallRecord(id = "b_${tourneyId}_7", matchId = demoMatchId, innings = 1, overNumber = 1, ballNumber = 1, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_20", bowlerId = "p_${tourneyId}_10", runsScored = 6, commentary = "6 runs"),
+            BallRecord(id = "b_${tourneyId}_8", matchId = demoMatchId, innings = 1, overNumber = 1, ballNumber = 2, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_20", bowlerId = "p_${tourneyId}_10", runsScored = 4, commentary = "4 runs"),
+            BallRecord(id = "b_${tourneyId}_9", matchId = demoMatchId, innings = 1, overNumber = 1, ballNumber = 3, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_20", bowlerId = "p_${tourneyId}_10", runsScored = 6, commentary = "6 runs"),
+            BallRecord(id = "b_${tourneyId}_10", matchId = demoMatchId, innings = 1, overNumber = 1, ballNumber = 4, strikerId = "p_${tourneyId}_1", nonStrikerId = "p_${tourneyId}_20", bowlerId = "p_${tourneyId}_10", runsScored = 3, commentary = "3 runs"),
+            // Innings 2 live balls (CS chasing 39: Rohit & Dhoni vs Bhuvneshwar)
+            BallRecord(id = "b_${tourneyId}_11", matchId = demoMatchId, innings = 2, overNumber = 0, ballNumber = 1, strikerId = "p_${tourneyId}_2", nonStrikerId = "p_${tourneyId}_5", bowlerId = "p_${tourneyId}_20", runsScored = 1, commentary = "1 run"),
+            BallRecord(id = "b_${tourneyId}_12", matchId = demoMatchId, innings = 2, overNumber = 0, ballNumber = 2, strikerId = "p_${tourneyId}_5", nonStrikerId = "p_${tourneyId}_2", bowlerId = "p_${tourneyId}_20", runsScored = 4, commentary = "4 runs"),
+            BallRecord(id = "b_${tourneyId}_13", matchId = demoMatchId, innings = 2, overNumber = 0, ballNumber = 3, strikerId = "p_${tourneyId}_5", nonStrikerId = "p_${tourneyId}_2", bowlerId = "p_${tourneyId}_20", runsScored = 1, commentary = "1 run"),
+            BallRecord(id = "b_${tourneyId}_14", matchId = demoMatchId, innings = 2, overNumber = 0, ballNumber = 4, strikerId = "p_${tourneyId}_2", nonStrikerId = "p_${tourneyId}_5", bowlerId = "p_${tourneyId}_20", runsScored = 0, commentary = "Dot ball"),
+            BallRecord(id = "b_${tourneyId}_15", matchId = demoMatchId, innings = 2, overNumber = 0, ballNumber = 5, strikerId = "p_${tourneyId}_2", nonStrikerId = "p_${tourneyId}_5", bowlerId = "p_${tourneyId}_20", runsScored = 2, commentary = "2 runs"),
+            BallRecord(id = "b_${tourneyId}_16", matchId = demoMatchId, innings = 2, overNumber = 0, ballNumber = 6, strikerId = "p_${tourneyId}_2", nonStrikerId = "p_${tourneyId}_5", bowlerId = "p_${tourneyId}_20", runsScored = 1, commentary = "1 run"),
+            BallRecord(id = "b_${tourneyId}_17", matchId = demoMatchId, innings = 2, overNumber = 1, ballNumber = 1, strikerId = "p_${tourneyId}_2", nonStrikerId = "p_${tourneyId}_5", bowlerId = "p_${tourneyId}_1", runsScored = 1, commentary = "1 run"),
+            BallRecord(id = "b_${tourneyId}_18", matchId = demoMatchId, innings = 2, overNumber = 1, ballNumber = 2, strikerId = "p_${tourneyId}_5", nonStrikerId = "p_${tourneyId}_2", bowlerId = "p_${tourneyId}_1", runsScored = 4, commentary = "4 runs"),
+            BallRecord(id = "b_${tourneyId}_19", matchId = demoMatchId, innings = 2, overNumber = 1, ballNumber = 3, strikerId = "p_${tourneyId}_5", nonStrikerId = "p_${tourneyId}_2", bowlerId = "p_${tourneyId}_1", runsScored = 2, commentary = "2 runs")
         )
 
         // Remove any old demo tournament if existing so only 1 demo tournament exists at a time
         val oldDemoTourneyIds = _tournaments.value.filter { isDemoOrOffline(it.id) }.map { it.id }.toSet()
+        val oldDemoMatchIds = _matches.value.filter { it.tournamentId in oldDemoTourneyIds }.map { it.id }.toSet()
         val nonDemoTourneys = _tournaments.value.filterNot { it.id in oldDemoTourneyIds }
         val nonDemoTeams = _teams.value.filterNot { it.tournamentId in oldDemoTourneyIds }
         val nonDemoPlayers = _players.value.filterNot { it.tournamentId in oldDemoTourneyIds }
+        val nonDemoMatches = _matches.value.filterNot { it.tournamentId in oldDemoTourneyIds }
+        val nonDemoBalls = _ballRecords.value.filterNot { it.matchId in oldDemoMatchIds }
 
         _tournaments.value = nonDemoTourneys + demoTourney
         _teams.value = nonDemoTeams + demoTeams
         _players.value = nonDemoPlayers + demoPlayers
+        _matches.value = nonDemoMatches + demoMatch
+        _ballRecords.value = nonDemoBalls + demoBalls
         _activeTournamentId.value = demoTourney.id
-        _activePlayerId.value = demoPlayers.first().id
+        _activePlayerId.value = demoPlayers.first { it.status == PlayerStatus.UP_NEXT }.id
+        _activeMatchId.value = demoMatch.id
+        ensureCaptainQuizIfNeeded(demoTourney.id)
         deviceTourneyManager.addTournament(demoTourney.id, "ADMIN")
         _myTournamentIds.value = deviceTourneyManager.getMyTournamentIds()
 
