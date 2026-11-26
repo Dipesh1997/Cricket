@@ -48,6 +48,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     val areAllCaptainsReady by viewModel.areAllCaptainsReady.collectAsState()
     val isBiddingStarted by viewModel.isBiddingStarted.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+    val lastAutoAssignedMessage by viewModel.lastAutoAssignedMessage.collectAsState()
     val isAdmin = currentUser?.role == UserRole.ADMIN_AUCTIONEER
 
     val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
@@ -65,6 +66,32 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     var playerToEditSoldAmount by remember { mutableStateOf<Player?>(null) }
     var showRemovePlayerDialog by remember { mutableStateOf(false) }
     var isRecentlySoldExpanded by remember { mutableStateOf(true) }
+    var quizTargetTeamId by remember { mutableStateOf<String?>(null) }
+
+    val tourneyId = activeTournament?.id ?: ""
+    val tourneyTeams = remember(teams, tourneyId) {
+        teams.filter { it.tournamentId == tourneyId }
+    }
+    val setQuotaPerTeam = remember(players, tourneyTeams, tourneyId) {
+        if (tourneyId.isNotBlank()) viewModel.getSetQuotaPerTeam(tourneyId) else 0
+    }
+    val teamPickedCounts = remember(players, tourneyTeams, tourneyId) {
+        tourneyTeams.associate { t ->
+            t.id to (if (tourneyId.isNotBlank()) viewModel.getTeamSetPickedCount(tourneyId, t.id) else 0)
+        }
+    }
+    val currentSpinTeam = remember(tourneyTeams, activeTournament?.spinTurnIndex, teamPickedCounts, setQuotaPerTeam) {
+        if (tourneyTeams.isEmpty()) null
+        else {
+            val idx = (activeTournament?.spinTurnIndex ?: 0).coerceAtLeast(0) % tourneyTeams.size
+            val candidate = tourneyTeams[idx]
+            if (setQuotaPerTeam > 0 && (teamPickedCounts[candidate.id] ?: 0) >= setQuotaPerTeam) {
+                tourneyTeams.firstOrNull { (teamPickedCounts[it.id] ?: 0) < setQuotaPerTeam } ?: candidate
+            } else {
+                candidate
+            }
+        }
+    }
 
     // Auto-select user assigned team if team captain or default to the first tournament team
     LaunchedEffect(currentUser, teams) {
@@ -176,6 +203,163 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Set Rule, Equal Distribution & Captain Math Quiz Card ---
+        val upNextFixedCount = players.count { it.tournamentId == tourneyId && it.isFixedSet && it.status == PlayerStatus.UP_NEXT }
+        val quizSessionNow = activeTournament?.captainQuizSession
+        if (tourneyTeams.isNotEmpty() && (setQuotaPerTeam > 0 || isAdmin || quizSessionNow != null)) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (quizSessionNow != null && quizSessionNow.winnerTeamId == null) NeonBlue else surfaceBg
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Checkbox(
+                                    checked = activeTournament?.autoAssignLastPlayerAtAvg == true,
+                                    onCheckedChange = { checked ->
+                                        if (isAdmin && tourneyId.isNotBlank()) {
+                                            viewModel.setTournamentAutoAssignRule(tourneyId, checked)
+                                        }
+                                    },
+                                    enabled = isAdmin,
+                                    colors = CheckboxDefaults.colors(checkedColor = BidGreen, checkmarkColor = Color.White),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(
+                                        text = "Last Player Auto-Assign at Avg Price",
+                                        color = textMain,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                    Text(
+                                        text = if (currentSpinTeam != null) "🎡 Spin Turn: ${currentSpinTeam.shortCode}" else "Equal set quota active",
+                                        color = themeAccent,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+
+                        if (setQuotaPerTeam > 0) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                tourneyTeams.forEach { t ->
+                                    val picked = teamPickedCounts[t.id] ?: 0
+                                    val done = picked >= setQuotaPerTeam
+                                    Surface(
+                                        color = if (done) BidGreen.copy(alpha = 0.16f) else surfaceBg,
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, if (done) BidGreen else textSub.copy(alpha = 0.25f))
+                                    ) {
+                                        Text(
+                                            text = "${t.shortCode}: $picked/$setQuotaPerTeam${if (done) "✅" else ""}",
+                                            color = if (done) BidGreen else textMain,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (upNextFixedCount == 2 && activeTournament?.autoAssignLastPlayerAtAvg == true && quizSessionNow != null) {
+                            val t1 = tourneyTeams.find { it.id == quizSessionNow.team1Id }
+                            val t2 = tourneyTeams.find { it.id == quizSessionNow.team2Id }
+                            val s1 = quizSessionNow.team1Submission
+                            val s2 = quizSessionNow.team2Submission
+                            val winnerTeam = tourneyTeams.find { it.id == quizSessionNow.winnerTeamId }
+
+                            Surface(
+                                color = if (winnerTeam != null) BidGreen.copy(alpha = 0.14f) else NeonBlue.copy(alpha = 0.14f),
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (winnerTeam != null) BidGreen else NeonBlue),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (winnerTeam != null)
+                                            "🏆 Quiz Winner: ${winnerTeam.name} spins for 2nd-last player!"
+                                        else
+                                            "🧠 2 Players Left! Captains 5-Q Math Quiz (+, -, ×, ÷)",
+                                        color = if (winnerTeam != null) BidGreen else NeonBlue,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 11.sp
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (t1 != null) {
+                                            val canPlay1 = (s1?.isCompleted != true) && (isAdmin || currentUser?.assignedTeamId == t1.id)
+                                            Button(
+                                                onClick = { quizTargetTeamId = t1.id },
+                                                enabled = canPlay1,
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (s1?.isCompleted == true) BidGreen else NeonBlue),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(
+                                                    text = if (s1?.isCompleted == true) "${t1.shortCode}: ${s1.correctCount}/5 (${String.format("%.1f", s1.timeTakenMs / 1000.0)}s)" else "🧠 Quiz: ${t1.shortCode}",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.Black,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                        if (t2 != null) {
+                                            val canPlay2 = (s2?.isCompleted != true) && (isAdmin || currentUser?.assignedTeamId == t2.id)
+                                            Button(
+                                                onClick = { quizTargetTeamId = t2.id },
+                                                enabled = canPlay2,
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (s2?.isCompleted == true) BidGreen else NeonBlue),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(
+                                                    text = if (s2?.isCompleted == true) "${t2.shortCode}: ${s2.correctCount}/5 (${String.format("%.1f", s2.timeTakenMs / 1000.0)}s)" else "🧠 Quiz: ${t2.shortCode}",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.Black,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -624,8 +808,28 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                         val activeP = activePlayer
                         val isAuctionReady = joinedCaptainTeams.isEmpty() || isBiddingStarted || areAllCaptainsReady
-                        val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD && effectiveBiddingTeam != null && isAuctionReady
+                        val isTeamSetQuotaReached = activeP?.isFixedSet == true && setQuotaPerTeam > 0 &&
+                            (teamPickedCounts[effectiveBiddingTeam?.id] ?: 0) >= setQuotaPerTeam
+                        val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD &&
+                            effectiveBiddingTeam != null && isAuctionReady && !isTeamSetQuotaReached
                         val availablePurse = effectiveBiddingTeam?.remainingPurse ?: 0.0
+
+                        if (isTeamSetQuotaReached && effectiveBiddingTeam != null) {
+                            Surface(
+                                color = BidGreen.copy(alpha = 0.14f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                            ) {
+                                Text(
+                                    text = "✅ ${effectiveBiddingTeam.name} completed its set quota ($setQuotaPerTeam/$setQuotaPerTeam)! Other teams bid for remaining players.",
+                                    color = BidGreen,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(8.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
 
                         if (!isAuctionReady) {
                             Surface(
@@ -753,7 +957,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = themeAccent, contentColor = Color.Black),
                                     modifier = Modifier.weight(1f),
-                                    enabled = activePlayer != null && effectiveBiddingTeam != null && activePlayer?.status != PlayerStatus.SOLD
+                                    enabled = activePlayer != null && effectiveBiddingTeam != null && activePlayer?.status != PlayerStatus.SOLD &&
+                                        !(activePlayer?.isFixedSet == true && setQuotaPerTeam > 0 && (teamPickedCounts[effectiveBiddingTeam?.id] ?: 0) >= setQuotaPerTeam)
                                 ) {
                                     Icon(imageVector = Icons.Default.Sell, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -1111,7 +1316,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                 }
                                 Text(
-                                    text = team.name,
+                                    text = if (setQuotaPerTeam > 0) "${team.name} (${teamPickedCounts[team.id] ?: 0}/$setQuotaPerTeam)" else team.name,
                                     color = if (isSelected) themeAccent else textMain,
                                     fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold
                                 )
@@ -1134,13 +1339,21 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
     // --- Interactive Spin Wheel Dialog ---
     if (showSpinWheelModal) {
-        val tourneyTeams = remember(teams, activeTournament) {
-            teams.filter { it.tournamentId == activeTournament?.id }
-        }
         SpinWheelModal(
-            players = players,
+            players = players.filter { it.tournamentId == tourneyId },
             teams = tourneyTeams,
             isDarkTheme = isDarkTheme,
+            autoAssignLastPlayerAtAvg = activeTournament?.autoAssignLastPlayerAtAvg == true,
+            onToggleAutoAssignRule = if (isAdmin && tourneyId.isNotBlank()) {
+                { enabled -> viewModel.setTournamentAutoAssignRule(tourneyId, enabled) }
+            } else null,
+            currentSpinTeam = currentSpinTeam,
+            teamPickedCounts = teamPickedCounts,
+            quotaPerTeam = setQuotaPerTeam,
+            captainQuizSession = activeTournament?.captainQuizSession,
+            onOpenQuizForTeam = { tId ->
+                quizTargetTeamId = tId
+            },
             onTogglePlayerFixedSet = { playerId, isFixed ->
                 viewModel.togglePlayerFixedSet(playerId, isFixed)
             },
@@ -1154,8 +1367,61 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             onDismiss = { showSpinWheelModal = false },
             onPlayerSelected = { selectedPlayer ->
                 viewModel.selectActivePlayer(selectedPlayer.id)
+                if (tourneyId.isNotBlank()) {
+                    viewModel.advanceSpinTurn(tourneyId)
+                }
                 showSpinWheelModal = false
             }
+        )
+    }
+
+    // --- Captain 5-Question Math Quiz Dialog (+, -, ×, ÷) ---
+    val activeQuizSession = activeTournament?.captainQuizSession
+    if (quizTargetTeamId != null && activeQuizSession != null && activeQuizSession.questions.isNotEmpty()) {
+        val quizTeam = tourneyTeams.find { it.id == quizTargetTeamId }
+        if (quizTeam != null) {
+            cricket.player.auction.ui.components.CaptainMathQuizDialog(
+                team = quizTeam,
+                questions = activeQuizSession.questions,
+                isDarkTheme = isDarkTheme,
+                onSubmit = { correctCount, timeTakenMs ->
+                    viewModel.submitCaptainQuizResult(tourneyId, quizTeam.id, correctCount, timeTakenMs)
+                    quizTargetTeamId = null
+                    Toast.makeText(
+                        context,
+                        "🧠 ${quizTeam.shortCode} scored $correctCount/5 in ${String.format("%.1f", timeTakenMs / 1000.0)}s!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                onDismiss = { quizTargetTeamId = null }
+            )
+        }
+    }
+
+    // --- Auto-Assign Last Player Celebration Dialog ---
+    if (lastAutoAssignedMessage != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.clearAutoAssignedMessage() },
+            title = {
+                Text("⚡ Last Player Auto-Assigned!", color = BidGreen, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+            },
+            text = {
+                Text(
+                    text = lastAutoAssignedMessage!!,
+                    color = textMain,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.clearAutoAssignedMessage() },
+                    colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.White)
+                ) {
+                    Text("AWESOME!", fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = cardBg
         )
     }
 

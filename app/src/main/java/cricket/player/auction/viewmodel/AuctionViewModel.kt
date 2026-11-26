@@ -144,9 +144,45 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         _timerSeconds.value = 15
     }
 
+    val lastAutoAssignedMessage: StateFlow<String?> = localRepository.lastAutoAssignedMessage
+
+    fun clearAutoAssignedMessage() {
+        localRepository.clearAutoAssignedMessage()
+    }
+
     // --- Tournament Actions ---
-    fun createTournament(name: String, defaultPurse: Double, maxSlots: Int, maxOverseas: Int): Tournament {
-        return localRepository.createTournament(name, defaultPurse, maxSlots, maxOverseas)
+    fun createTournament(
+        name: String,
+        defaultPurse: Double,
+        maxSlots: Int,
+        maxOverseas: Int,
+        autoAssignLastPlayerAtAvg: Boolean = false
+    ): Tournament {
+        return localRepository.createTournament(name, defaultPurse, maxSlots, maxOverseas, autoAssignLastPlayerAtAvg)
+    }
+
+    fun setTournamentAutoAssignRule(tournamentId: String, enabled: Boolean) {
+        localRepository.setTournamentAutoAssignRule(tournamentId, enabled)
+    }
+
+    fun advanceSpinTurn(tournamentId: String) {
+        localRepository.advanceSpinTurn(tournamentId)
+    }
+
+    fun ensureCaptainQuizIfNeeded(tournamentId: String) {
+        localRepository.ensureCaptainQuizIfNeeded(tournamentId)
+    }
+
+    fun submitCaptainQuizResult(tournamentId: String, teamId: String, correctCount: Int, timeTakenMs: Long) {
+        localRepository.submitCaptainQuizResult(tournamentId, teamId, correctCount, timeTakenMs)
+    }
+
+    fun getSetQuotaPerTeam(tournamentId: String): Int {
+        return localRepository.getSetQuotaPerTeam(tournamentId)
+    }
+
+    fun getTeamSetPickedCount(tournamentId: String, teamId: String): Int {
+        return localRepository.getTeamSetPickedCount(tournamentId, teamId)
     }
 
     fun createDemoTournament(): Tournament {

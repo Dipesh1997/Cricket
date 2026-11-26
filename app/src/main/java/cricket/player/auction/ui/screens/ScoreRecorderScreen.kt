@@ -198,6 +198,8 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     LaunchedEffect(currentInnings, battingTeamId, bowlingTeamId, activeMatch?.id) {
         if (currentInnings != lastObservedInnings) {
             lastObservedInnings = currentInnings
+            // Reset bowler guard when innings changes so innings-2 bowler check is fresh
+            lastCompletedOverBowlerId = null
             val lastBallOfInnings = matchBalls.filter { it.innings == currentInnings }.lastOrNull()
             if (lastBallOfInnings != null) {
                 strikerId = lastBallOfInnings.strikerId
@@ -207,7 +209,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 // Reset players on crease when starting fresh innings
                 strikerId = battingPlayers.firstOrNull()?.id
                 nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
-                bowlerId = bowlingPlayers.firstOrNull()?.id
+                bowlerId = null // force bowler selection for innings 2
             }
             if (currentInnings == 2) {
                 showTargetModal = true
@@ -620,15 +622,21 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 val statusBadge = when {
-                                                    m.status != MatchStatus.COMPLETED -> "LIVE 🔴"
-                                                    mEditable -> "Editable ✏️"
-                                                    else -> "Locked 🔒"
+                                                    m.status == MatchStatus.COMPLETED && mEditable -> "Editable ✏️"
+                                                    m.status == MatchStatus.COMPLETED -> "Locked 🔒"
+                                                    m.status == MatchStatus.INNINGS_BREAK -> "BREAK ⏸"
+                                                    else -> "LIVE 🔴"
                                                 }
                                                 Text(
                                                     text = statusBadge,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = if (m.status != MatchStatus.COMPLETED) BidGreen else if (mEditable) themeAccent else Color.Gray
+                                                    color = when {
+                                                        m.status == MatchStatus.COMPLETED && mEditable -> themeAccent
+                                                        m.status == MatchStatus.COMPLETED -> Color.Gray
+                                                        m.status == MatchStatus.INNINGS_BREAK -> IplGold
+                                                        else -> BidGreen
+                                                    }
                                                 )
                                             }
                                         },
@@ -859,7 +867,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             shape = RoundedCornerShape(12.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
-                                if (match.status != MatchStatus.COMPLETED) themeAccent.copy(alpha = 0.5f) else Color.Gray.copy(alpha = 0.3f)
+                                when (match.status) {
+                                    MatchStatus.INNINGS_BREAK -> IplGold.copy(alpha = 0.7f)
+                                    MatchStatus.COMPLETED -> Color.Gray.copy(alpha = 0.3f)
+                                    else -> themeAccent.copy(alpha = 0.5f)
+                                }
                             )
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -871,11 +883,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         val statusText = when {
+                                            match.status == MatchStatus.INNINGS_BREAK -> "⏸ INNINGS BREAK"
                                             match.status != MatchStatus.COMPLETED -> "● INN $currentInnings LIVE"
                                             isEditable -> "COMPLETED (EDITABLE ✏️)"
                                             else -> "COMPLETED (LOCKED 🔒)"
                                         }
                                         val statusColor = when {
+                                            match.status == MatchStatus.INNINGS_BREAK -> IplGold
                                             match.status != MatchStatus.COMPLETED -> BidGreen
                                             isEditable -> themeAccent
                                             else -> Color.Gray
@@ -1437,9 +1451,78 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
+                    // --- Innings Break Screen (shown after Innings 1 overs / all-out) ---
+                    if (match.status == MatchStatus.INNINGS_BREAK) {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = cardBg),
+                                shape = RoundedCornerShape(16.dp),
+                                border = androidx.compose.foundation.BorderStroke(2.dp, themeAccent),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "🏁 INNINGS 1 COMPLETE",
+                                        color = themeAccent,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 16.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val teamAName = teams.find { it.id == match.teamAId }?.name ?: "Team A"
+                                    val teamBName = teams.find { it.id == match.teamBId }?.name ?: "Team B"
+                                    Text(
+                                        text = "$teamAName scored ${match.teamARuns}/${match.teamAWickets}",
+                                        color = textMain,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "$teamBName needs ${match.teamARuns + 1} runs to win",
+                                        color = textSub,
+                                        fontSize = 12.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    if (isEditable) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    viewModel.endActiveInnings()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = BidGreen),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("🏏 Start Chase", fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 13.sp, maxLines = 1)
+                                            }
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val undone = viewModel.undoLastBall(match.id)
+                                                    if (undone != null) {
+                                                        Toast.makeText(context, "↩ Undone last ball", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("↩ Undo Last Ball", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // --- Ball-by-Ball Instant Scoring Keypad ---
                     item {
-                        if (!canScore || isSpectator) {
+                        if (!canScore || isSpectator || match.status == MatchStatus.INNINGS_BREAK) {
                             Surface(
                                 color = NeonBlue.copy(alpha = 0.12f),
                                 shape = RoundedCornerShape(12.dp),
@@ -1725,7 +1808,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         ) {
                             Text("THIS OVER", color = textSub, fontSize = 10.sp, fontWeight = FontWeight.Bold)
 
-                            val currentOverBalls = currentInningsBalls.takeLast(6)
+                            val currentOverBalls = run {
+                                    val legalBallsInInnings = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                    val currentOverIndex = legalBallsInInnings / 6
+                                    currentInningsBalls.filter { it.overNumber == currentOverIndex }
+                                }
                             if (currentOverBalls.isEmpty()) {
                                 Text("No balls bowled yet", color = textSub, fontSize = 10.sp)
                             } else {

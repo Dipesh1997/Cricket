@@ -523,6 +523,7 @@ fun TournamentScreen(
         var purseStr by remember { mutableStateOf("100.0") }
         var maxSlotsStr by remember { mutableStateOf("25") }
         var maxOverseasStr by remember { mutableStateOf("8") }
+        var autoAssignLastAtAvg by remember { mutableStateOf(true) }
 
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
@@ -560,6 +561,34 @@ fun TournamentScreen(
                         label = { Text("Max Overseas Slots per Team") },
                         singleLine = true
                     )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { autoAssignLastAtAvg = !autoAssignLastAtAvg }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = autoAssignLastAtAvg,
+                            onCheckedChange = { autoAssignLastAtAvg = it },
+                            colors = CheckboxDefaults.colors(checkedColor = themeAccent)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Last Player Auto-Assign at Average Price",
+                                color = textMain,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "Equal distribution per set; last 2 captains play a 5-Q math quiz (+,-,×,÷) for 2nd-last spin.",
+                                color = textSub,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -569,7 +598,7 @@ fun TournamentScreen(
                         val slots = maxSlotsStr.toIntOrNull() ?: 25
                         val overseas = maxOverseasStr.toIntOrNull() ?: 8
 
-                        val tourney = viewModel.createTournament(tourneyName, purse, slots, overseas)
+                        val tourney = viewModel.createTournament(tourneyName, purse, slots, overseas, autoAssignLastAtAvg)
                         showCreateDialog = false
                         onTournamentClick(tourney)
                     },

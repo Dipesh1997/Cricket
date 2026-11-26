@@ -87,6 +87,13 @@ class LocalCricketRepository(context: Context) {
     private val _activeMatchId = MutableStateFlow<String?>(null)
     val activeMatchId: StateFlow<String?> = _activeMatchId.asStateFlow()
 
+    private val _lastAutoAssignedMessage = MutableStateFlow<String?>(null)
+    val lastAutoAssignedMessage: StateFlow<String?> = _lastAutoAssignedMessage.asStateFlow()
+
+    fun clearAutoAssignedMessage() {
+        _lastAutoAssignedMessage.value = null
+    }
+
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
@@ -377,7 +384,13 @@ class LocalCricketRepository(context: Context) {
     }
 
 
-    fun createTournament(name: String, defaultPurse: Double, maxSlots: Int, maxOverseas: Int): Tournament {
+    fun createTournament(
+        name: String,
+        defaultPurse: Double,
+        maxSlots: Int,
+        maxOverseas: Int,
+        autoAssignLastPlayerAtAvg: Boolean = false
+    ): Tournament {
         val scorerCode = "SC" + UUID.randomUUID().toString().take(4).uppercase()
         val adminCode = "ADM" + UUID.randomUUID().toString().take(4).uppercase()
         val spectatorCode = "SPEC" + UUID.randomUUID().toString().take(4).uppercase()
@@ -390,7 +403,8 @@ class LocalCricketRepository(context: Context) {
             scorerInviteCode = scorerCode,
             adminCode = adminCode,
             spectatorInviteCode = spectatorCode,
-            creatorDeviceId = firebaseRepo.deviceId
+            creatorDeviceId = firebaseRepo.deviceId,
+            autoAssignLastPlayerAtAvg = autoAssignLastPlayerAtAvg
         )
         _tournaments.value = _tournaments.value + newTourney
         _activeTournamentId.value = newTourney.id
@@ -845,10 +859,197 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
+    // --- Fixed Set Equal Distribution & Spin Turn Helpers ---
+    fun getSetQuotaPerTeam(tournamentId: String): Int {
+        val tourneyTeams = _teams.value.filter { it.tournamentId == tournamentId }
+        val allFixed = _players.value.filter { it.tournamentId == tournamentId && it.isFixedSet }
+        if (tourneyTeams.isEmpty() || allFixed.isEmpty()) return 0
+        return if (allFixed.size >= tourneyTeams.size && allFixed.size % tourneyTeams.size == 0) {
+            allFixed.size / tourneyTeams.size
+        } else 0
+    }
+
+    fun getTeamSetPickedCount(tournamentId: String, teamId: String): Int {
+        return _players.value.count {
+            it.tournamentId == tournamentId &&
+                it.isFixedSet &&
+                it.status == PlayerStatus.SOLD &&
+                it.soldToTeamId == teamId
+        }
+    }
+
+    fun getEligibleTeamsForSet(tournamentId: String): List<Team> {
+        val tourneyTeams = _teams.value.filter { it.tournamentId == tournamentId }
+        val quota = getSetQuotaPerTeam(tournamentId)
+        if (quota <= 0) return tourneyTeams
+        return tourneyTeams.filter { getTeamSetPickedCount(tournamentId, it.id) < quota }
+    }
+
+    fun setTournamentAutoAssignRule(tournamentId: String, enabled: Boolean) {
+        _tournaments.value = _tournaments.value.map { t ->
+            if (t.id == tournamentId) {
+                t.copy(
+                    autoAssignLastPlayerAtAvg = enabled,
+                    captainQuizSession = if (!enabled) null else t.captainQuizSession
+                )
+            } else t
+        }
+        if (enabled) {
+            ensureCaptainQuizIfNeeded(tournamentId)
+        }
+        persistAsync()
+    }
+
+    fun advanceSpinTurn(tournamentId: String) {
+        val tourneyTeams = _teams.value.filter { it.tournamentId == tournamentId }
+        if (tourneyTeams.isEmpty()) return
+        val eligible = getEligibleTeamsForSet(tournamentId)
+        _tournaments.value = _tournaments.value.map { t ->
+            if (t.id == tournamentId) {
+                var nextIdx = (t.spinTurnIndex + 1) % tourneyTeams.size
+                if (eligible.isNotEmpty() && eligible.size < tourneyTeams.size) {
+                    for (offset in 1..tourneyTeams.size) {
+                        val candidateIdx = (t.spinTurnIndex + offset) % tourneyTeams.size
+                        if (eligible.any { it.id == tourneyTeams[candidateIdx].id }) {
+                            nextIdx = candidateIdx
+                            break
+                        }
+                    }
+                }
+                t.copy(spinTurnIndex = nextIdx)
+            } else t
+        }
+        persistAsync()
+    }
+
+    private fun generateMathQuizQuestions(): List<MathQuizQuestion> {
+        val ops = listOf("+", "-", "×", "÷", listOf("+", "-", "×", "÷").random()).shuffled()
+        return ops.mapIndexed { index, op ->
+            val (prompt, answer) = when (op) {
+                "+" -> {
+                    val a = (12..48).random()
+                    val b = (11..45).random()
+                    "$a + $b = ?" to (a + b)
+                }
+                "-" -> {
+                    val b = (11..35).random()
+                    val a = b + (9..40).random()
+                    "$a - $b = ?" to (a - b)
+                }
+                "×" -> {
+                    val a = (4..14).random()
+                    val b = (3..12).random()
+                    "$a × $b = ?" to (a * b)
+                }
+                else -> {
+                    val divisor = (3..12).random()
+                    val quotient = (4..15).random()
+                    val dividend = divisor * quotient
+                    "$dividend ÷ $divisor = ?" to quotient
+                }
+            }
+            val wrongOptions = mutableSetOf<Int>()
+            val offsets = listOf(-4, -3, -2, -1, 1, 2, 3, 4, 5, -5, 6, -6, 10, -10)
+            while (wrongOptions.size < 2) {
+                val candidate = answer + offsets.random()
+                if (candidate != answer && candidate >= 0) {
+                    wrongOptions.add(candidate)
+                }
+            }
+            val options = (wrongOptions.toList() + answer).shuffled()
+            MathQuizQuestion(
+                id = "q_${index + 1}_${System.currentTimeMillis()}",
+                prompt = prompt,
+                options = options,
+                correctAnswer = answer
+            )
+        }
+    }
+
+    fun ensureCaptainQuizIfNeeded(tournamentId: String) {
+        val tourney = _tournaments.value.find { it.id == tournamentId } ?: return
+        if (!tourney.autoAssignLastPlayerAtAvg) return
+        val quota = getSetQuotaPerTeam(tournamentId)
+        if (quota <= 0) return
+
+        val remainingInSet = _players.value.filter {
+            it.tournamentId == tournamentId &&
+                it.isFixedSet &&
+                (it.status == PlayerStatus.UP_NEXT || it.status == PlayerStatus.BIDDING)
+        }
+        val eligibleTeams = getEligibleTeamsForSet(tournamentId)
+        if (remainingInSet.size == 2 && eligibleTeams.size == 2) {
+            val snapshotKey = remainingInSet.map { it.id }.sorted().joinToString(",")
+            val existing = tourney.captainQuizSession
+            if (existing == null || existing.setSnapshotKey != snapshotKey) {
+                val newSession = CaptainQuizSession(
+                    id = "quiz_${System.currentTimeMillis()}",
+                    setSnapshotKey = snapshotKey,
+                    team1Id = eligibleTeams[0].id,
+                    team2Id = eligibleTeams[1].id,
+                    questions = generateMathQuizQuestions()
+                )
+                _tournaments.value = _tournaments.value.map { t ->
+                    if (t.id == tournamentId) t.copy(captainQuizSession = newSession) else t
+                }
+            }
+        }
+    }
+
+    fun submitCaptainQuizResult(tournamentId: String, teamId: String, correctCount: Int, timeTakenMs: Long) {
+        val tourney = _tournaments.value.find { it.id == tournamentId } ?: return
+        val session = tourney.captainQuizSession ?: return
+        val team = _teams.value.find { it.id == teamId } ?: return
+        val tourneyTeams = _teams.value.filter { it.tournamentId == tournamentId }
+
+        val submission = CaptainQuizSubmission(
+            teamId = teamId,
+            teamName = team.name,
+            correctCount = correctCount,
+            timeTakenMs = timeTakenMs,
+            isCompleted = true
+        )
+
+        var updatedSession = when (teamId) {
+            session.team1Id -> session.copy(team1Submission = submission)
+            session.team2Id -> session.copy(team2Submission = submission)
+            else -> session
+        }
+
+        val s1 = updatedSession.team1Submission
+        val s2 = updatedSession.team2Submission
+        var winnerIdx = tourney.spinTurnIndex
+
+        if (s1 != null && s1.isCompleted && s2 != null && s2.isCompleted) {
+            val winnerId = when {
+                s1.correctCount > s2.correctCount -> s1.teamId
+                s2.correctCount > s1.correctCount -> s2.teamId
+                s1.timeTakenMs <= s2.timeTakenMs -> s1.teamId
+                else -> s2.teamId
+            }
+            updatedSession = updatedSession.copy(winnerTeamId = winnerId)
+            val foundIdx = tourneyTeams.indexOfFirst { it.id == winnerId }
+            if (foundIdx >= 0) winnerIdx = foundIdx
+        }
+
+        _tournaments.value = _tournaments.value.map { t ->
+            if (t.id == tournamentId) t.copy(captainQuizSession = updatedSession, spinTurnIndex = winnerIdx) else t
+        }
+        persistAsync()
+    }
+
     // --- Live Auction Bidding ---
     fun placeBid(playerId: String, teamId: String, newAmount: Double, bidderEmail: String? = null): Boolean {
         val player = _players.value.find { it.id == playerId } ?: return false
         val team = _teams.value.find { it.id == teamId } ?: return false
+
+        // Equal Distribution Check for Fixed Sets
+        if (player.isFixedSet) {
+            val quota = getSetQuotaPerTeam(player.tournamentId)
+            if (quota > 0 && getTeamSetPickedCount(player.tournamentId, teamId) >= quota) {
+                return false
+            }
+        }
 
         if (team.remainingPurse < (newAmount - (player.soldPrice ?: 0.0))) {
             return false
@@ -883,6 +1084,12 @@ class LocalCricketRepository(context: Context) {
         val player = _players.value.find { it.id == playerId } ?: return false
         val team = _teams.value.find { it.id == winnerTeamId } ?: return false
 
+        // Equal Distribution Check for Fixed Sets
+        val quota = if (player.isFixedSet) getSetQuotaPerTeam(player.tournamentId) else 0
+        if (quota > 0 && getTeamSetPickedCount(player.tournamentId, winnerTeamId) >= quota) {
+            return false
+        }
+
         _teams.value = _teams.value.map { t ->
             if (t.id == winnerTeamId) {
                 t.copy(spentPurse = t.spentPurse + finalPrice)
@@ -899,6 +1106,69 @@ class LocalCricketRepository(context: Context) {
                     highestBidderTeamId = winnerTeamId
                 )
             } else p
+        }
+
+        val tourneyId = player.tournamentId
+        val tourney = _tournaments.value.find { it.id == tourneyId }
+
+        if (player.isFixedSet && quota > 0) {
+            val remainingInSet = _players.value.filter {
+                it.tournamentId == tourneyId &&
+                    it.isFixedSet &&
+                    (it.status == PlayerStatus.UP_NEXT || it.status == PlayerStatus.BIDDING)
+            }
+            val eligibleTeams = getEligibleTeamsForSet(tourneyId)
+
+            if (remainingInSet.size == 1 && tourney?.autoAssignLastPlayerAtAvg == true && eligibleTeams.size == 1) {
+                val lastPlayer = remainingInSet.first()
+                val lastTeam = eligibleTeams.first()
+                val soldInSet = _players.value.filter {
+                    it.tournamentId == tourneyId && it.isFixedSet && it.status == PlayerStatus.SOLD
+                }
+                val rawAvg = if (soldInSet.isNotEmpty()) {
+                    soldInSet.map { it.soldPrice ?: it.currentBid }.average()
+                } else {
+                    lastPlayer.basePrice
+                }
+                val avgPrice = (kotlin.math.round(rawAvg * 100.0) / 100.0).coerceAtLeast(0.1)
+
+                _teams.value = _teams.value.map { t ->
+                    if (t.id == lastTeam.id) t.copy(spentPurse = t.spentPurse + avgPrice) else t
+                }
+                _players.value = _players.value.map { p ->
+                    when {
+                        p.id == lastPlayer.id -> p.copy(
+                            status = PlayerStatus.SOLD,
+                            soldPrice = avgPrice,
+                            soldToTeamId = lastTeam.id,
+                            currentBid = avgPrice,
+                            highestBidderTeamId = lastTeam.id,
+                            isFixedSet = false
+                        )
+                        p.tournamentId == tourneyId && p.isFixedSet -> p.copy(isFixedSet = false)
+                        else -> p
+                    }
+                }
+                _tournaments.value = _tournaments.value.map { t ->
+                    if (t.id == tourneyId) t.copy(captainQuizSession = null) else t
+                }
+                _lastAutoAssignedMessage.value = "⚡ ${lastPlayer.name} auto-assigned to ${lastTeam.name} at Avg Price ${avgPrice.formatIplCurrency()}!"
+            } else if (remainingInSet.isEmpty()) {
+                // Set completed normally -> clear isFixedSet flags for next set
+                _players.value = _players.value.map { p ->
+                    if (p.tournamentId == tourneyId && p.isFixedSet) p.copy(isFixedSet = false) else p
+                }
+                _tournaments.value = _tournaments.value.map { t ->
+                    if (t.id == tourneyId) t.copy(captainQuizSession = null) else t
+                }
+            } else {
+                advanceSpinTurn(tourneyId)
+                if (remainingInSet.size == 2 && tourney?.autoAssignLastPlayerAtAvg == true) {
+                    ensureCaptainQuizIfNeeded(tourneyId)
+                }
+            }
+        } else {
+            advanceSpinTurn(tourneyId)
         }
 
         val nextPlayer = _players.value.find { it.tournamentId == player.tournamentId && it.status == PlayerStatus.UP_NEXT }
@@ -1030,22 +1300,35 @@ class LocalCricketRepository(context: Context) {
     }
 
     fun togglePlayerFixedSet(playerId: String, isFixed: Boolean) {
+        var tourneyId = ""
         _players.value = _players.value.map { p ->
-            if (p.id == playerId) p.copy(isFixedSet = isFixed) else p
+            if (p.id == playerId) {
+                tourneyId = p.tournamentId
+                p.copy(isFixedSet = isFixed)
+            } else p
         }
+        if (tourneyId.isNotBlank()) ensureCaptainQuizIfNeeded(tourneyId)
         persistAsync()
     }
 
     fun setMultiplePlayersFixedSet(playerIds: Set<String>, isFixed: Boolean) {
+        val tourneyIds = mutableSetOf<String>()
         _players.value = _players.value.map { p ->
-            if (p.id in playerIds) p.copy(isFixedSet = isFixed) else p
+            if (p.id in playerIds) {
+                tourneyIds.add(p.tournamentId)
+                p.copy(isFixedSet = isFixed)
+            } else p
         }
+        tourneyIds.forEach { ensureCaptainQuizIfNeeded(it) }
         persistAsync()
     }
 
     fun clearAllFixedSets(tournamentId: String) {
         _players.value = _players.value.map { p ->
             if (p.tournamentId == tournamentId) p.copy(isFixedSet = false) else p
+        }
+        _tournaments.value = _tournaments.value.map { t ->
+            if (t.id == tournamentId) t.copy(captainQuizSession = null) else t
         }
         persistAsync()
     }
@@ -1067,7 +1350,7 @@ class LocalCricketRepository(context: Context) {
     // --- End Innings Action ---
     fun endInnings(matchId: String) {
         val match = _matches.value.find { it.id == matchId } ?: return
-        if (match.currentInnings == 1) {
+        if (match.currentInnings == 1 || match.status == MatchStatus.INNINGS_BREAK) {
             val updated = match.copy(
                 currentInnings = 2,
                 status = MatchStatus.LIVE_INNINGS_2
@@ -1299,18 +1582,18 @@ class LocalCricketRepository(context: Context) {
                 }
                 val allOutWickets = if (match.isLastPlayerBattingAllowed) squadCount else (squadCount - 1).coerceAtLeast(1)
 
-                var currentInnings = 1
-                var status = MatchStatus.LIVE_INNINGS_1
-                if (newOvers >= match.totalOvers || newWickets >= allOutWickets) {
-                    currentInnings = 2
-                    status = MatchStatus.LIVE_INNINGS_2
+                // Don't auto-flip innings — show INNINGS_BREAK screen so scorer can confirm
+                val status = if (newOvers >= match.totalOvers || newWickets >= allOutWickets) {
+                    MatchStatus.INNINGS_BREAK
+                } else {
+                    MatchStatus.LIVE_INNINGS_1
                 }
 
                 updatedMatch = updatedMatch.copy(
                     teamARuns = newRuns,
                     teamAWickets = newWickets,
                     teamAOversBatted = newOvers,
-                    currentInnings = currentInnings,
+                    currentInnings = 1,
                     status = status
                 )
             } else {
@@ -1391,6 +1674,21 @@ class LocalCricketRepository(context: Context) {
         val teamBWkts = inn2Balls.count { it.isWicket }
         val teamBOvers = calculateOversFromBalls(inn2Balls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL })
 
+        // After undo, check if innings 1 is still at over/wicket threshold → keep INNINGS_BREAK
+        val remainingLegal1 = inn1Balls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+        val remainingOvers1 = calculateOversFromBalls(remainingLegal1)
+        val soldBatting1 = _players.value.filter { it.soldToTeamId == match.teamAId }
+        val squadCount1 = if (soldBatting1.isNotEmpty()) soldBatting1.size else {
+            val tp = _players.value.filter { it.tournamentId == match.tournamentId }
+            if (tp.isNotEmpty()) (tp.size / 2).coerceAtLeast(2) else 11
+        }
+        val allOutWickets1 = if (match.isLastPlayerBattingAllowed) squadCount1 else (squadCount1 - 1).coerceAtLeast(1)
+        val inn1Status = when {
+            inn2Balls.isNotEmpty() -> MatchStatus.LIVE_INNINGS_2
+            remainingOvers1 >= match.totalOvers || teamAWkts >= allOutWickets1 -> MatchStatus.INNINGS_BREAK
+            else -> MatchStatus.LIVE_INNINGS_1
+        }
+
         val updated = match.copy(
             teamARuns = teamARuns,
             teamAWickets = teamAWkts,
@@ -1399,7 +1697,7 @@ class LocalCricketRepository(context: Context) {
             teamBWickets = teamBWkts,
             teamBOversBatted = teamBOvers,
             currentInnings = if (inn2Balls.isNotEmpty()) 2 else 1,
-            status = if (inn2Balls.isNotEmpty()) MatchStatus.LIVE_INNINGS_2 else MatchStatus.LIVE_INNINGS_1,
+            status = inn1Status,
             winnerTeamId = null,
             resultSummary = ""
         )

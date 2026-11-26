@@ -24,6 +24,7 @@ enum class UserRole(val label: String) {
 enum class MatchStatus(val label: String) {
     SCHEDULED("Scheduled"),
     LIVE_INNINGS_1("Innings 1 Live"),
+    INNINGS_BREAK("Innings Break"),
     LIVE_INNINGS_2("Innings 2 Live"),
     COMPLETED("Completed")
 }
@@ -46,6 +47,32 @@ enum class DismissalType(val label: String) {
     RETIRED_HURT("Retired Hurt")
 }
 
+data class MathQuizQuestion(
+    val id: String = "",
+    val prompt: String = "",
+    val options: List<Int> = emptyList(),
+    val correctAnswer: Int = 0
+)
+
+data class CaptainQuizSubmission(
+    val teamId: String = "",
+    val teamName: String = "",
+    val correctCount: Int = 0,
+    val timeTakenMs: Long = Long.MAX_VALUE,
+    val isCompleted: Boolean = false
+)
+
+data class CaptainQuizSession(
+    val id: String = "",
+    val setSnapshotKey: String = "",
+    val team1Id: String = "",
+    val team2Id: String = "",
+    val questions: List<MathQuizQuestion> = emptyList(),
+    val team1Submission: CaptainQuizSubmission? = null,
+    val team2Submission: CaptainQuizSubmission? = null,
+    val winnerTeamId: String? = null
+)
+
 data class Tournament(
     val id: String,
     val name: String,
@@ -58,7 +85,10 @@ data class Tournament(
     val spectatorInviteCode: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val isOfflineOnly: Boolean = false,
-    val creatorDeviceId: String = ""
+    val creatorDeviceId: String = "",
+    val autoAssignLastPlayerAtAvg: Boolean = false,
+    val spinTurnIndex: Int = 0,
+    val captainQuizSession: CaptainQuizSession? = null
 )
 
 data class Player(
