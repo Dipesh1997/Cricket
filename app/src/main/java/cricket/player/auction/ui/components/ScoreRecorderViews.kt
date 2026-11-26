@@ -1,5 +1,13 @@
 package cricket.player.auction.ui.components
 
+import android.content.Intent
+import android.hardware.Camera
+import android.net.Uri
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,8 +20,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,11 +32,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.theme.*
 
@@ -813,6 +828,20 @@ fun CricbuzzSpectatorView(
 
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Live", "Scorecard", "Overs")
+    val context = LocalContext.current
+
+    val streamVideoId = remember(match.liveStreamUrl) {
+        val trimmed = match.liveStreamUrl.trim()
+        when {
+            trimmed.isBlank() -> null
+            Regex("""^[a-zA-Z0-9_-]{11}$""").matches(trimmed) -> trimmed
+            else -> Regex("""(?:youtu\.be/|youtube\.com/(?:watch\?v=|live/|embed/|shorts/))([a-zA-Z0-9_-]{11})""")
+                .find(trimmed)?.groupValues?.getOrNull(1)
+        }
+    }
+    var streamOverlayOnly by remember(match.id, match.liveStreamUrl) {
+        mutableStateOf(match.liveStreamUrl.isNotBlank())
+    }
 
     val teamA = teams.find { it.id == match.teamAId }
     val teamB = teams.find { it.id == match.teamBId }
@@ -900,8 +929,127 @@ fun CricbuzzSpectatorView(
             }
         }
 
-        // Cricbuzz Sub-Tabs
-        TabRow(
+        // YouTube Live Stream + Score Overlay Only Mode (for Spectators when live stream is active)
+        if (match.liveStreamUrl.isNotBlank()) {
+            val activeTeam = if (currentInnings == 1) teamA else teamB
+            val activeWkts = if (currentInnings == 1) match.teamAWickets else match.teamBWickets
+            val activeOvStr = if (currentInnings == 1) inn1OversStr else inn2OversStr
+            val overIdx = activeLegal / 6
+            val thisOverBalls = currentInningsBalls.filter { it.overNumber == overIdx }
+
+            Column(modifier = Modifier.fillMaxWidth().background(Color.Black)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Surface(
+                            onClick = { streamOverlayOnly = true },
+                            color = if (streamOverlayOnly) Color(0xFFFF0000) else Color.White.copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "📺 Stream + Score Overlay",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                        Surface(
+                            onClick = { streamOverlayOnly = false },
+                            color = if (!streamOverlayOnly) cricbuzzGreen else Color.White.copy(alpha = 0.14f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "📊 Full Scorecard",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            val ytUrl = if (streamVideoId != null) "https://www.youtube.com/watch?v=$streamVideoId" else match.liveStreamUrl
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ytUrl)).apply { setPackage("com.google.android.youtube") })
+                            } catch (_: Exception) {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ytUrl)))
+                            }
+                        },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = "Open in YouTube", tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                // Embedded YouTube Player + Broadcast Score Overlay Bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (streamOverlayOnly) 260.dp else 185.dp)
+                        .background(Color.Black)
+                ) {
+                    if (streamVideoId != null) {
+                        AndroidView(
+                            factory = { ctx ->
+                                WebView(ctx).apply {
+                                    layoutParams = android.view.ViewGroup.LayoutParams(
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.mediaPlaybackRequiresUserGesture = false
+                                    webChromeClient = WebChromeClient()
+                                    webViewClient = WebViewClient()
+                                    loadUrl("https://www.youtube-nocookie.com/embed/$streamVideoId?autoplay=1&playsinline=1&modestbranding=1&rel=0")
+                                }
+                            },
+                            update = { webView ->
+                                val embedUrl = "https://www.youtube-nocookie.com/embed/$streamVideoId?autoplay=1&playsinline=1&modestbranding=1&rel=0"
+                                if (webView.url != embedUrl) webView.loadUrl(embedUrl)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("YouTube Live: ${match.liveStreamUrl}", color = Color.White, fontSize = 12.sp)
+                        }
+                    }
+
+                    // Compact Broadcast Score Overlay pinned at bottom of the video
+                    BroadcastScoreOverlayBar(
+                        battingTeamShort = activeTeam?.shortCode ?: "TEAM",
+                        runs = activeRuns,
+                        wickets = activeWkts,
+                        oversStr = activeOvStr,
+                        totalOvers = match.totalOvers,
+                        currentInnings = currentInnings,
+                        targetRuns = target,
+                        needRuns = need,
+                        ballsRemaining = ballsRem,
+                        striker = striker,
+                        nonStriker = nonStriker,
+                        bowler = bowler,
+                        currentInningsBalls = currentInningsBalls,
+                        thisOverBalls = thisOverBalls,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(6.dp)
+                    )
+                }
+            }
+        }
+
+        if (match.liveStreamUrl.isBlank() || !streamOverlayOnly) {
+            // Cricbuzz Sub-Tabs
+            TabRow(
             selectedTabIndex = selectedTab,
             containerColor = cardBg,
             contentColor = cricbuzzGreen
@@ -1214,6 +1362,292 @@ fun CricbuzzSpectatorView(
                             }
                         }
                     }
+                }
+            }
+        }
+        }
+    }
+}
+
+@Composable
+fun BroadcastScoreOverlayBar(
+    battingTeamShort: String,
+    runs: Int,
+    wickets: Int,
+    oversStr: String,
+    totalOvers: Int,
+    currentInnings: Int,
+    targetRuns: Int,
+    needRuns: Int,
+    ballsRemaining: Int,
+    striker: Player?,
+    nonStriker: Player?,
+    bowler: Player?,
+    currentInningsBalls: List<BallRecord>,
+    thisOverBalls: List<BallRecord>,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xE60A192F),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.7f)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(color = Color(0xFFE53935), shape = RoundedCornerShape(4.dp)) {
+                        Text("LIVE", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                    }
+                    Text(
+                        text = "$battingTeamShort $runs/$wickets",
+                        color = Color.White,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "($oversStr/$totalOvers)",
+                        color = IplGold,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                }
+                Text(
+                    text = if (currentInnings == 2) "T:$targetRuns • Need $needRuns in $ballsRemaining b" else "1st Innings",
+                    color = NeonBlue,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val sRuns = striker?.let { s -> currentInningsBalls.filter { it.strikerId == s.id }.sumOf { it.runsScored } } ?: 0
+                val sBalls = striker?.let { s -> currentInningsBalls.filter { it.strikerId == s.id && it.extraType != ExtraType.WIDE }.size } ?: 0
+                val nsRuns = nonStriker?.let { ns -> currentInningsBalls.filter { it.strikerId == ns.id }.sumOf { it.runsScored } } ?: 0
+                val nsBalls = nonStriker?.let { ns -> currentInningsBalls.filter { it.strikerId == ns.id && it.extraType != ExtraType.WIDE }.size } ?: 0
+
+                Text(
+                    text = "${striker?.name?.take(10) ?: "-"}* $sRuns($sBalls)  |  ${nonStriker?.name?.take(10) ?: "-"} $nsRuns($nsBalls)",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    items(thisOverBalls.takeLast(6)) { b ->
+                        val lbl = if (b.isWicket) "W" else if (b.extraType != ExtraType.NONE) "${b.runsScored}${b.extraType.name.take(1)}" else "${b.runsScored}"
+                        val bg = when {
+                            b.isWicket -> UnsoldRed
+                            b.runsScored == 6 -> BidGreen
+                            b.runsScored == 4 -> Color(0xFF1976D2)
+                            else -> Color.White.copy(alpha = 0.22f)
+                        }
+                        Box(
+                            modifier = Modifier.size(18.dp).clip(CircleShape).background(bg),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(lbl, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 8.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Suppress("DEPRECATION")
+@Composable
+fun CameraLiveBroadcastOverlayDialog(
+    match: Match,
+    teams: List<Team>,
+    currentInningsBalls: List<BallRecord>,
+    striker: Player?,
+    nonStriker: Player?,
+    bowler: Player?,
+    initialStreamUrl: String,
+    onSaveStreamUrl: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var streamUrlInput by remember(initialStreamUrl) { mutableStateOf(initialStreamUrl) }
+    var cameraRef by remember { mutableStateOf<Camera?>(null) }
+
+    val teamA = teams.find { it.id == match.teamAId }
+    val teamB = teams.find { it.id == match.teamBId }
+    val currentInnings = match.currentInnings
+    val activeTeam = if (currentInnings == 1) teamA else teamB
+    val activeRuns = if (currentInnings == 1) match.teamARuns else match.teamBRuns
+    val activeWkts = if (currentInnings == 1) match.teamAWickets else match.teamBWickets
+    val activeLegal = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+    val activeOvStr = "${activeLegal / 6}.${activeLegal % 6}"
+    val overIdx = activeLegal / 6
+    val thisOverBalls = currentInningsBalls.filter { it.overNumber == overIdx }
+    val target = match.teamARuns + 1
+    val need = (target - match.teamBRuns).coerceAtLeast(0)
+    val ballsRem = (match.totalOvers * 6 - activeLegal).coerceAtLeast(0)
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                cameraRef?.stopPreview()
+                cameraRef?.release()
+                cameraRef = null
+            } catch (_: Exception) { }
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            color = Color.Black,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Live Camera Surface Preview
+                AndroidView(
+                    factory = { ctx ->
+                        SurfaceView(ctx).apply {
+                            holder.addCallback(object : SurfaceHolder.Callback {
+                                override fun surfaceCreated(holder: SurfaceHolder) {
+                                    try {
+                                        val cam = Camera.open()
+                                        cam.setDisplayOrientation(90)
+                                        cam.setPreviewDisplay(holder)
+                                        cam.startPreview()
+                                        cameraRef = cam
+                                    } catch (_: Exception) { }
+                                }
+                                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+                                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                    try {
+                                        cameraRef?.stopPreview()
+                                        cameraRef?.release()
+                                        cameraRef = null
+                                    } catch (_: Exception) { }
+                                }
+                            })
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Top Broadcast Bar
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFF0000)))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "CAMERA LIVE STREAM + SCORE OVERLAY",
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close Camera", tint = Color.White)
+                    }
+                }
+
+                // Bottom Controls + Live Score Overlay
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BroadcastScoreOverlayBar(
+                        battingTeamShort = activeTeam?.shortCode ?: "TEAM",
+                        runs = activeRuns,
+                        wickets = activeWkts,
+                        oversStr = activeOvStr,
+                        totalOvers = match.totalOvers,
+                        currentInnings = currentInnings,
+                        targetRuns = target,
+                        needRuns = need,
+                        ballsRemaining = ballsRem,
+                        striker = striker,
+                        nonStriker = nonStriker,
+                        bowler = bowler,
+                        currentInningsBalls = currentInningsBalls,
+                        thisOverBalls = thisOverBalls,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                val ytLive = Intent(Intent.ACTION_VIEW, Uri.parse("https://studio.youtube.com/channel/live")).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                try {
+                                    context.startActivity(ytLive)
+                                } catch (_: Exception) {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/live_dashboard")))
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Go Live on YouTube", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                onSaveStreamUrl(streamUrlInput.trim())
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Publish Overlay", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = streamUrlInput,
+                        onValueChange = { streamUrlInput = it },
+                        placeholder = { Text("Paste YouTube Live URL for Spectators...", color = Color.LightGray, fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = IplGold,
+                            unfocusedBorderColor = Color.Gray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }

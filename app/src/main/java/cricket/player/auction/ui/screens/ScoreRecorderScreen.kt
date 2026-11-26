@@ -36,13 +36,18 @@ import cricket.player.auction.viewmodel.AuctionViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-import android.widget.Toast
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -121,7 +126,21 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var showLiveStreamDialog by remember { mutableStateOf(false) }
     var showLiveStreamCard by remember { mutableStateOf(true) }
     var streamUrlInput by remember { mutableStateOf("") }
+    var showCameraStreamPreview by remember { mutableStateOf(false) }
     var showDirectEndMatchModal by remember { mutableStateOf(false) }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val camGranted = permissions[Manifest.permission.CAMERA] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        if (camGranted) {
+            showLiveStreamDialog = false
+            showCameraStreamPreview = true
+        } else {
+            Toast.makeText(context, "📷 Camera permission is required to start live camera streaming.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     LaunchedEffect(pendingScorerLaunch) {
         val req = pendingScorerLaunch
@@ -2433,19 +2452,17 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         fontSize = 12.sp
                     )
 
-                    // Button to create and start live streaming on YouTube
+                    // Button to request Camera permission and start direct stream + score overlay
                     Button(
                         onClick = {
-                            val liveDashIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://studio.youtube.com/channel/live")).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                            }
-                            try {
-                                context.startActivity(liveDashIntent)
-                            } catch (e: Exception) {
-                                val altIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/live_dashboard")).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                context.startActivity(altIntent)
+                            val hasCam = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                            if (hasCam) {
+                                showLiveStreamDialog = false
+                                showCameraStreamPreview = true
+                            } else {
+                                cameraPermissionLauncher.launch(
+                                    arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+                                )
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
@@ -2456,7 +2473,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     ) {
                         Icon(imageVector = Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Create Stream & Go Live 🔴", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                        Text("Start Camera Stream & Go Live 🔴", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                     }
 
                     HorizontalDivider(color = surfaceBg, thickness = 1.dp)
@@ -2528,6 +2545,25 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 }
             },
             containerColor = cardBg
+        )
+    }
+
+    if (showCameraStreamPreview && activeMatch != null) {
+        CameraLiveBroadcastOverlayDialog(
+            match = activeMatch,
+            teams = teams,
+            currentInningsBalls = currentInningsBalls,
+            striker = striker,
+            nonStriker = nonStriker,
+            bowler = bowler,
+            initialStreamUrl = activeMatch.liveStreamUrl,
+            onSaveStreamUrl = { newUrl ->
+                viewModel.updateMatchLiveStreamUrl(activeMatch.id, newUrl)
+                streamUrlInput = newUrl
+                showLiveStreamCard = true
+                Toast.makeText(context, "📺 Live stream overlay published for Spectators!", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showCameraStreamPreview = false }
         )
     }
 
