@@ -104,6 +104,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     }
 
     var isViewingLiveMatch by remember { mutableStateOf(false) }
+    var scorerUiMode by remember { mutableStateOf("CLASSIC") } // "CLASSIC" (Crichunt), "MODERN" (Current), "SPECTATOR" (Cricbuzz Preview)
     var matchFilter by remember { mutableStateOf("ALL") }
     var showCreateMatchModal by remember { mutableStateOf(false) }
     var showCoinTossModal by remember { mutableStateOf(false) }
@@ -786,8 +787,36 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    // 8. Status actions: Resume/Edit or End (Only for scorer / admin)
+                    // 8. UI Mode Switcher (Classic Crichunt / Modern / Spectator Preview) + Status actions
                     if (canScore) {
+                        val modeOptions = listOf(
+                            "CLASSIC" to "Classic",
+                            "MODERN" to "Modern",
+                            "SPECTATOR" to "👁 Spectator"
+                        )
+                        modeOptions.forEach { (modeKey, modeLabel) ->
+                            val isSelectedMode = scorerUiMode == modeKey
+                            Surface(
+                                onClick = { scorerUiMode = modeKey },
+                                color = if (isSelectedMode) themeAccent else surfaceBg,
+                                shape = RoundedCornerShape(6.dp),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSelectedMode) themeAccent else textSub.copy(alpha = 0.35f)
+                                )
+                            ) {
+                                Text(
+                                    text = modeLabel,
+                                    color = if (isSelectedMode) (if (isDarkTheme) Color.Black else Color.White) else textMain,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+
                         if (activeMatch.status == MatchStatus.COMPLETED) {
                             if (isEditable) {
                                 Surface(
@@ -854,7 +883,136 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 val tossWinnerTeam = teams.find { it.id == match.tossWinnerTeamId }
                 val winnerTeam = teams.find { it.id == match.winnerTeamId }
 
-                LazyColumn(
+                if (isSpectator || !canScore || scorerUiMode == "SPECTATOR") {
+                    cricket.player.auction.ui.components.CricbuzzSpectatorView(
+                        match = match,
+                        teams = teams,
+                        players = players,
+                        matchBalls = matchBalls,
+                        striker = striker,
+                        nonStriker = nonStriker,
+                        bowler = bowler,
+                        isDarkTheme = isDarkTheme,
+                        isPreviewByScorer = canScore && !isSpectator && scorerUiMode == "SPECTATOR",
+                        onExitPreview = { scorerUiMode = "CLASSIC" }
+                    )
+                } else if (scorerUiMode == "CLASSIC") {
+                    cricket.player.auction.ui.components.ClassicCrichuntScorerView(
+                        match = match,
+                        teams = teams,
+                        players = players,
+                        currentInningsBalls = currentInningsBalls,
+                        battingTeam = battingTeam,
+                        bowlingTeam = bowlingTeam,
+                        striker = striker,
+                        nonStriker = nonStriker,
+                        bowler = bowler,
+                        battingPlayers = battingPlayers,
+                        selectedExtraType = selectedExtraType,
+                        isEditable = isEditable,
+                        isDarkTheme = isDarkTheme,
+                        onSelectExtra = { extra ->
+                            val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                            val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                            if (bowlerId == null || isOverEndedWaitingForBowler) {
+                                showChangeBowlerModal = true
+                                Toast.makeText(context, "⚠️ Over completed! Please select the bowler for the next over.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                selectedExtraType = extra
+                            }
+                        },
+                        onScoreRuns = { run ->
+                            val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                            val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                            if (bowlerId == null || isOverEndedWaitingForBowler) {
+                                showChangeBowlerModal = true
+                                Toast.makeText(context, "⚠️ Over completed! Please select the bowler for the next over.", Toast.LENGTH_SHORT).show()
+                            } else if (strikerId != null && isEditable) {
+                                if (match.status == MatchStatus.COMPLETED) {
+                                    viewModel.resumeMatch(match.id)
+                                }
+                                val extraRuns = if (selectedExtraType == ExtraType.WIDE || selectedExtraType == ExtraType.NO_BALL) 1 else 0
+                                val isLegal = selectedExtraType != ExtraType.WIDE && selectedExtraType != ExtraType.NO_BALL
+                                val legalBallsBefore = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                val overNum = legalBallsBefore / 6
+                                val ballNum = (legalBallsBefore % 6) + 1
+                                val ball = BallRecord(
+                                    id = "b_${System.currentTimeMillis()}",
+                                    matchId = match.id,
+                                    innings = currentInnings,
+                                    overNumber = overNum,
+                                    ballNumber = ballNum,
+                                    strikerId = strikerId ?: "",
+                                    nonStrikerId = nonStrikerId,
+                                    bowlerId = bowlerId ?: "",
+                                    runsScored = run,
+                                    extraType = selectedExtraType,
+                                    extraRuns = extraRuns,
+                                    commentary = "$run runs scored"
+                                )
+                                viewModel.addBallRecord(ball)
+                                selectedExtraType = ExtraType.NONE
+
+                                var newStriker = strikerId
+                                var newNonStriker = nonStrikerId
+                                if (run % 2 != 0 && newNonStriker != null) {
+                                    val temp = newStriker
+                                    newStriker = newNonStriker
+                                    newNonStriker = temp
+                                }
+                                val isOverComplete = isLegal && (ballNum == 6)
+                                if (isOverComplete && newNonStriker != null) {
+                                    val temp = newStriker
+                                    newStriker = newNonStriker
+                                    newNonStriker = temp
+                                    lastCompletedOverBowlerId = bowlerId
+                                    bowlerId = null
+                                    showChangeBowlerModal = true
+                                }
+                                strikerId = newStriker
+                                nonStrikerId = newNonStriker
+                            }
+                        },
+                        onOpenWicket = {
+                            val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                            val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                            if (bowlerId == null || isOverEndedWaitingForBowler) {
+                                showChangeBowlerModal = true
+                                Toast.makeText(context, "⚠️ Over ended! Please select the bowler for the next over.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                if (match.status == MatchStatus.COMPLETED) {
+                                    viewModel.resumeMatch(match.id)
+                                }
+                                showWicketModal = true
+                            }
+                        },
+                        onUndoLastBall = {
+                            if (match.status == MatchStatus.COMPLETED) {
+                                viewModel.resumeMatch(match.id)
+                            }
+                            val undone = viewModel.undoLastBall(match.id)
+                            if (undone != null) {
+                                Toast.makeText(context, "↩ Undone last ball", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onSwapStrike = {
+                            if (nonStrikerId != null) {
+                                val temp = strikerId
+                                strikerId = nonStrikerId
+                                nonStrikerId = temp
+                            }
+                        },
+                        onReplaceBatter = { isStr, newPlayerId ->
+                            if (isStr) strikerId = newPlayerId else nonStrikerId = newPlayerId
+                        },
+                        onChangeBowler = { showChangeBowlerModal = true },
+                        onStartChase = { viewModel.endActiveInnings() },
+                        onEndInnings = { showEndInningsConfirmModal = true },
+                        onDirectEndMatch = { showDirectEndMatchModal = true },
+                        onUndoEndInnings = { showUndoEndInningsConfirmModal = true }
+                    )
+                } else {
+                    LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -1886,6 +2044,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             }
                         }
                     }
+                }
                 }
             }
         }
