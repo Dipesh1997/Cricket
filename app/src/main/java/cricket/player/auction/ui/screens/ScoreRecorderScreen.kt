@@ -229,43 +229,61 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     val nonStriker = players.find { it.id == nonStrikerId }
     val bowler = players.find { it.id == bowlerId }
 
-    // Auto-assign initial players & update when innings switches
+    // Restore playing batters & bowler from ball history on resume/switch, or require explicit selection
     var lastObservedInnings by remember { mutableStateOf(currentInnings) }
-    LaunchedEffect(currentInnings, battingTeamId, bowlingTeamId, activeMatch?.id) {
-        if (currentInnings != lastObservedInnings) {
+    var lastObservedMatchId by remember { mutableStateOf(activeMatch?.id) }
+    LaunchedEffect(currentInnings, battingTeamId, bowlingTeamId, activeMatch?.id, isViewingLiveMatch) {
+        val matchChanged = activeMatch?.id != lastObservedMatchId
+        val inningsChanged = currentInnings != lastObservedInnings
+        if (matchChanged || inningsChanged) {
+            lastObservedMatchId = activeMatch?.id
             lastObservedInnings = currentInnings
-            // Reset bowler guard when innings changes so innings-2 bowler check is fresh
             lastCompletedOverBowlerId = null
-            val lastBallOfInnings = matchBalls.filter { it.innings == currentInnings }.lastOrNull()
-            if (lastBallOfInnings != null) {
-                strikerId = lastBallOfInnings.strikerId
-                nonStrikerId = lastBallOfInnings.nonStrikerId
-                bowlerId = lastBallOfInnings.bowlerId
-            } else {
-                // Reset players on crease when starting fresh innings
-                strikerId = battingPlayers.firstOrNull()?.id
-                nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
-                bowlerId = null // force bowler selection for innings 2
-            }
-            if (currentInnings == 2) {
+            strikerId = null
+            nonStrikerId = null
+            bowlerId = null
+            if (inningsChanged && currentInnings == 2) {
                 showTargetModal = true
                 Toast.makeText(context, "🏁 Innings 1 Ended! 2nd Innings Started. Target: ${(activeMatch?.teamARuns ?: 0) + 1}", Toast.LENGTH_LONG).show()
             }
-        } else if (activeMatch != null) {
-            if (strikerId == null || battingPlayers.none { it.id == strikerId }) {
-                strikerId = battingPlayers.firstOrNull()?.id
-            }
-            if (nonStrikerId == null || battingPlayers.none { it.id == nonStrikerId }) {
-                nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
-            }
-            val legalBallsCount = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
-            val isOverJustEnded = legalBallsCount > 0 && (legalBallsCount % 6 == 0)
-            if (bowlerId == null || bowlingPlayers.none { it.id == bowlerId }) {
-                if (showChangeBowlerModal || isOverJustEnded) {
-                    // Do NOT auto-assign bowler when an over has just ended or when waiting for bowler change!
-                } else {
-                    bowlerId = bowlingPlayers.firstOrNull()?.id
+        }
+        if (activeMatch != null && (strikerId == null || nonStrikerId == null || bowlerId == null)) {
+            val lastBallOfInnings = currentInningsBalls.lastOrNull()
+            if (lastBallOfInnings != null) {
+                var restoredStriker: String? = lastBallOfInnings.strikerId.takeIf { it.isNotBlank() }
+                var restoredNonStriker: String? = lastBallOfInnings.nonStrikerId?.takeIf { it.isNotBlank() }
+                val isLegal = lastBallOfInnings.extraType != ExtraType.WIDE && lastBallOfInnings.extraType != ExtraType.NO_BALL
+                val overEndedOnLastBall = isLegal && (lastBallOfInnings.ballNumber == 6)
+
+                if (lastBallOfInnings.runsScored % 2 != 0 && restoredNonStriker != null) {
+                    val tmp = restoredStriker
+                    restoredStriker = restoredNonStriker
+                    restoredNonStriker = tmp
                 }
+                if (overEndedOnLastBall && restoredNonStriker != null) {
+                    val tmp = restoredStriker
+                    restoredStriker = restoredNonStriker
+                    restoredNonStriker = tmp
+                }
+                if (strikerId == null) strikerId = restoredStriker ?: battingPlayers.firstOrNull()?.id
+                if (nonStrikerId == null) nonStrikerId = restoredNonStriker ?: battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
+
+                val legalTotal = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                val oversDone = legalTotal >= activeMatch.totalOvers * 6
+                if (overEndedOnLastBall && !oversDone) {
+                    lastCompletedOverBowlerId = lastBallOfInnings.bowlerId
+                    bowlerId = null
+                } else if (bowlerId == null) {
+                    bowlerId = lastBallOfInnings.bowlerId.takeIf { it.isNotBlank() }
+                }
+            } else {
+                if (strikerId == null || battingPlayers.none { it.id == strikerId }) {
+                    strikerId = battingPlayers.firstOrNull()?.id
+                }
+                if (nonStrikerId == null || battingPlayers.none { it.id == nonStrikerId }) {
+                    nonStrikerId = battingPlayers.getOrNull(1)?.id ?: battingPlayers.firstOrNull()?.id
+                }
+                // Do NOT auto-assign bowlerId when no balls bowled yet — force explicit bowler selection
             }
         }
     }
@@ -277,11 +295,13 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
         }
     }
 
-    // Auto-show Declare Winner Modal when Match Completes naturally (target chased, all-out, overs complete)
+    // Auto-show Declare Winner Modal when Match Completes naturally (and reset when resumed)
     LaunchedEffect(activeMatch?.id, activeMatch?.status) {
         if (activeMatch?.status == MatchStatus.COMPLETED && lastConcludedMatchId != activeMatch?.id) {
             showDeclareWinnerPopup = true
             lastConcludedMatchId = activeMatch?.id
+        } else if (activeMatch?.status != MatchStatus.COMPLETED) {
+            lastConcludedMatchId = null
         }
     }
 
@@ -958,11 +978,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         },
                         onScoreRuns = { run ->
                             val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
-                            val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
-                            if (bowlerId == null || isOverEndedWaitingForBowler) {
+                            val oversAlreadyDone = legalBallsNow >= match.totalOvers * 6
+                            val isOverEndedWaitingForBowler = !oversAlreadyDone && legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                            if (strikerId.isNullOrBlank()) {
+                                Toast.makeText(context, "⚠️ Please select a Striker batter first!", Toast.LENGTH_SHORT).show()
+                            } else if (bowlerId.isNullOrBlank() || isOverEndedWaitingForBowler) {
                                 showChangeBowlerModal = true
-                                Toast.makeText(context, "⚠️ Over completed! Please select the bowler for the next over.", Toast.LENGTH_SHORT).show()
-                            } else if (strikerId != null && isEditable) {
+                                Toast.makeText(context, "⚠️ Please select the bowler before recording runs!", Toast.LENGTH_SHORT).show()
+                            } else if (isEditable) {
                                 if (match.status == MatchStatus.COMPLETED) {
                                     viewModel.resumeMatch(match.id)
                                 }
@@ -995,11 +1018,17 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                     newStriker = newNonStriker
                                     newNonStriker = temp
                                 }
+                                val newLegalTotal = legalBallsBefore + (if (isLegal) 1 else 0)
+                                val oversExhausted = newLegalTotal >= match.totalOvers * 6
+                                val currentRunsBefore = if (currentInnings == 1) match.teamARuns else match.teamBRuns
+                                val targetChased = currentInnings == 2 && (currentRunsBefore + run + extraRuns) >= (match.teamARuns + 1)
                                 val isOverComplete = isLegal && (ballNum == 6)
-                                if (isOverComplete && newNonStriker != null) {
-                                    val temp = newStriker
-                                    newStriker = newNonStriker
-                                    newNonStriker = temp
+                                if (isOverComplete && !oversExhausted && !targetChased) {
+                                    if (newNonStriker != null) {
+                                        val temp = newStriker
+                                        newStriker = newNonStriker
+                                        newNonStriker = temp
+                                    }
                                     lastCompletedOverBowlerId = bowlerId
                                     bowlerId = null
                                     showChangeBowlerModal = true
@@ -1630,7 +1659,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
                                                     text = "⏸️ Scoring Paused (Over Ended)",
-                                                    color = IplGold,
+                                                    color = themeAccent,
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -1853,12 +1882,18 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                                             newNonStriker = temp
                                                         }
 
-                                                        // End of Over (6 legal balls completed): swap strike & prompt bowler change!
+                                                        // End of Over (6 legal balls completed): swap strike & prompt bowler change ONLY if innings/match continues!
+                                                        val newLegalTotal = legalBallsBefore + (if (isLegal) 1 else 0)
+                                                        val oversExhausted = newLegalTotal >= match.totalOvers * 6
+                                                        val currentRunsBefore = if (currentInnings == 1) match.teamARuns else match.teamBRuns
+                                                        val targetChased = currentInnings == 2 && (currentRunsBefore + run + extraRuns) >= (match.teamARuns + 1)
                                                         val isOverComplete = isLegal && (ballNum == 6)
-                                                        if (isOverComplete && newNonStriker != null) {
-                                                            val temp = newStriker
-                                                            newStriker = newNonStriker
-                                                            newNonStriker = temp
+                                                        if (isOverComplete && !oversExhausted && !targetChased) {
+                                                            if (newNonStriker != null) {
+                                                                val temp = newStriker
+                                                                newStriker = newNonStriker
+                                                                newNonStriker = temp
+                                                            }
 
                                                             lastCompletedOverBowlerId = bowlerId
                                                             bowlerId = null
@@ -2196,7 +2231,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     item {
-                        Text("SELECT WINNING TEAM", color = IplGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("SELECT WINNING TEAM", color = themeAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -2720,7 +2755,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "Last Player Batting Allowed",
-                                    color = IplGold,
+                                    color = themeAccent,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -2773,6 +2808,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             CoinTossModal(
                 teamA = team1,
                 teamB = team2,
+                isDarkTheme = isDarkTheme,
                 onDismiss = { showCoinTossModal = false },
                 onTossCompleted = { winnerTeam, decision ->
                     val overs = matchOversInput.toIntOrNull() ?: 5
@@ -3795,9 +3831,14 @@ fun MatchHistoryCard(
 fun CoinTossModal(
     teamA: Team,
     teamB: Team,
+    isDarkTheme: Boolean = true,
     onDismiss: () -> Unit,
     onTossCompleted: (tossWinnerTeam: Team, decision: String) -> Unit
 ) {
+    val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
+    val textMain = if (isDarkTheme) Color.White else LightPitchText
+    val textSub = if (isDarkTheme) Color.Gray else LightPitchSecondary
+    val themeAccent = if (isDarkTheme) IplGold else LightPitchPrimary
     var callSelection by remember { mutableStateOf("HEADS") }
     var isFlipping by remember { mutableStateOf(false) }
     var flipResult by remember { mutableStateOf<String?>(null) }
@@ -3814,10 +3855,10 @@ fun CoinTossModal(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🪙 COIN TOSS ARENA", color = IplGold, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                    Text("🪙 COIN TOSS ARENA", color = themeAccent, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Flip the coin to determine Batting or Bowling choice", color = Color.Gray, fontSize = 12.sp)
+                Text("Flip the coin to determine Batting or Bowling choice", color = textSub, fontSize = 12.sp)
             }
         },
         text = {
@@ -3981,10 +4022,10 @@ fun CoinTossModal(
                 onClick = { onDismiss() },
                 enabled = !isFlipping
             ) {
-                Text("Cancel", color = Color.Gray)
+                Text("Cancel", color = textSub)
             }
         },
-        containerColor = StadiumCardDark
+        containerColor = cardBg
     )
 }
 
@@ -4117,10 +4158,10 @@ fun DropdownPlayerPicker(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("Close", color = Color.Gray)
+                    Text("Close", color = textSub)
                 }
             },
-            containerColor = StadiumCardDark
+            containerColor = cardBg
         )
     }
 }
@@ -4156,10 +4197,10 @@ fun DropdownTeamPicker(
             ) {
                 Text(
                     text = selectedTeam?.name ?: "Tap to choose team",
-                    color = Color.White,
+                    color = textMain,
                     fontWeight = FontWeight.Bold
                 )
-                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = IplGold)
+                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null, tint = themeAccent)
             }
         }
 
@@ -4170,7 +4211,7 @@ fun DropdownTeamPicker(
         ) {
             teams.forEach { team ->
                 DropdownMenuItem(
-                    text = { Text(team.name, color = Color.White) },
+                    text = { Text(team.name, color = textMain) },
                     onClick = {
                         onTeamSelected(team)
                         expanded = false

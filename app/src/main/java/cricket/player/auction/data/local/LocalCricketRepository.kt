@@ -952,6 +952,21 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
+    fun setEnforceEqualSquadsRule(tournamentId: String, enabled: Boolean) {
+        _tournaments.value = _tournaments.value.map { t ->
+            if (t.id == tournamentId) t.copy(enforceEqualSquadsAcrossTeams = enabled) else t
+        }
+        persistAsync()
+    }
+
+    fun getEqualSquadTargetPerTeam(tournamentId: String): Int {
+        val tourney = _tournaments.value.find { it.id == tournamentId } ?: return 0
+        if (!tourney.enforceEqualSquadsAcrossTeams) return 0
+        val tCount = _teams.value.count { it.tournamentId == tournamentId }
+        val pCount = _players.value.count { it.tournamentId == tournamentId }
+        return if (tCount > 0 && pCount >= tCount && pCount % tCount == 0) pCount / tCount else 0
+    }
+
     fun advanceSpinTurn(tournamentId: String) {
         val tourneyTeams = _teams.value.filter { it.tournamentId == tournamentId }
         if (tourneyTeams.isEmpty()) return
@@ -1103,6 +1118,15 @@ class LocalCricketRepository(context: Context) {
             }
         }
 
+        // Equal Squads Across Whole Tournament Check
+        val equalTarget = getEqualSquadTargetPerTeam(player.tournamentId)
+        if (equalTarget > 0) {
+            val teamSoldCount = _players.value.count {
+                it.tournamentId == player.tournamentId && it.status == PlayerStatus.SOLD && it.soldToTeamId == teamId
+            }
+            if (teamSoldCount >= equalTarget) return false
+        }
+
         if (team.remainingPurse < (newAmount - (player.soldPrice ?: 0.0))) {
             return false
         }
@@ -1136,10 +1160,20 @@ class LocalCricketRepository(context: Context) {
         val player = _players.value.find { it.id == playerId } ?: return false
         val team = _teams.value.find { it.id == winnerTeamId } ?: return false
 
-        // Equal Distribution Check for Fixed Sets
+        // Budget & Equal Distribution Checks
+        if (team.remainingPurse < finalPrice) {
+            return false
+        }
         val quota = if (player.isFixedSet) getSetQuotaPerTeam(player.tournamentId) else 0
         if (quota > 0 && getTeamSetPickedCount(player.tournamentId, winnerTeamId) >= quota) {
             return false
+        }
+        val equalTarget = getEqualSquadTargetPerTeam(player.tournamentId)
+        if (equalTarget > 0) {
+            val teamSoldCount = _players.value.count {
+                it.tournamentId == player.tournamentId && it.status == PlayerStatus.SOLD && it.soldToTeamId == winnerTeamId
+            }
+            if (teamSoldCount >= equalTarget) return false
         }
 
         _teams.value = _teams.value.map { t ->
@@ -1622,9 +1656,11 @@ class LocalCricketRepository(context: Context) {
             var updatedMatch = match.copy(status = if (match.currentInnings == 1) MatchStatus.LIVE_INNINGS_1 else MatchStatus.LIVE_INNINGS_2)
 
             if (match.currentInnings == 1) {
-                val newRuns = match.teamARuns + totalBallRuns
-                val newWickets = if (ball.isWicket) match.teamAWickets + 1 else match.teamAWickets
-                val newOvers = incrementOvers(match.teamAOversBatted, isLegalBall)
+                val inn1Balls = _ballRecords.value.filter { it.matchId == ball.matchId && it.innings == 1 }
+                val newRuns = inn1Balls.sumOf { it.runsScored + it.extraRuns }
+                val newWickets = inn1Balls.count { it.isWicket }
+                val legalCount1 = inn1Balls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                val newOvers = calculateOversFromBalls(legalCount1)
 
                 // Calculate all-out threshold for team A
                 val soldBatting = _players.value.filter { it.soldToTeamId == match.teamAId }
@@ -1635,7 +1671,7 @@ class LocalCricketRepository(context: Context) {
                 val allOutWickets = if (match.isLastPlayerBattingAllowed) squadCount else (squadCount - 1).coerceAtLeast(1)
 
                 // Don't auto-flip innings — show INNINGS_BREAK screen so scorer can confirm
-                val status = if (newOvers >= match.totalOvers || newWickets >= allOutWickets) {
+                val status = if (legalCount1 >= match.totalOvers * 6 || newWickets >= allOutWickets) {
                     MatchStatus.INNINGS_BREAK
                 } else {
                     MatchStatus.LIVE_INNINGS_1
@@ -1649,9 +1685,11 @@ class LocalCricketRepository(context: Context) {
                     status = status
                 )
             } else {
-                val newRuns = match.teamBRuns + totalBallRuns
-                val newWickets = if (ball.isWicket) match.teamBWickets + 1 else match.teamBWickets
-                val newOvers = incrementOvers(match.teamBOversBatted, isLegalBall)
+                val inn2Balls = _ballRecords.value.filter { it.matchId == ball.matchId && it.innings == 2 }
+                val newRuns = inn2Balls.sumOf { it.runsScored + it.extraRuns }
+                val newWickets = inn2Balls.count { it.isWicket }
+                val legalCount2 = inn2Balls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                val newOvers = calculateOversFromBalls(legalCount2)
 
                 // Calculate all-out threshold for team B
                 val soldBatting = _players.value.filter { it.soldToTeamId == match.teamBId }
@@ -1735,8 +1773,9 @@ class LocalCricketRepository(context: Context) {
             if (tp.isNotEmpty()) (tp.size / 2).coerceAtLeast(2) else 11
         }
         val allOutWickets1 = if (match.isLastPlayerBattingAllowed) squadCount1 else (squadCount1 - 1).coerceAtLeast(1)
+        val keepInnings2 = (match.currentInnings == 2 && lastBall.innings == 2) || inn2Balls.isNotEmpty()
         val inn1Status = when {
-            inn2Balls.isNotEmpty() -> MatchStatus.LIVE_INNINGS_2
+            keepInnings2 -> MatchStatus.LIVE_INNINGS_2
             remainingOvers1 >= match.totalOvers || teamAWkts >= allOutWickets1 -> MatchStatus.INNINGS_BREAK
             else -> MatchStatus.LIVE_INNINGS_1
         }
@@ -1748,7 +1787,7 @@ class LocalCricketRepository(context: Context) {
             teamBRuns = teamBRuns,
             teamBWickets = teamBWkts,
             teamBOversBatted = teamBOvers,
-            currentInnings = if (inn2Balls.isNotEmpty()) 2 else 1,
+            currentInnings = if (keepInnings2) 2 else 1,
             status = inn1Status,
             winnerTeamId = null,
             resultSummary = ""
@@ -1762,7 +1801,7 @@ class LocalCricketRepository(context: Context) {
     private fun incrementOvers(currentOvers: Double, isLegalBall: Boolean): Double {
         if (!isLegalBall) return currentOvers
         val wholeOvers = currentOvers.toInt()
-        val balls = ((currentOvers - wholeOvers) * 10).toInt() + 1
+        val balls = kotlin.math.round((currentOvers - wholeOvers) * 10.0).toInt() + 1
         return if (balls >= 6) (wholeOvers + 1).toDouble() else (wholeOvers + balls / 10.0)
     }
 

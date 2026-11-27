@@ -165,6 +165,10 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         localRepository.setTournamentAutoAssignRule(tournamentId, enabled)
     }
 
+    fun setEnforceEqualSquadsRule(tournamentId: String, enabled: Boolean) {
+        localRepository.setEnforceEqualSquadsRule(tournamentId, enabled)
+    }
+
     fun advanceSpinTurn(tournamentId: String) {
         localRepository.advanceSpinTurn(tournamentId)
     }

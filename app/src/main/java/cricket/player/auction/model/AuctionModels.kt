@@ -87,6 +87,7 @@ data class Tournament(
     val isOfflineOnly: Boolean = false,
     val creatorDeviceId: String = "",
     val autoAssignLastPlayerAtAvg: Boolean = false,
+    val enforceEqualSquadsAcrossTeams: Boolean = false,
     val spinTurnIndex: Int = 0,
     val captainQuizSession: CaptainQuizSession? = null
 )

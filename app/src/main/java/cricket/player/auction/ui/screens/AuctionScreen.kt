@@ -67,6 +67,8 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     var showRemovePlayerDialog by remember { mutableStateOf(false) }
     var isRecentlySoldExpanded by remember { mutableStateOf(true) }
     var quizTargetTeamId by remember { mutableStateOf<String?>(null) }
+    var pendingBudgetWarningBid by remember { mutableStateOf<Pair<String, Double>?>(null) }
+    var pendingBudgetWarningMsg by remember { mutableStateOf("") }
 
     val tourneyId = activeTournament?.id ?: ""
     val tourneyTeams = remember(teams, tourneyId) {
@@ -262,6 +264,34 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
+                            }
+                        }
+
+                        val tourneyAllPlayers = players.filter { it.tournamentId == tourneyId }
+                        if (tourneyTeams.isNotEmpty() && tourneyAllPlayers.size >= tourneyTeams.size && tourneyAllPlayers.size % tourneyTeams.size == 0) {
+                            val equalPerTeam = tourneyAllPlayers.size / tourneyTeams.size
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Checkbox(
+                                    checked = activeTournament?.enforceEqualSquadsAcrossTeams == true,
+                                    onCheckedChange = { checked ->
+                                        if (isAdmin && tourneyId.isNotBlank()) {
+                                            viewModel.setEnforceEqualSquadsRule(tourneyId, checked)
+                                        }
+                                    },
+                                    enabled = isAdmin,
+                                    colors = CheckboxDefaults.colors(checkedColor = NeonBlue, checkmarkColor = Color.Black),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Equal Players per Team (${tourneyAllPlayers.size} ÷ ${tourneyTeams.size} = $equalPerTeam each)",
+                                    color = textMain,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
                             }
                         }
 
@@ -808,11 +838,63 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                         val activeP = activePlayer
                         val isAuctionReady = joinedCaptainTeams.isEmpty() || isBiddingStarted || areAllCaptainsReady
-                        val isTeamSetQuotaReached = activeP?.isFixedSet == true && setQuotaPerTeam > 0 &&
-                            (teamPickedCounts[effectiveBiddingTeam?.id] ?: 0) >= setQuotaPerTeam
+                        val tourneyAllPlayersForQuota = players.filter { it.tournamentId == tourneyId }
+                        val equalSquadTarget = if (activeTournament?.enforceEqualSquadsAcrossTeams == true &&
+                            tourneyTeams.isNotEmpty() &&
+                            tourneyAllPlayersForQuota.size >= tourneyTeams.size &&
+                            tourneyAllPlayersForQuota.size % tourneyTeams.size == 0
+                        ) tourneyAllPlayersForQuota.size / tourneyTeams.size else 0
+                        val teamTotalSold = players.count { it.tournamentId == tourneyId && it.status == PlayerStatus.SOLD && it.soldToTeamId == effectiveBiddingTeam?.id }
+                        val isEqualSquadReached = equalSquadTarget > 0 && teamTotalSold >= equalSquadTarget
+                        val isTeamSetQuotaReached = (activeP?.isFixedSet == true && setQuotaPerTeam > 0 &&
+                            (teamPickedCounts[effectiveBiddingTeam?.id] ?: 0) >= setQuotaPerTeam) || isEqualSquadReached
                         val isBidEnabled = activeP != null && activeP.status != PlayerStatus.SOLD &&
                             effectiveBiddingTeam != null && isAuctionReady && !isTeamSetQuotaReached
                         val availablePurse = effectiveBiddingTeam?.remainingPurse ?: 0.0
+
+                        val remainingPoolUpNext = players.filter { it.tournamentId == tourneyId && it.status == PlayerStatus.UP_NEXT && it.id != activeP?.id }
+                        val lowestNextBasePrice = remainingPoolUpNext.minOfOrNull { it.basePrice } ?: 0.0
+                        val remainingPlayersNeeded = when {
+                            equalSquadTarget > 0 -> (equalSquadTarget - teamTotalSold - 1).coerceAtLeast(0)
+                            setQuotaPerTeam > 0 && activeP?.isFixedSet == true -> (setQuotaPerTeam - (teamPickedCounts[effectiveBiddingTeam?.id] ?: 0) - 1).coerceAtLeast(0)
+                            remainingPoolUpNext.isNotEmpty() -> 1
+                            else -> 0
+                        }
+                        val requiredReserveMoney = remainingPlayersNeeded * lowestNextBasePrice
+                        val maxSafeBid = (availablePurse - requiredReserveMoney).coerceAtLeast(0.0)
+
+                        if (effectiveBiddingTeam != null && remainingPlayersNeeded > 0 && lowestNextBasePrice > 0.0) {
+                            Surface(
+                                color = themeAccent.copy(alpha = 0.10f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                            ) {
+                                Text(
+                                    text = "💡 Reserve ${requiredReserveMoney.formatIplCurrency()} for $remainingPlayersNeeded remaining player(s) (min base ${lowestNextBasePrice.formatIplCurrency()}) • Max Safe Bid: ${maxSafeBid.formatIplCurrency()}",
+                                    color = themeAccent,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+
+                        val tryPlaceBidWithReserveCheck: (Double) -> Unit = { inc ->
+                            val team = effectiveBiddingTeam
+                            val p = activeP
+                            if (team != null && p != null) {
+                                val nextAmt = p.currentBid + inc
+                                if (nextAmt > team.remainingPurse) {
+                                    Toast.makeText(context, "❌ Cannot exceed total remaining budget (${team.remainingPurse.formatIplCurrency()})!", Toast.LENGTH_SHORT).show()
+                                } else if (lowestNextBasePrice > 0.0 && remainingPlayersNeeded > 0 && nextAmt > maxSafeBid) {
+                                    val leftAfter = (team.remainingPurse - nextAmt).coerceAtLeast(0.0)
+                                    pendingBudgetWarningBid = team.id to inc
+                                    pendingBudgetWarningMsg = "You need ${requiredReserveMoney.formatIplCurrency()} to buy $remainingPlayersNeeded more player(s) at the lowest base price (${lowestNextBasePrice.formatIplCurrency()}).\n\nRaising your bid to ${nextAmt.formatIplCurrency()} leaves only ${leftAfter.formatIplCurrency()} — you will NOT be able to purchase the next player at base price!"
+                                } else {
+                                    viewModel.placeBid(team.id, inc)
+                                }
+                            }
+                        }
 
                         if (isTeamSetQuotaReached && effectiveBiddingTeam != null) {
                             Surface(
@@ -858,11 +940,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     amountCr = 0.20,
                                     availablePurse = availablePurse,
                                     isEnabled = isBidEnabled,
-                                    onClick = {
-                                        if (effectiveBiddingTeam != null) {
-                                            viewModel.placeBid(effectiveBiddingTeam.id, 0.20)
-                                        }
-                                    }
+                                    onClick = { tryPlaceBidWithReserveCheck(0.20) }
                                 )
                             }
                             Box(modifier = Modifier.weight(1f)) {
@@ -871,11 +949,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     amountCr = 0.50,
                                     availablePurse = availablePurse,
                                     isEnabled = isBidEnabled,
-                                    onClick = {
-                                        if (effectiveBiddingTeam != null) {
-                                            viewModel.placeBid(effectiveBiddingTeam.id, 0.50)
-                                        }
-                                    }
+                                    onClick = { tryPlaceBidWithReserveCheck(0.50) }
                                 )
                             }
                             Box(modifier = Modifier.weight(1f)) {
@@ -884,11 +958,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                                     amountCr = 1.00,
                                     availablePurse = availablePurse,
                                     isEnabled = isBidEnabled,
-                                    onClick = {
-                                        if (effectiveBiddingTeam != null) {
-                                            viewModel.placeBid(effectiveBiddingTeam.id, 1.00)
-                                        }
-                                    }
+                                    onClick = { tryPlaceBidWithReserveCheck(1.00) }
                                 )
                             }
                         }
@@ -1337,6 +1407,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
         )
     }
 
+
     // --- Interactive Spin Wheel Dialog ---
     if (showSpinWheelModal) {
         SpinWheelModal(
@@ -1424,6 +1495,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             containerColor = cardBg
         )
     }
+
 
     // --- Fixed Set Multi-Player Checkbox Selector Dialog ---
     if (showFixedSetSelectorModal) {
@@ -1544,6 +1616,7 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
         )
     }
 
+
     // --- Admin Remove Player Confirmation Dialog ---
     if (showRemovePlayerDialog && activePlayer != null) {
         val playerToRemove = activePlayer!!
@@ -1578,6 +1651,32 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             dismissButton = {
                 TextButton(onClick = { showRemovePlayerDialog = false }) {
                     Text("CANCEL", color = textSub)
+                }
+            },
+            containerColor = cardBg
+        )
+    }
+
+    if (pendingBudgetWarningBid != null) {
+        val (warnTeamId, warnInc) = pendingBudgetWarningBid!!
+        AlertDialog(
+            onDismissRequest = { pendingBudgetWarningBid = null },
+            title = { Text("⚠️ Budget Reserve Warning", color = UnsoldRed, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) },
+            text = { Text(pendingBudgetWarningMsg, color = textMain, fontSize = 13.sp) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.placeBid(warnTeamId, warnInc)
+                        pendingBudgetWarningBid = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White)
+                ) {
+                    Text("Bid Anyway", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingBudgetWarningBid = null }) {
+                    Text("Cancel", color = textSub)
                 }
             },
             containerColor = cardBg

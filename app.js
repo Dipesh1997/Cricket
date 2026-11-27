@@ -135,14 +135,17 @@ function toggleMasterAdminMode() {
   try {
     localStorage.setItem("cricket_master_admin_mode", (!current).toString());
   } catch (_e) {}
+  const btn = document.getElementById("masterModeBtn");
   if (!current) {
     state.currentUser.role = "ADMIN_AUCTIONEER";
+    if (btn) { btn.innerText = "👑 Master ON"; btn.style.borderColor = "var(--color-gold)"; }
     attachMasterModeWeb();
   } else {
+    if (btn) { btn.innerText = "👑 Master"; btn.style.borderColor = ""; }
     detachMasterModeWeb();
   }
   renderAll();
-  showToast(!current ? "🔓 MASTER ADMIN UNLOCKED: All tournaments visible with full control!" : "🔒 Master Admin Mode Disabled: Restored device view");
+  showToast(!current ? "🔓 MASTER ADMIN UNLOCKED: All tournaments visible with full CRUD control!" : "🔒 Master Admin Mode Disabled: Restored device view");
 }
 
 function registerBrowserDevice() {
@@ -715,17 +718,27 @@ function renderAll() {
 
 // --- NAVIGATION TABS ---
 function setupNavigation() {
-  const buttons = document.querySelectorAll(".nav-btn");
-  buttons.forEach(btn => {
+  const switchTab = (target) => {
+    document.querySelectorAll(".nav-btn, .mobile-nav-btn").forEach(b => {
+      b.classList.toggle("active", b.getAttribute("data-tab") === target);
+    });
+    document.querySelectorAll(".tab-pane").forEach(pane => pane.classList.remove("active"));
+    const targetPane = document.getElementById(target);
+    if (targetPane) targetPane.classList.add("active");
+  };
+
+  document.querySelectorAll(".nav-btn, .mobile-nav-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      buttons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
       const target = btn.getAttribute("data-tab");
-      document.querySelectorAll(".tab-pane").forEach(pane => pane.classList.remove("active"));
-      const targetPane = document.getElementById(target);
-      if (targetPane) targetPane.classList.add("active");
+      if (target) switchTab(target);
     });
   });
+
+  const masterBtn = document.getElementById("masterModeBtn");
+  if (masterBtn && isMasterAdminMode()) {
+    masterBtn.innerText = "👑 Master ON";
+    masterBtn.style.borderColor = "var(--color-gold)";
+  }
 
   const subButtons = document.querySelectorAll(".sub-nav-btn");
   subButtons.forEach(btn => {
@@ -1151,6 +1164,7 @@ function renderTeams() {
   const container = document.getElementById("teamsGridList");
   if (!container) return;
   const isAdmin = state.currentUser.role === "ADMIN_AUCTIONEER";
+  const isMaster = isMasterAdminMode();
   container.innerHTML = state.teams.map(t => {
     const remaining = t.totalPurse - t.spentPurse;
     const spentPct = Math.min(100, (t.spentPurse / t.totalPurse) * 100);
@@ -1161,13 +1175,16 @@ function renderTeams() {
           <div style="display: flex; align-items: center; gap: 10px;">
             <div class="team-avatar" style="background-color: ${t.primaryColorHex || '#FFD700'}">${t.shortCode}</div>
             <div>
-              <div style="font-weight: 800; color: #FFF;">${t.name}</div>
+              <div style="font-weight: 800; color: var(--color-text-main);">${t.name}</div>
               <div class="invite-badge" onclick="copyText('${t.inviteCode}', 'Team Code')">
                 <span>🔑 CODE: ${t.inviteCode}</span> 📋
               </div>
             </div>
           </div>
-          <div class="chip">Purse: ₹${remaining.toFixed(2)} Cr</div>
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <div class="chip">Purse: ₹${remaining.toFixed(2)} Cr</div>
+            ${isMaster ? `<button class="btn btn-sm btn-secondary" onclick="editTeam('${t.id}')" title="Edit Team">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteTeam('${t.id}')" title="Delete Team">🗑️</button>` : ''}
+          </div>
         </div>
         <div class="progress-bar">
           <div class="progress-fill" style="width: ${spentPct}%;"></div>
@@ -1199,6 +1216,7 @@ function renderTeams() {
 // --- PLAYER ROSTER ENGINE ---
 function renderPlayers() {
   const container = document.getElementById("playersTableContainer");
+  const isMaster = isMasterAdminMode();
   container.innerHTML = `
     <table>
       <thead>
@@ -1221,12 +1239,80 @@ function renderPlayers() {
             <td>₹${p.basePrice.toFixed(2)} Cr</td>
             <td><span class="chip" style="color: ${p.status === 'SOLD' ? 'var(--color-green)' : 'var(--color-gold)'}">${p.status}</span></td>
             <td>${p.setName || 'Set 1'} ${p.isFixedSet ? '⭐' : ''}</td>
-            <td><button class="btn btn-sm btn-secondary" onclick="selectActivePlayer('${p.id}')">Stage Player</button></td>
+            <td style="display: flex; gap: 4px; flex-wrap: wrap;">
+              <button class="btn btn-sm btn-secondary" onclick="selectActivePlayer('${p.id}')">Stage</button>
+              ${isMaster ? `<button class="btn btn-sm btn-secondary" onclick="editPlayer('${p.id}')" title="Edit Player">✏️</button><button class="btn btn-sm btn-danger" onclick="deletePlayer('${p.id}')" title="Delete Player">🗑️</button>` : ''}
+            </td>
           </tr>
         `).join("")}
       </tbody>
     </table>
   `;
+}
+
+// --- MASTER MODE FULL CRUD HELPERS ---
+function editTournament(tourneyId) {
+  const t = state.tournaments.find(x => x.id === tourneyId);
+  if (!t) return;
+  const newName = prompt("Edit Tournament Name:", t.name);
+  if (newName === null) return;
+  const newPurse = parseFloat(prompt("Edit Default Purse (Cr):", t.defaultPurse));
+  if (!isNaN(newPurse) && newPurse > 0) t.defaultPurse = newPurse;
+  if (newName.trim()) t.name = newName.trim();
+  saveToFirebase();
+  renderAll();
+  showToast("✅ Tournament updated!");
+}
+
+function editTeam(teamId) {
+  const t = state.teams.find(x => x.id === teamId);
+  if (!t) return;
+  const newName = prompt("Edit Team Name:", t.name);
+  if (newName === null) return;
+  const newCode = prompt("Edit Short Code:", t.shortCode);
+  const newPurse = parseFloat(prompt("Edit Total Purse (Cr):", t.totalPurse));
+  if (newName.trim()) t.name = newName.trim();
+  if (newCode && newCode.trim()) t.shortCode = newCode.trim().toUpperCase();
+  if (!isNaN(newPurse) && newPurse > 0) t.totalPurse = newPurse;
+  saveToFirebase();
+  renderAll();
+  showToast("✅ Team updated!");
+}
+
+function deleteTeam(teamId) {
+  const t = state.teams.find(x => x.id === teamId);
+  if (!t || !confirm(`Delete team '${t.name}'?`)) return;
+  state.teams = state.teams.filter(x => x.id !== teamId);
+  state.players = state.players.map(p => p.soldToTeamId === teamId ? { ...p, soldToTeamId: null, soldPrice: null, status: "UP_NEXT" } : p);
+  saveToFirebase();
+  renderAll();
+  showToast(`🗑️ Team '${t.name}' deleted!`);
+}
+
+function editPlayer(playerId) {
+  const p = state.players.find(x => x.id === playerId);
+  if (!p) return;
+  const newName = prompt("Edit Player Name:", p.name);
+  if (newName === null) return;
+  const newBase = parseFloat(prompt("Edit Base Price (Cr):", p.basePrice));
+  if (newName.trim()) p.name = newName.trim();
+  if (!isNaN(newBase) && newBase > 0) p.basePrice = newBase;
+  saveToFirebase();
+  renderAll();
+  showToast("✅ Player updated!");
+}
+
+function deletePlayer(playerId) {
+  const p = state.players.find(x => x.id === playerId);
+  if (!p || !confirm(`Delete player '${p.name}'?`)) return;
+  if (p.status === "SOLD" && p.soldToTeamId) {
+    const team = state.teams.find(t => t.id === p.soldToTeamId);
+    if (team) team.spentPurse = Math.max(0, team.spentPurse - (p.soldPrice || p.currentBid || 0));
+  }
+  state.players = state.players.filter(x => x.id !== playerId);
+  saveToFirebase();
+  renderAll();
+  showToast(`🗑️ Player '${p.name}' deleted!`);
 }
 
 function selectActivePlayer(playerId) {
@@ -2201,9 +2287,9 @@ function renderTournaments() {
           <span style="color: var(--color-blue);">🏏 Scorer Code: <strong>${t.scorerInviteCode || 'SC8K2M'}</strong></span>
         </p>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         ${t.id !== state.activeTournamentId ? `<button class="btn btn-sm btn-secondary" onclick="switchActiveTournament('${t.id}')">Select</button>` : ''}
-        ${isMaster ? `<button class="btn btn-sm btn-danger" style="background: var(--color-red); color: white;" onclick="deleteTournament('${t.id}')">Delete 🗑️</button>` : ''}
+        ${isMaster ? `<button class="btn btn-sm btn-secondary" onclick="editTournament('${t.id}')">Edit ✏️</button><button class="btn btn-sm btn-danger" style="background: var(--color-red); color: white;" onclick="deleteTournament('${t.id}')">Delete 🗑️</button>` : ''}
       </div>
     </div>
   `).join("");
@@ -2593,4 +2679,9 @@ if (typeof window !== 'undefined') {
   window.toggleMasterAdminMode = toggleMasterAdminMode;
   window.isMasterAdminMode = isMasterAdminMode;
   window.deleteTournament = deleteTournament;
+  window.editTournament = editTournament;
+  window.editTeam = editTeam;
+  window.deleteTeam = deleteTeam;
+  window.editPlayer = editPlayer;
+  window.deletePlayer = deletePlayer;
 }

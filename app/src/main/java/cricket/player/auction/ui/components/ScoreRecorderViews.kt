@@ -111,6 +111,7 @@ fun ClassicCrichuntScorerView(
         modifier = Modifier
             .fillMaxSize()
             .background(padBg)
+            .verticalScroll(rememberScrollState())
     ) {
         // --- Top Dark Navy Crichunt Header Card ---
         Column(
@@ -477,11 +478,11 @@ fun ClassicCrichuntScorerView(
                 }
             }
         } else {
-            // Crichunt 4-Row Scoring Pad
+            // Crichunt 4-Row Scoring Pad (fixed height so it is NEVER squished on smaller screens)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .height(255.dp)
                     .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -626,9 +627,13 @@ fun ClassicCrichuntScorerView(
     if (showReplaceBatterDialog) {
         AlertDialog(
             onDismissRequest = { showReplaceBatterDialog = false },
+            containerColor = tileBg,
+            titleContentColor = tileText,
+            textContentColor = tileText,
             title = {
                 Text(
                     text = if (replaceTargetIsStriker) "Select Striker" else "Select Non-Striker",
+                    color = tileText,
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -685,7 +690,10 @@ fun ClassicCrichuntScorerView(
     if (showFiveSevenDialog) {
         AlertDialog(
             onDismissRequest = { showFiveSevenDialog = false },
-            title = { Text("Score 5 or 7 Runs", fontWeight = FontWeight.Bold) },
+            containerColor = tileBg,
+            titleContentColor = tileText,
+            textContentColor = tileText,
+            title = { Text("Score 5 or 7 Runs", color = tileText, fontWeight = FontWeight.Bold) },
             text = {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -722,7 +730,10 @@ fun ClassicCrichuntScorerView(
     if (showMoreActionsDialog) {
         AlertDialog(
             onDismissRequest = { showMoreActionsDialog = false },
-            title = { Text("Match Actions", fontWeight = FontWeight.Bold) },
+            containerColor = tileBg,
+            titleContentColor = tileText,
+            textContentColor = tileText,
+            title = { Text("Match Actions", color = tileText, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -1484,6 +1495,7 @@ fun CameraLiveBroadcastOverlayDialog(
     val context = LocalContext.current
     var streamUrlInput by remember(initialStreamUrl) { mutableStateOf(initialStreamUrl) }
     var cameraRef by remember { mutableStateOf<Camera?>(null) }
+    var showInAppYouTubeStudio by remember { mutableStateOf(false) }
 
     val teamA = teams.find { it.id == match.teamAId }
     val teamB = teams.find { it.id == match.teamBId }
@@ -1518,33 +1530,57 @@ fun CameraLiveBroadcastOverlayDialog(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Live Camera Surface Preview
-                AndroidView(
-                    factory = { ctx ->
-                        SurfaceView(ctx).apply {
-                            holder.addCallback(object : SurfaceHolder.Callback {
-                                override fun surfaceCreated(holder: SurfaceHolder) {
-                                    try {
-                                        val cam = Camera.open()
-                                        cam.setDisplayOrientation(90)
-                                        cam.setPreviewDisplay(holder)
-                                        cam.startPreview()
-                                        cameraRef = cam
-                                    } catch (_: Exception) { }
+                // Live Camera Surface Preview OR In-App YouTube Studio Live Streamer
+                if (showInAppYouTubeStudio) {
+                    AndroidView(
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                layoutParams = android.view.ViewGroup.LayoutParams(
+                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.mediaPlaybackRequiresUserGesture = false
+                                webChromeClient = object : WebChromeClient() {
+                                    override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
+                                        request?.grant(request.resources)
+                                    }
                                 }
-                                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-                                override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                    try {
-                                        cameraRef?.stopPreview()
-                                        cameraRef?.release()
-                                        cameraRef = null
-                                    } catch (_: Exception) { }
-                                }
-                            })
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
+                                webViewClient = WebViewClient()
+                                loadUrl("https://studio.youtube.com/channel/live")
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    AndroidView(
+                        factory = { ctx ->
+                            SurfaceView(ctx).apply {
+                                holder.addCallback(object : SurfaceHolder.Callback {
+                                    override fun surfaceCreated(holder: SurfaceHolder) {
+                                        try {
+                                            val cam = Camera.open()
+                                            cam.setDisplayOrientation(90)
+                                            cam.setPreviewDisplay(holder)
+                                            cam.startPreview()
+                                            cameraRef = cam
+                                        } catch (_: Exception) { }
+                                    }
+                                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+                                    override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                        try {
+                                            cameraRef?.stopPreview()
+                                            cameraRef?.release()
+                                            cameraRef = null
+                                        } catch (_: Exception) { }
+                                    }
+                                })
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
                 // Top Broadcast Bar
                 Row(
@@ -1604,23 +1640,14 @@ fun CameraLiveBroadcastOverlayDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = {
-                                val ytLive = Intent(Intent.ACTION_VIEW, Uri.parse("https://studio.youtube.com/channel/live")).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                try {
-                                    context.startActivity(ytLive)
-                                } catch (_: Exception) {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/live_dashboard")))
-                                }
-                            },
+                            onClick = { showInAppYouTubeStudio = !showInAppYouTubeStudio },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Go Live on YouTube", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text(if (showInAppYouTubeStudio) "Back to Camera" else "Start YouTube Live (In-App)", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         }
 
                         Button(

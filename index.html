@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0F19">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="play_store_icon_512x512.jpg">
   <title>IPL Cricket Hub & Live Auction Arena</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,6 +34,7 @@
       <div class="role-badge" id="currentRoleBadge">
         <span>👑 Admin Auctioneer</span>
       </div>
+      <button id="masterModeBtn" class="btn btn-sm btn-secondary" onclick="toggleMasterAdminMode()" title="Toggle Master Mode (Full CRUD)">👑 Master</button>
       <button id="themeToggleBtn" class="btn btn-sm btn-secondary" onclick="toggleWebTheme()" title="Toggle Light/Dark Theme">☀️ Light</button>
       <button class="btn btn-sm btn-secondary" onclick="openModal('claimCodeModal')">🔑 Redeem Code</button>
       <select id="userRoleSelect" class="form-control" style="width: auto; padding: 4px 8px; font-size: 0.75rem;">
@@ -530,10 +536,25 @@
   <!-- TOAST NOTIFICATIONS -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- MOBILE PWA BOTTOM NAVIGATION -->
+  <nav class="mobile-bottom-nav" id="mobileBottomNav">
+    <button class="mobile-nav-btn active" data-tab="tab-home"><span>🏠</span><small>Home</small></button>
+    <button class="mobile-nav-btn" data-tab="tab-auction"><span>🔨</span><small>Auction</small></button>
+    <button class="mobile-nav-btn" data-tab="tab-list"><span>📋</span><small>Lists</small></button>
+    <button class="mobile-nav-btn" data-tab="tab-scorer"><span>📊</span><small>Scorer</small></button>
+  </nav>
+
   <!-- Firebase Web SDK JS (v10 compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
