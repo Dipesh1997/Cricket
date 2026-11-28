@@ -1663,46 +1663,65 @@ fun BackgroundCameraPreviewLayer(
                                         return
                                     }
                                     surfaceTexture.setDefaultBufferSize(1280, 720)
+                                    val chars = manager.getCameraCharacteristics(camId)
+                                    val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                                    val supported = map?.getOutputSizes(SurfaceTexture::class.java)
+                                    val chosenSize = supported?.firstOrNull { it.width <= 1280 && it.height <= 720 }
+                                        ?: supported?.minByOrNull { it.width * it.height }
+                                    if (chosenSize != null) {
+                                        surfaceTexture.setDefaultBufferSize(chosenSize.width, chosenSize.height)
+                                    }
                                     val previewSurface = Surface(surfaceTexture)
                                     val mainHandler = Handler(Looper.getMainLooper())
 
-                                    manager.openCamera(camId, object : CameraDevice.StateCallback() {
-                                        override fun onOpened(camera: CameraDevice) {
-                                            cameraDeviceRef = camera
-                                            cameraError = null
-                                            try {
-                                                val reqBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
-                                                    addTarget(previewSurface)
-                                                    set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-                                                }
-                                                @Suppress("DEPRECATION")
-                                                camera.createCaptureSession(listOf(previewSurface), object : CameraCaptureSession.StateCallback() {
-                                                    override fun onConfigured(session: CameraCaptureSession) {
-                                                        captureSessionRef = session
-                                                        try {
-                                                            session.setRepeatingRequest(reqBuilder.build(), null, mainHandler)
-                                                        } catch (e: Exception) {
-                                                            cameraError = e.localizedMessage
+                                    fun openWithRetry(attempt: Int) {
+                                        try {
+                                            manager.openCamera(camId, object : CameraDevice.StateCallback() {
+                                                override fun onOpened(camera: CameraDevice) {
+                                                    cameraDeviceRef = camera
+                                                    cameraError = null
+                                                    try {
+                                                        val reqBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                                                            addTarget(previewSurface)
+                                                            set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
                                                         }
+                                                        @Suppress("DEPRECATION")
+                                                        camera.createCaptureSession(listOf(previewSurface), object : CameraCaptureSession.StateCallback() {
+                                                            override fun onConfigured(session: CameraCaptureSession) {
+                                                                captureSessionRef = session
+                                                                try {
+                                                                    session.setRepeatingRequest(reqBuilder.build(), null, mainHandler)
+                                                                } catch (e: Exception) {
+                                                                    cameraError = e.localizedMessage
+                                                                }
+                                                            }
+                                                            override fun onConfigureFailed(session: CameraCaptureSession) {
+                                                                cameraError = "Camera session config failed"
+                                                            }
+                                                        }, mainHandler)
+                                                    } catch (e: Exception) {
+                                                        cameraError = e.localizedMessage
                                                     }
-                                                    override fun onConfigureFailed(session: CameraCaptureSession) {
-                                                        cameraError = "Camera session config failed"
+                                                }
+                                                override fun onDisconnected(camera: CameraDevice) {
+                                                    camera.close()
+                                                    cameraDeviceRef = null
+                                                }
+                                                override fun onError(camera: CameraDevice, error: Int) {
+                                                    camera.close()
+                                                    cameraDeviceRef = null
+                                                    if (attempt < 2) {
+                                                        mainHandler.postDelayed({ openWithRetry(attempt + 1) }, 350L)
+                                                    } else {
+                                                        cameraError = "Camera error ($error)"
                                                     }
-                                                }, mainHandler)
-                                            } catch (e: Exception) {
-                                                cameraError = e.localizedMessage
-                                            }
+                                                }
+                                            }, mainHandler)
+                                        } catch (e: Exception) {
+                                            cameraError = e.localizedMessage
                                         }
-                                        override fun onDisconnected(camera: CameraDevice) {
-                                            camera.close()
-                                            cameraDeviceRef = null
-                                        }
-                                        override fun onError(camera: CameraDevice, error: Int) {
-                                            camera.close()
-                                            cameraDeviceRef = null
-                                            cameraError = "Camera error ($error)"
-                                        }
-                                    }, mainHandler)
+                                    }
+                                    mainHandler.postDelayed({ openWithRetry(0) }, 150L)
                                 } catch (e: Exception) {
                                     cameraError = e.localizedMessage
                                 }

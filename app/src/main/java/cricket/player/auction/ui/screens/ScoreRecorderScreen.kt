@@ -314,7 +314,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (isBackgroundCameraOn && isViewingLiveMatch && activeMatch != null) {
+            if (isBackgroundCameraOn && !showCameraStreamPreview && isViewingLiveMatch && activeMatch != null) {
                 BackgroundCameraPreviewLayer(modifier = Modifier.fillMaxSize())
                 Box(
                     modifier = Modifier
