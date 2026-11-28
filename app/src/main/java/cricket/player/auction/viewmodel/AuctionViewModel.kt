@@ -77,6 +77,36 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun monitorAndGoLive(
+        broadcastId: String,
+        streamId: String,
+        onStatusUpdate: (isLive: Boolean, statusText: String) -> Unit
+    ): Job {
+        return viewModelScope.launch {
+            val token = googleAuthManager.fetchYouTubeAccessToken() ?: return@launch
+            repeat(20) {
+                delay(3000L)
+                val lifeCycle = YouTubeLiveStreamManager.getBroadcastLifeCycleStatus(token, broadcastId)
+                if (lifeCycle.equals("live", ignoreCase = true)) {
+                    onStatusUpdate(true, "ON AIR • YOUTUBE LIVE")
+                    return@launch
+                }
+                val streamStatus = YouTubeLiveStreamManager.getStreamStatus(token, streamId)
+                if (streamStatus.equals("active", ignoreCase = true)) {
+                    val transitioned = YouTubeLiveStreamManager.transitionBroadcast(token, broadcastId, "live")
+                    if (transitioned || YouTubeLiveStreamManager.getBroadcastLifeCycleStatus(token, broadcastId).equals("live", ignoreCase = true)) {
+                        onStatusUpdate(true, "ON AIR • YOUTUBE LIVE")
+                        return@launch
+                    } else {
+                        onStatusUpdate(false, "RTMP Active • Switching YouTube to LIVE...")
+                    }
+                } else {
+                    onStatusUpdate(false, "RTMP Streaming • Waiting for YouTube (${streamStatus.ifBlank { "connecting" }})...")
+                }
+            }
+        }
+    }
+
     fun signOutGoogleAccount(onComplete: () -> Unit = {}) {
         googleAuthManager.signOutGoogleAndYouTube(onComplete)
     }

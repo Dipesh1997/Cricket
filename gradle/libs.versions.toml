@@ -17,6 +17,7 @@ googleid = "1.1.1"
 playServicesAuth = "21.3.0"
 googleServices = "4.4.2"
 firebaseBom = "33.9.0"
+rootEncoder = "2.8.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ play-services-auth = { group = "com.google.android.gms", name = "play-services-a
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }
 firebase-database = { group = "com.google.firebase", name = "firebase-database-ktx" }
+rootencoder-library = { group = "com.github.pedroSG94.RootEncoder", name = "library", version.ref = "rootEncoder" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

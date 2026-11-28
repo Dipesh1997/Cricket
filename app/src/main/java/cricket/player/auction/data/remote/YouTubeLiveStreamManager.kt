@@ -152,6 +152,58 @@ object YouTubeLiveStreamManager {
         }
     }
 
+    suspend fun getStreamStatus(
+        accessToken: String,
+        streamId: String
+    ): String = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("https://www.googleapis.com/youtube/v3/liveStreams?part=status&id=$streamId")
+                .addHeader("Authorization", "Bearer $accessToken")
+                .get()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext ""
+                val obj = gson.fromJson(resp.body?.string().orEmpty(), JsonObject::class.java)
+                val items = obj.getAsJsonArray("items") ?: return@withContext ""
+                if (items.size() == 0) return@withContext ""
+                items[0].asJsonObject
+                    .getAsJsonObject("status")
+                    ?.get("streamStatus")
+                    ?.asString
+                    .orEmpty()
+            }
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    suspend fun getBroadcastLifeCycleStatus(
+        accessToken: String,
+        broadcastId: String
+    ): String = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("https://www.googleapis.com/youtube/v3/liveBroadcasts?part=status&id=$broadcastId")
+                .addHeader("Authorization", "Bearer $accessToken")
+                .get()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext ""
+                val obj = gson.fromJson(resp.body?.string().orEmpty(), JsonObject::class.java)
+                val items = obj.getAsJsonArray("items") ?: return@withContext ""
+                if (items.size() == 0) return@withContext ""
+                items[0].asJsonObject
+                    .getAsJsonObject("status")
+                    ?.get("lifeCycleStatus")
+                    ?.asString
+                    .orEmpty()
+            }
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     suspend fun transitionBroadcast(
         accessToken: String,
         broadcastId: String,
