@@ -819,11 +819,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                     val hasStream = activeMatch.liveStreamUrl.isNotBlank()
                     Surface(
                         onClick = {
-                            if (hasStream) {
-                                showLiveStreamCard = !showLiveStreamCard
-                            } else {
-                                streamUrlInput = ""
+                            if (canScore) {
+                                streamUrlInput = activeMatch.liveStreamUrl
                                 showLiveStreamDialog = true
+                            } else if (hasStream) {
+                                showLiveStreamCard = !showLiveStreamCard
                             }
                         },
                         color = if (hasStream) Color(0xFFFF0000).copy(alpha = 0.15f) else surfaceBg,
