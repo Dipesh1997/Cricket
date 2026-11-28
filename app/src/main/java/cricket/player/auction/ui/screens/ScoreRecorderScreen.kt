@@ -127,6 +127,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     var showLiveStreamCard by remember { mutableStateOf(true) }
     var streamUrlInput by remember { mutableStateOf("") }
     var showCameraStreamPreview by remember { mutableStateOf(false) }
+    var isBackgroundCameraOn by remember { mutableStateOf(false) }
     var showDirectEndMatchModal by remember { mutableStateOf(false) }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -308,11 +309,22 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
     Scaffold(
         containerColor = screenBg
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            if (isBackgroundCameraOn && isViewingLiveMatch && activeMatch != null) {
+                BackgroundCameraPreviewLayer(modifier = Modifier.fillMaxSize())
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.40f))
+                )
+            }
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
             if (!isViewingLiveMatch || activeMatch == null) {
                 // ==========================================
                 // 🏏 CRICBUZZ SCORECARD MASTER PAGE
@@ -842,8 +854,39 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         }
                     }
 
-                    // 8. UI Mode Switcher (Classic Crichunt / Modern / Spectator Preview) + Status actions
+                    // 8. UI Mode Switcher (Classic Crichunt / Modern / Spectator Preview) + BG Cam + Status actions
                     if (canScore) {
+                        Surface(
+                            onClick = {
+                                if (isBackgroundCameraOn) {
+                                    isBackgroundCameraOn = false
+                                } else {
+                                    val hasCam = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                                    if (hasCam) {
+                                        isBackgroundCameraOn = true
+                                    } else {
+                                        cameraPermissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+                                    }
+                                }
+                            },
+                            color = if (isBackgroundCameraOn) Color(0xFFFF0000) else surfaceBg,
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isBackgroundCameraOn) Color(0xFFFF0000) else textSub.copy(alpha = 0.35f)
+                            )
+                        ) {
+                            Text(
+                                text = if (isBackgroundCameraOn) "📹 BG ON" else "📹 BG Cam",
+                                color = if (isBackgroundCameraOn) Color.White else textMain,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            )
+                        }
+
                         val modeOptions = listOf(
                             "CLASSIC" to "Classic",
                             "MODERN" to "Modern",
@@ -966,6 +1009,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                         selectedExtraType = selectedExtraType,
                         isEditable = isEditable,
                         isDarkTheme = isDarkTheme,
+                        isBackgroundCameraOn = isBackgroundCameraOn,
                         onSelectExtra = { extra ->
                             val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
                             val isOverEndedWaitingForBowler = legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
@@ -1022,6 +1066,73 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                                 val oversExhausted = newLegalTotal >= match.totalOvers * 6
                                 val currentRunsBefore = if (currentInnings == 1) match.teamARuns else match.teamBRuns
                                 val targetChased = currentInnings == 2 && (currentRunsBefore + run + extraRuns) >= (match.teamARuns + 1)
+                                val isOverComplete = isLegal && (ballNum == 6)
+                                if (isOverComplete && !oversExhausted && !targetChased) {
+                                    if (newNonStriker != null) {
+                                        val temp = newStriker
+                                        newStriker = newNonStriker
+                                        newNonStriker = temp
+                                    }
+                                    lastCompletedOverBowlerId = bowlerId
+                                    bowlerId = null
+                                    showChangeBowlerModal = true
+                                }
+                                strikerId = newStriker
+                                nonStrikerId = newNonStriker
+                            }
+                        },
+                        onRecordExtraBall = { exType, addRuns ->
+                            val legalBallsNow = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                            val oversAlreadyDone = legalBallsNow >= match.totalOvers * 6
+                            val isOverEndedWaitingForBowler = !oversAlreadyDone && legalBallsNow > 0 && (legalBallsNow % 6 == 0) && (bowlerId == null || bowlerId == lastCompletedOverBowlerId)
+                            if (strikerId.isNullOrBlank()) {
+                                Toast.makeText(context, "⚠️ Please select a Striker batter first!", Toast.LENGTH_SHORT).show()
+                            } else if (bowlerId.isNullOrBlank() || isOverEndedWaitingForBowler) {
+                                showChangeBowlerModal = true
+                                Toast.makeText(context, "⚠️ Please select the bowler before recording extras!", Toast.LENGTH_SHORT).show()
+                            } else if (isEditable) {
+                                if (match.status == MatchStatus.COMPLETED) {
+                                    viewModel.resumeMatch(match.id)
+                                }
+                                val isLegal = exType != ExtraType.WIDE && exType != ExtraType.NO_BALL
+                                val legalBallsBefore = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+                                val overNum = legalBallsBefore / 6
+                                val ballNum = (legalBallsBefore % 6) + 1
+                                val batRuns = if (exType == ExtraType.NO_BALL) addRuns else 0
+                                val exRuns = when (exType) {
+                                    ExtraType.WIDE -> 1 + addRuns
+                                    ExtraType.NO_BALL -> 1
+                                    ExtraType.BYE, ExtraType.LEG_BYE -> addRuns
+                                    else -> addRuns
+                                }
+                                val ball = BallRecord(
+                                    id = "b_${System.currentTimeMillis()}",
+                                    matchId = match.id,
+                                    innings = currentInnings,
+                                    overNumber = overNum,
+                                    ballNumber = ballNum,
+                                    strikerId = strikerId ?: "",
+                                    nonStrikerId = nonStrikerId,
+                                    bowlerId = bowlerId ?: "",
+                                    runsScored = batRuns,
+                                    extraType = exType,
+                                    extraRuns = exRuns,
+                                    commentary = "${exType.name} +$addRuns"
+                                )
+                                viewModel.addBallRecord(ball)
+                                selectedExtraType = ExtraType.NONE
+
+                                var newStriker = strikerId
+                                var newNonStriker = nonStrikerId
+                                if (addRuns % 2 != 0 && newNonStriker != null) {
+                                    val temp = newStriker
+                                    newStriker = newNonStriker
+                                    newNonStriker = temp
+                                }
+                                val newLegalTotal = legalBallsBefore + (if (isLegal) 1 else 0)
+                                val oversExhausted = newLegalTotal >= match.totalOvers * 6
+                                val currentRunsBefore = if (currentInnings == 1) match.teamARuns else match.teamBRuns
+                                val targetChased = currentInnings == 2 && (currentRunsBefore + batRuns + exRuns) >= (match.teamARuns + 1)
                                 val isOverComplete = isLegal && (ballNum == 6)
                                 if (isOverComplete && !oversExhausted && !targetChased) {
                                     if (newNonStriker != null) {
@@ -2122,6 +2233,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 }
             }
         }
+        }
     }
 
     // --- End Innings Confirmation Dialog ---
@@ -2596,9 +2708,14 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
             onSaveStreamUrl = { newUrl ->
                 viewModel.updateMatchLiveStreamUrl(activeMatch.id, newUrl)
                 streamUrlInput = newUrl
-                showLiveStreamCard = true
-                Toast.makeText(context, "📺 Live stream overlay published for Spectators!", Toast.LENGTH_SHORT).show()
+                showLiveStreamCard = newUrl.isNotBlank()
+                Toast.makeText(
+                    context,
+                    if (newUrl.isNotBlank()) "📺 Live stream overlay published for Spectators!" else "⏹ Live stream ended.",
+                    Toast.LENGTH_SHORT
+                ).show()
             },
+            onEnableBackgroundCamera = { isBackgroundCameraOn = true },
             onDismiss = { showCameraStreamPreview = false }
         )
     }

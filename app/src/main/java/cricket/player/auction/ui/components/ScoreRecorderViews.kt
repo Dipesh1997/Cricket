@@ -4,10 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.SurfaceTexture
 import android.hardware.Camera
 import android.net.Uri
-import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.view.TextureView
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -69,8 +69,10 @@ fun ClassicCrichuntScorerView(
     selectedExtraType: ExtraType,
     isEditable: Boolean,
     isDarkTheme: Boolean,
+    isBackgroundCameraOn: Boolean = false,
     onSelectExtra: (ExtraType) -> Unit,
     onScoreRuns: (Int) -> Unit,
+    onRecordExtraBall: (ExtraType, Int) -> Unit = { _, _ -> },
     onOpenWicket: () -> Unit,
     onUndoLastBall: () -> Unit,
     onSwapStrike: () -> Unit,
@@ -94,6 +96,7 @@ fun ClassicCrichuntScorerView(
     var replaceTargetIsStriker by remember { mutableStateOf(true) }
     var showFiveSevenDialog by remember { mutableStateOf(false) }
     var showMoreActionsDialog by remember { mutableStateOf(false) }
+    var activeExtraPickerType by remember { mutableStateOf<ExtraType?>(null) }
 
     val currentInnings = match.currentInnings
     val runs = if (currentInnings == 1) match.teamARuns else match.teamBRuns
@@ -120,14 +123,14 @@ fun ClassicCrichuntScorerView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(padBg)
+            .background(if (isBackgroundCameraOn) Color.Black.copy(alpha = 0.25f) else padBg)
             .verticalScroll(rememberScrollState())
     ) {
         // --- Top Dark Navy Crichunt Header Card ---
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(navyHeaderBg)
+                .background(if (isBackgroundCameraOn) navyHeaderBg.copy(alpha = 0.78f) else navyHeaderBg)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -551,7 +554,7 @@ fun ClassicCrichuntScorerView(
                             Surface(
                                 onClick = {
                                     if (isEditable) {
-                                        onSelectExtra(if (isSel) ExtraType.NONE else extra)
+                                        activeExtraPickerType = extra
                                     }
                                 },
                                 color = if (isSel) accentColor else tileBg,
@@ -692,6 +695,50 @@ fun ClassicCrichuntScorerView(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showReplaceBatterDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    // 1-Tap Extra Runs Picker Dialog (WD, NB, BYE, LB)
+    if (activeExtraPickerType != null) {
+        val exType = activeExtraPickerType!!
+        val extraOptions: List<Pair<String, Int>> = when (exType) {
+            ExtraType.WIDE -> listOf("WD (1)" to 0, "WD + 1 (2)" to 1, "WD + 2 (3)" to 2, "WD + 4 (5)" to 4)
+            ExtraType.NO_BALL -> listOf("NB (1)" to 0, "NB + 1 (2)" to 1, "NB + 4 (5)" to 4, "NB + 6 (7)" to 6)
+            ExtraType.BYE -> listOf("1 Bye" to 1, "2 Byes" to 2, "3 Byes" to 3, "4 Byes" to 4)
+            ExtraType.LEG_BYE -> listOf("1 LB" to 1, "2 LB" to 2, "3 LB" to 3, "4 LB" to 4)
+            else -> emptyList()
+        }
+        AlertDialog(
+            onDismissRequest = { activeExtraPickerType = null },
+            containerColor = tileBg,
+            titleContentColor = tileText,
+            textContentColor = tileText,
+            title = { Text("Record ${exType.name.replace("_", " ")}", color = tileText, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    extraOptions.chunked(2).forEach { rowItems ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowItems.forEach { (lbl, runsVal) ->
+                                Button(
+                                    onClick = {
+                                        onRecordExtraBall(exType, runsVal)
+                                        activeExtraPickerType = null
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = crichuntBlue4, contentColor = Color.White),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f).height(46.dp)
+                                ) {
+                                    Text(lbl, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { activeExtraPickerType = null }) { Text("Cancel", color = Color.Gray) }
             }
         )
     }
@@ -1561,6 +1608,71 @@ fun AuctionBroadcastOverlayBar(
 
 @Suppress("DEPRECATION")
 @Composable
+fun BackgroundCameraPreviewLayer(
+    useFrontCamera: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    var cameraRef by remember { mutableStateOf<Camera?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                cameraRef?.stopPreview()
+                cameraRef?.release()
+                cameraRef = null
+            } catch (_: Exception) { }
+        }
+    }
+
+    key(useFrontCamera) {
+        AndroidView(
+            factory = { ctx ->
+                TextureView(ctx).apply {
+                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+                            try {
+                                cameraRef?.stopPreview()
+                                cameraRef?.release()
+                                val camCount = Camera.getNumberOfCameras()
+                                var targetId = 0
+                                val info = Camera.CameraInfo()
+                                for (i in 0 until camCount) {
+                                    Camera.getCameraInfo(i, info)
+                                    if (useFrontCamera && info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                                        targetId = i
+                                        break
+                                    } else if (!useFrontCamera && info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
+                                        targetId = i
+                                        break
+                                    }
+                                }
+                                val cam = Camera.open(targetId)
+                                cam.setDisplayOrientation(90)
+                                cam.setPreviewTexture(surface)
+                                cam.startPreview()
+                                cameraRef = cam
+                            } catch (_: Exception) { }
+                        }
+                        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+                        override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                            try {
+                                cameraRef?.stopPreview()
+                                cameraRef?.release()
+                                cameraRef = null
+                            } catch (_: Exception) { }
+                            return true
+                        }
+                        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+                    }
+                }
+            },
+            modifier = modifier
+        )
+    }
+}
+
+@Suppress("DEPRECATION")
+@Composable
 fun PrismYouTubeLiveStreamerDialog(
     viewModel: AuctionViewModel,
     streamTitle: String,
@@ -1568,6 +1680,7 @@ fun PrismYouTubeLiveStreamerDialog(
     initialStreamUrl: String,
     overlayContent: @Composable () -> Unit,
     onSaveStreamUrl: (String) -> Unit,
+    onEnableBackgroundCamera: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1575,7 +1688,6 @@ fun PrismYouTubeLiveStreamerDialog(
     val connectedEmail by viewModel.connectedGoogleEmail.collectAsState()
 
     var streamUrlInput by remember(initialStreamUrl) { mutableStateOf(initialStreamUrl) }
-    var cameraRef by remember { mutableStateOf<Camera?>(null) }
     var useFrontCamera by remember { mutableStateOf(false) }
     var isCreatingBroadcast by remember { mutableStateOf(false) }
     var activeBroadcast by remember { mutableStateOf<YouTubeBroadcastResult?>(null) }
@@ -1595,42 +1707,6 @@ fun PrismYouTubeLiveStreamerDialog(
         }
     }
 
-    fun openCameraIntoHolder(holder: SurfaceHolder, front: Boolean) {
-        try {
-            cameraRef?.stopPreview()
-            cameraRef?.release()
-            cameraRef = null
-            val camCount = Camera.getNumberOfCameras()
-            var targetId = 0
-            val info = Camera.CameraInfo()
-            for (i in 0 until camCount) {
-                Camera.getCameraInfo(i, info)
-                if (front && info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                    targetId = i
-                    break
-                } else if (!front && info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
-                    targetId = i
-                    break
-                }
-            }
-            val cam = Camera.open(targetId)
-            cam.setDisplayOrientation(90)
-            cam.setPreviewDisplay(holder)
-            cam.startPreview()
-            cameraRef = cam
-        } catch (_: Exception) { }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            try {
-                cameraRef?.stopPreview()
-                cameraRef?.release()
-                cameraRef = null
-            } catch (_: Exception) { }
-        }
-    }
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1640,29 +1716,11 @@ fun PrismYouTubeLiveStreamerDialog(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Live Camera Preview (keyed by camera facing to cleanly re-bind)
-                key(useFrontCamera) {
-                    AndroidView(
-                        factory = { ctx ->
-                            SurfaceView(ctx).apply {
-                                holder.addCallback(object : SurfaceHolder.Callback {
-                                    override fun surfaceCreated(holder: SurfaceHolder) {
-                                        openCameraIntoHolder(holder, useFrontCamera)
-                                    }
-                                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-                                    override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                        try {
-                                            cameraRef?.stopPreview()
-                                            cameraRef?.release()
-                                            cameraRef = null
-                                        } catch (_: Exception) { }
-                                    }
-                                })
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                // Live Camera Preview via TextureView (never occluded by Compose Dialog surface)
+                BackgroundCameraPreviewLayer(
+                    useFrontCamera = useFrontCamera,
+                    modifier = Modifier.fillMaxSize()
+                )
 
                 // Top PRISM-Style Broadcast Bar
                 Row(
@@ -1835,11 +1893,15 @@ fun PrismYouTubeLiveStreamerDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (activeBroadcast?.success == true) {
+                        if (activeBroadcast?.success == true || streamUrlInput.isNotBlank()) {
                             Button(
                                 onClick = {
-                                    viewModel.endDirectYouTubeBroadcast(activeBroadcast!!.broadcastId)
-                                    activeBroadcast = null
+                                    if (activeBroadcast?.success == true) {
+                                        viewModel.endDirectYouTubeBroadcast(activeBroadcast!!.broadcastId)
+                                        activeBroadcast = null
+                                    }
+                                    streamUrlInput = ""
+                                    onSaveStreamUrl("")
                                     Toast.makeText(context, "⏹ YouTube Broadcast ended", Toast.LENGTH_SHORT).show()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
@@ -1881,6 +1943,20 @@ fun PrismYouTubeLiveStreamerDialog(
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 11.sp
                                 )
+                            }
+                        }
+
+                        if (onEnableBackgroundCamera != null) {
+                            Button(
+                                onClick = {
+                                    onSaveStreamUrl(streamUrlInput.trim())
+                                    onEnableBackgroundCamera()
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("📹 BG Score Mode", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
                         }
 
@@ -1926,6 +2002,7 @@ fun CameraLiveBroadcastOverlayDialog(
     bowler: Player?,
     initialStreamUrl: String,
     onSaveStreamUrl: (String) -> Unit,
+    onEnableBackgroundCamera: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val teamA = teams.find { it.id == match.teamAId }
@@ -1967,6 +2044,7 @@ fun CameraLiveBroadcastOverlayDialog(
             )
         },
         onSaveStreamUrl = onSaveStreamUrl,
+        onEnableBackgroundCamera = onEnableBackgroundCamera,
         onDismiss = onDismiss
     )
 }
