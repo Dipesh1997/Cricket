@@ -1,14 +1,24 @@
 package cricket.player.auction.ui.components
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.SurfaceTexture
-import android.hardware.Camera
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CaptureRequest
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.view.Surface
 import android.view.TextureView
 import android.webkit.WebChromeClient
+import androidx.core.content.ContextCompat
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -1606,68 +1616,123 @@ fun AuctionBroadcastOverlayBar(
     }
 }
 
-@Suppress("DEPRECATION")
 @Composable
 fun BackgroundCameraPreviewLayer(
     useFrontCamera: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    var cameraRef by remember { mutableStateOf<Camera?>(null) }
+    val context = LocalContext.current
+    var cameraDeviceRef by remember { mutableStateOf<CameraDevice?>(null) }
+    var captureSessionRef by remember { mutableStateOf<CameraCaptureSession?>(null) }
+    var cameraError by remember { mutableStateOf<String?>(null) }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            try {
-                cameraRef?.stopPreview()
-                cameraRef?.release()
-                cameraRef = null
-            } catch (_: Exception) { }
-        }
+    fun closeCamera() {
+        try {
+            captureSessionRef?.close()
+            captureSessionRef = null
+            cameraDeviceRef?.close()
+            cameraDeviceRef = null
+        } catch (_: Exception) { }
     }
 
-    key(useFrontCamera) {
-        AndroidView(
-            factory = { ctx ->
-                TextureView(ctx).apply {
-                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                        override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-                            try {
-                                cameraRef?.stopPreview()
-                                cameraRef?.release()
-                                val camCount = Camera.getNumberOfCameras()
-                                var targetId = 0
-                                val info = Camera.CameraInfo()
-                                for (i in 0 until camCount) {
-                                    Camera.getCameraInfo(i, info)
-                                    if (useFrontCamera && info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-                                        targetId = i
-                                        break
-                                    } else if (!useFrontCamera && info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
-                                        targetId = i
-                                        break
-                                    }
+    DisposableEffect(Unit) {
+        onDispose { closeCamera() }
+    }
+
+    Box(modifier = modifier) {
+        key(useFrontCamera) {
+            AndroidView(
+                factory = { ctx ->
+                    TextureView(ctx).apply {
+                        surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                            override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
+                                if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                                    cameraError = "Camera permission not granted"
+                                    return
                                 }
-                                val cam = Camera.open(targetId)
-                                cam.setDisplayOrientation(90)
-                                cam.setPreviewTexture(surface)
-                                cam.startPreview()
-                                cameraRef = cam
-                            } catch (_: Exception) { }
+                                try {
+                                    closeCamera()
+                                    val manager = ctx.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+                                    val desiredFacing = if (useFrontCamera) CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
+                                    val camId = manager.cameraIdList.firstOrNull { id ->
+                                        manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) == desiredFacing
+                                    } ?: manager.cameraIdList.firstOrNull()
+
+                                    if (camId == null) {
+                                        cameraError = "No camera found on device"
+                                        return
+                                    }
+                                    surfaceTexture.setDefaultBufferSize(1280, 720)
+                                    val previewSurface = Surface(surfaceTexture)
+                                    val mainHandler = Handler(Looper.getMainLooper())
+
+                                    manager.openCamera(camId, object : CameraDevice.StateCallback() {
+                                        override fun onOpened(camera: CameraDevice) {
+                                            cameraDeviceRef = camera
+                                            cameraError = null
+                                            try {
+                                                val reqBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                                                    addTarget(previewSurface)
+                                                    set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
+                                                }
+                                                @Suppress("DEPRECATION")
+                                                camera.createCaptureSession(listOf(previewSurface), object : CameraCaptureSession.StateCallback() {
+                                                    override fun onConfigured(session: CameraCaptureSession) {
+                                                        captureSessionRef = session
+                                                        try {
+                                                            session.setRepeatingRequest(reqBuilder.build(), null, mainHandler)
+                                                        } catch (e: Exception) {
+                                                            cameraError = e.localizedMessage
+                                                        }
+                                                    }
+                                                    override fun onConfigureFailed(session: CameraCaptureSession) {
+                                                        cameraError = "Camera session config failed"
+                                                    }
+                                                }, mainHandler)
+                                            } catch (e: Exception) {
+                                                cameraError = e.localizedMessage
+                                            }
+                                        }
+                                        override fun onDisconnected(camera: CameraDevice) {
+                                            camera.close()
+                                            cameraDeviceRef = null
+                                        }
+                                        override fun onError(camera: CameraDevice, error: Int) {
+                                            camera.close()
+                                            cameraDeviceRef = null
+                                            cameraError = "Camera error ($error)"
+                                        }
+                                    }, mainHandler)
+                                } catch (e: Exception) {
+                                    cameraError = e.localizedMessage
+                                }
+                            }
+                            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+                            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                                closeCamera()
+                                return true
+                            }
+                            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
                         }
-                        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
-                        override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-                            try {
-                                cameraRef?.stopPreview()
-                                cameraRef?.release()
-                                cameraRef = null
-                            } catch (_: Exception) { }
-                            return true
-                        }
-                        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
                     }
-                }
-            },
-            modifier = modifier
-        )
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (!cameraError.isNullOrBlank()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "📷 $cameraError",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
 
@@ -1888,64 +1953,67 @@ fun PrismYouTubeLiveStreamerDialog(
                         }
                     }
 
+                    // Full-width Start / End YouTube Stream Button (never wraps vertically)
+                    if (activeBroadcast?.success == true || streamUrlInput.isNotBlank()) {
+                        Button(
+                            onClick = {
+                                if (activeBroadcast?.success == true) {
+                                    viewModel.endDirectYouTubeBroadcast(activeBroadcast!!.broadcastId)
+                                    activeBroadcast = null
+                                }
+                                streamUrlInput = ""
+                                onSaveStreamUrl("")
+                                Toast.makeText(context, "⏹ YouTube Broadcast ended", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Text("⏹ End YouTube Stream", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                if (!isYouTubeConnected) {
+                                    googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context))
+                                    return@Button
+                                }
+                                isCreatingBroadcast = true
+                                errorMessage = null
+                                viewModel.startDirectYouTubeBroadcast(streamTitle, streamDescription) { res ->
+                                    isCreatingBroadcast = false
+                                    if (res.success) {
+                                        activeBroadcast = res
+                                        streamUrlInput = res.watchUrl
+                                        onSaveStreamUrl(res.watchUrl)
+                                        Toast.makeText(context, "🔴 YouTube Live Broadcast Started!", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        errorMessage = res.errorMessage
+                                    }
+                                }
+                            },
+                            enabled = !isCreatingBroadcast,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isCreatingBroadcast) "Starting Stream..." else "🔴 Start Direct YouTube Live",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (activeBroadcast?.success == true || streamUrlInput.isNotBlank()) {
-                            Button(
-                                onClick = {
-                                    if (activeBroadcast?.success == true) {
-                                        viewModel.endDirectYouTubeBroadcast(activeBroadcast!!.broadcastId)
-                                        activeBroadcast = null
-                                    }
-                                    streamUrlInput = ""
-                                    onSaveStreamUrl("")
-                                    Toast.makeText(context, "⏹ YouTube Broadcast ended", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("⏹ End YouTube Stream", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    if (!isYouTubeConnected) {
-                                        googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context))
-                                        return@Button
-                                    }
-                                    isCreatingBroadcast = true
-                                    errorMessage = null
-                                    viewModel.startDirectYouTubeBroadcast(streamTitle, streamDescription) { res ->
-                                        isCreatingBroadcast = false
-                                        if (res.success) {
-                                            activeBroadcast = res
-                                            streamUrlInput = res.watchUrl
-                                            onSaveStreamUrl(res.watchUrl)
-                                            Toast.makeText(context, "🔴 YouTube Live Broadcast Started!", Toast.LENGTH_LONG).show()
-                                        } else {
-                                            errorMessage = res.errorMessage
-                                        }
-                                    }
-                                },
-                                enabled = !isCreatingBroadcast,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isCreatingBroadcast) "Starting Stream..." else "🔴 Start Direct YouTube Live",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-
                         if (onEnableBackgroundCamera != null) {
                             Button(
                                 onClick = {
@@ -1954,9 +2022,10 @@ fun PrismYouTubeLiveStreamerDialog(
                                     onDismiss()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = NeonBlue, contentColor = Color.Black),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text("📹 BG Score Mode", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                Text("📹 BG Score Mode", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
                             }
                         }
 
@@ -1966,9 +2035,10 @@ fun PrismYouTubeLiveStreamerDialog(
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.White),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text("Save & Close", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text("Save & Close", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
                         }
                     }
 
