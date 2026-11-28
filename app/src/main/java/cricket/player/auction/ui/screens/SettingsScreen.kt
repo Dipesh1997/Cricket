@@ -44,6 +44,16 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
     val currentUser by viewModel.currentUser.collectAsState()
     val activeTournament by viewModel.activeTournament.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
+    val isYouTubeConnected by viewModel.isYouTubeConnected.collectAsState()
+    val connectedGoogleEmail by viewModel.connectedGoogleEmail.collectAsState()
+
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        viewModel.handleGoogleYouTubeSignInResult(result.data) { ok, msg ->
+            Toast.makeText(context, if (ok) "✅ $msg" else "⚠️ $msg", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val screenBg = if (isDarkTheme) StadiumDark else LightPitchBackground
     val cardBg = if (isDarkTheme) StadiumCardDark else LightPitchCard
@@ -77,6 +87,46 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
             color = textSub,
             fontSize = 12.sp
         )
+
+        // --- 0. Google Sign-In for Direct YouTube Live Streaming ---
+        Card(
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, if (isYouTubeConnected) BidGreen else Color(0xFFFF0000).copy(alpha = 0.7f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "GOOGLE & YOUTUBE LIVE ACCOUNT",
+                    color = if (isYouTubeConnected) (if (isDarkTheme) BidGreen else Color(0xFF15803D)) else textMain,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = if (isYouTubeConnected)
+                        "Connected: ${connectedGoogleEmail ?: "Google Account"} — Ready for direct YouTube Live streaming in Auction & Matches."
+                    else
+                        "Sign in with Google once to start direct YouTube Live broadcasts from Auction & Match Scorer without web sign-in.",
+                    color = textSub,
+                    fontSize = 11.sp
+                )
+                Button(
+                    onClick = { googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context)) },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isYouTubeConnected) surfaceBg else Color.White,
+                        contentColor = if (isYouTubeConnected) textMain else Color(0xFF1F2937)
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (isYouTubeConnected) "G  Switch Google Account" else "G  Sign in with Google",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
 
         // --- 1. Spectator Code Card (Prominently displayed at top) ---
         val spectatorCode = activeTournament?.spectatorInviteCode.orEmpty().ifBlank {

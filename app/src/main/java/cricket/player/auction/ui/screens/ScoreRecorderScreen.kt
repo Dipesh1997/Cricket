@@ -2585,6 +2585,7 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
 
     if (showCameraStreamPreview && activeMatch != null) {
         CameraLiveBroadcastOverlayDialog(
+            viewModel = viewModel,
             match = activeMatch,
             teams = teams,
             currentInningsBalls = currentInningsBalls,
@@ -3938,13 +3939,13 @@ fun CoinTossModal(
                         ) {
                             Text(
                                 text = "🎉 ${tossWinner?.name ?: ""} WON THE TOSS!",
-                                color = BidGreen,
+                                color = if (isDarkTheme) BidGreen else Color(0xFF15803D),
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 15.sp,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(text = "Captain, choose to Bat or Bowl first:", color = Color.White, fontSize = 12.sp)
+                            Text(text = "Captain, choose to Bat or Bowl first:", color = textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             Spacer(modifier = Modifier.height(10.dp))
 
                             Row(

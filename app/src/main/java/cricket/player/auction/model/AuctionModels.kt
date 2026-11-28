@@ -88,6 +88,7 @@ data class Tournament(
     val creatorDeviceId: String = "",
     val autoAssignLastPlayerAtAvg: Boolean = false,
     val enforceEqualSquadsAcrossTeams: Boolean = false,
+    val auctionLiveStreamUrl: String = "",
     val spinTurnIndex: Int = 0,
     val captainQuizSession: CaptainQuizSession? = null
 )

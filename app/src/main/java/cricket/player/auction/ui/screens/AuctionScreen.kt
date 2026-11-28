@@ -1,15 +1,22 @@
 package cricket.player.auction.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
 import androidx.compose.material.icons.automirrored.filled.Undo
@@ -69,6 +76,19 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
     var quizTargetTeamId by remember { mutableStateOf<String?>(null) }
     var pendingBudgetWarningBid by remember { mutableStateOf<Pair<String, Double>?>(null) }
     var pendingBudgetWarningMsg by remember { mutableStateOf("") }
+    var showAuctionLiveStreamer by remember { mutableStateOf(false) }
+
+    val auctionCameraPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val camOk = perms[Manifest.permission.CAMERA] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        if (camOk) {
+            showAuctionLiveStreamer = true
+        } else {
+            Toast.makeText(context, "📷 Camera permission is required to start Auction Live Stream.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     val tourneyId = activeTournament?.id ?: ""
     val tourneyTeams = remember(teams, tourneyId) {
@@ -149,8 +169,34 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
                     ) {
+                        // Direct YouTube Live Stream for Auction (Admin)
+                        if (isAdmin) {
+                            Surface(
+                                onClick = {
+                                    val hasCam = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                                    if (hasCam) {
+                                        showAuctionLiveStreamer = true
+                                    } else {
+                                        auctionCameraPermLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+                                    }
+                                },
+                                color = Color(0xFFFF0000),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(imageVector = Icons.Default.Videocam, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("GO LIVE", color = Color.White, fontWeight = FontWeight.Black, fontSize = 10.sp)
+                                }
+                            }
+                        }
+
                         // Spin Wheel Trigger Button
                         Button(
                             onClick = { showSpinWheelModal = true },
@@ -1680,6 +1726,30 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
                 }
             },
             containerColor = cardBg
+        )
+    }
+
+    if (showAuctionLiveStreamer && activeTournament != null) {
+        val tourney = activeTournament!!
+        PrismYouTubeLiveStreamerDialog(
+            viewModel = viewModel,
+            streamTitle = "Live Auction: ${tourney.name}",
+            streamDescription = "Live cricket player auction broadcast from Cricket Hub.",
+            initialStreamUrl = tourney.auctionLiveStreamUrl,
+            overlayContent = {
+                AuctionBroadcastOverlayBar(
+                    tournamentName = tourney.name,
+                    activePlayer = activePlayer,
+                    highestBidderTeam = highestBidderTeam,
+                    timerSeconds = timerSeconds,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            onSaveStreamUrl = { newUrl ->
+                viewModel.updateTournamentAuctionStreamUrl(tourney.id, newUrl)
+                Toast.makeText(context, "📺 Auction Live Stream saved!", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showAuctionLiveStreamer = false }
         )
     }
 }

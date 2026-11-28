@@ -50,6 +50,14 @@ class GoogleAuthManager(private val context: Context) {
     private val _isSheetsPermissionGranted = MutableStateFlow(true)
     val isSheetsPermissionGranted: StateFlow<Boolean> = _isSheetsPermissionGranted.asStateFlow()
 
+    private val _isYouTubeConnected = MutableStateFlow(false)
+    val isYouTubeConnected: StateFlow<Boolean> = _isYouTubeConnected.asStateFlow()
+
+    private val _connectedGoogleEmail = MutableStateFlow<String?>(null)
+    val connectedGoogleEmail: StateFlow<String?> = _connectedGoogleEmail.asStateFlow()
+
+    val youtubeScope = "https://www.googleapis.com/auth/youtube"
+
     init {
         checkLastSignedInAccount()
     }
@@ -125,6 +133,32 @@ class GoogleAuthManager(private val context: Context) {
         return client.signInIntent
     }
 
+    fun getYouTubeSignInIntent(activityContext: Context = context): Intent {
+        val builder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestEmail()
+            .requestProfile()
+            .requestScopes(Scope(youtubeScope))
+        try {
+            builder.requestIdToken(defaultWebClientId)
+        } catch (_: Exception) { }
+        return GoogleSignIn.getClient(activityContext, builder.build()).signInIntent
+    }
+
+    suspend fun fetchYouTubeAccessToken(): String? = withContext(Dispatchers.IO) {
+        val account = GoogleSignIn.getLastSignedInAccount(context)
+        val androidAccount = account?.account ?: return@withContext null
+        try {
+            val token = GoogleAuthUtil.getToken(context, androidAccount, "oauth2:$youtubeScope")
+            _accessToken.value = token
+            _isYouTubeConnected.value = true
+            _connectedGoogleEmail.value = account.email
+            return@withContext token
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext null
+        }
+    }
+
     /**
      * Handles activity result data returned from Google Sign-In intent
      */
@@ -181,6 +215,8 @@ class GoogleAuthManager(private val context: Context) {
 
         _isDrivePermissionGranted.value = true
         _isSheetsPermissionGranted.value = true
+        _connectedGoogleEmail.value = account.email
+        _isYouTubeConnected.value = GoogleSignIn.hasPermissions(account, Scope(youtubeScope))
 
         val profile = UserProfile(
             email = email,

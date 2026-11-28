@@ -1,5 +1,8 @@
 package cricket.player.auction.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.hardware.Camera
 import android.net.Uri
@@ -8,6 +11,9 @@ import android.view.SurfaceView
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,7 +26,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -41,8 +49,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import cricket.player.auction.data.remote.YouTubeBroadcastResult
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.theme.*
+import cricket.player.auction.viewmodel.AuctionViewModel
 
 @Composable
 fun ClassicCrichuntScorerView(
@@ -1479,37 +1489,137 @@ fun BroadcastScoreOverlayBar(
     }
 }
 
+@Composable
+fun AuctionBroadcastOverlayBar(
+    tournamentName: String,
+    activePlayer: Player?,
+    highestBidderTeam: Team?,
+    timerSeconds: Int,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xE60A192F),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, IplGold.copy(alpha = 0.8f)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(color = Color(0xFFE53935), shape = RoundedCornerShape(4.dp)) {
+                        Text("AUCTION LIVE", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                    }
+                    Text(
+                        text = tournamentName,
+                        color = IplGold,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "⏱ ${timerSeconds}s",
+                    color = if (timerSeconds <= 5) UnsoldRed else NeonBlue,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 11.sp
+                )
+            }
+            if (activePlayer != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${activePlayer.name} (${activePlayer.role.label})",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "${activePlayer.currentBid.formatIplCurrency()} • ${highestBidderTeam?.shortCode ?: "Base"}",
+                        color = BidGreen,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Suppress("DEPRECATION")
 @Composable
-fun CameraLiveBroadcastOverlayDialog(
-    match: Match,
-    teams: List<Team>,
-    currentInningsBalls: List<BallRecord>,
-    striker: Player?,
-    nonStriker: Player?,
-    bowler: Player?,
+fun PrismYouTubeLiveStreamerDialog(
+    viewModel: AuctionViewModel,
+    streamTitle: String,
+    streamDescription: String,
     initialStreamUrl: String,
+    overlayContent: @Composable () -> Unit,
     onSaveStreamUrl: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val isYouTubeConnected by viewModel.isYouTubeConnected.collectAsState()
+    val connectedEmail by viewModel.connectedGoogleEmail.collectAsState()
+
     var streamUrlInput by remember(initialStreamUrl) { mutableStateOf(initialStreamUrl) }
     var cameraRef by remember { mutableStateOf<Camera?>(null) }
-    var showInAppYouTubeStudio by remember { mutableStateOf(false) }
+    var useFrontCamera by remember { mutableStateOf(false) }
+    var isCreatingBroadcast by remember { mutableStateOf(false) }
+    var activeBroadcast by remember { mutableStateOf<YouTubeBroadcastResult?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showOverlayOnCamera by remember { mutableStateOf(true) }
 
-    val teamA = teams.find { it.id == match.teamAId }
-    val teamB = teams.find { it.id == match.teamBId }
-    val currentInnings = match.currentInnings
-    val activeTeam = if (currentInnings == 1) teamA else teamB
-    val activeRuns = if (currentInnings == 1) match.teamARuns else match.teamBRuns
-    val activeWkts = if (currentInnings == 1) match.teamAWickets else match.teamBWickets
-    val activeLegal = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
-    val activeOvStr = "${activeLegal / 6}.${activeLegal % 6}"
-    val overIdx = activeLegal / 6
-    val thisOverBalls = currentInningsBalls.filter { it.overNumber == overIdx }
-    val target = match.teamARuns + 1
-    val need = (target - match.teamBRuns).coerceAtLeast(0)
-    val ballsRem = (match.totalOvers * 6 - activeLegal).coerceAtLeast(0)
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        viewModel.handleGoogleYouTubeSignInResult(result.data) { ok, msg ->
+            if (!ok) {
+                errorMessage = msg
+            } else {
+                errorMessage = null
+                Toast.makeText(context, "✅ $msg", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun openCameraIntoHolder(holder: SurfaceHolder, front: Boolean) {
+        try {
+            cameraRef?.stopPreview()
+            cameraRef?.release()
+            cameraRef = null
+            val camCount = Camera.getNumberOfCameras()
+            var targetId = 0
+            val info = Camera.CameraInfo()
+            for (i in 0 until camCount) {
+                Camera.getCameraInfo(i, info)
+                if (front && info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                    targetId = i
+                    break
+                } else if (!front && info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
+                    targetId = i
+                    break
+                }
+            }
+            val cam = Camera.open(targetId)
+            cam.setDisplayOrientation(90)
+            cam.setPreviewDisplay(holder)
+            cam.startPreview()
+            cameraRef = cam
+        } catch (_: Exception) { }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -1530,42 +1640,14 @@ fun CameraLiveBroadcastOverlayDialog(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Live Camera Surface Preview OR In-App YouTube Studio Live Streamer
-                if (showInAppYouTubeStudio) {
-                    AndroidView(
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                layoutParams = android.view.ViewGroup.LayoutParams(
-                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.mediaPlaybackRequiresUserGesture = false
-                                webChromeClient = object : WebChromeClient() {
-                                    override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
-                                        request?.grant(request.resources)
-                                    }
-                                }
-                                webViewClient = WebViewClient()
-                                loadUrl("https://studio.youtube.com/channel/live")
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
+                // Live Camera Preview (keyed by camera facing to cleanly re-bind)
+                key(useFrontCamera) {
                     AndroidView(
                         factory = { ctx ->
                             SurfaceView(ctx).apply {
                                 holder.addCallback(object : SurfaceHolder.Callback {
                                     override fun surfaceCreated(holder: SurfaceHolder) {
-                                        try {
-                                            val cam = Camera.open()
-                                            cam.setDisplayOrientation(90)
-                                            cam.setPreviewDisplay(holder)
-                                            cam.startPreview()
-                                            cameraRef = cam
-                                        } catch (_: Exception) { }
+                                        openCameraIntoHolder(holder, useFrontCamera)
                                     }
                                     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
                                     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -1582,72 +1664,210 @@ fun CameraLiveBroadcastOverlayDialog(
                     )
                 }
 
-                // Top Broadcast Bar
+                // Top PRISM-Style Broadcast Bar
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.55f))
+                        .background(Color.Black.copy(alpha = 0.6f))
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFFF0000)))
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(if (activeBroadcast?.success == true) Color(0xFFFF0000) else IplGold)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "CAMERA LIVE STREAM + SCORE OVERLAY",
+                            text = if (activeBroadcast?.success == true) "ON AIR • YOUTUBE LIVE" else "DIRECT STREAM STUDIO",
                             color = Color.White,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 12.sp
                         )
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close Camera", tint = Color.White)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = { showOverlayOnCamera = !showOverlayOnCamera },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text(
+                                text = if (showOverlayOnCamera) "Overlay ON" else "Overlay OFF",
+                                color = IplGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        IconButton(onClick = { useFrontCamera = !useFrontCamera }) {
+                            Icon(Icons.Default.Cameraswitch, contentDescription = "Switch Camera", tint = Color.White)
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close Streamer", tint = Color.White)
+                        }
                     }
                 }
 
-                // Bottom Controls + Live Score Overlay
+                // Bottom Controls + Live Overlay + Direct Google Sign-In & YouTube Broadcast
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.65f))
+                        .background(Color.Black.copy(alpha = 0.72f))
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    BroadcastScoreOverlayBar(
-                        battingTeamShort = activeTeam?.shortCode ?: "TEAM",
-                        runs = activeRuns,
-                        wickets = activeWkts,
-                        oversStr = activeOvStr,
-                        totalOvers = match.totalOvers,
-                        currentInnings = currentInnings,
-                        targetRuns = target,
-                        needRuns = need,
-                        ballsRemaining = ballsRem,
-                        striker = striker,
-                        nonStriker = nonStriker,
-                        bowler = bowler,
-                        currentInningsBalls = currentInningsBalls,
-                        thisOverBalls = thisOverBalls,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (showOverlayOnCamera) {
+                        overlayContent()
+                    }
+
+                    // Google Sign-In Status & Direct YouTube Live Controls (No Web Page Sign-In)
+                    if (!isYouTubeConnected) {
+                        Button(
+                            onClick = {
+                                googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1F2937)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth().height(44.dp)
+                        ) {
+                            Text(
+                                text = "G  Sign in with Google (Direct YouTube Live)",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "✅ YouTube: ${connectedEmail ?: "Connected"}",
+                                color = BidGreen,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = { googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context)) },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            ) {
+                                Text("Switch Account", color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    if (!errorMessage.isNullOrBlank()) {
+                        Surface(
+                            color = UnsoldRed.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, UnsoldRed)
+                        ) {
+                            Text(
+                                text = errorMessage!!,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+
+                    if (activeBroadcast?.success == true) {
+                        val b = activeBroadcast!!
+                        Surface(
+                            color = Color(0xFF142238),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BidGreen)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("🔴 YouTube Broadcast Created & Linked!", color = BidGreen, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                Text("Watch URL: ${b.watchUrl}", color = Color.White, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (b.streamKey.isNotBlank()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "RTMP Key: ${b.streamKey.take(14)}...",
+                                            color = IplGold,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(
+                                            onClick = {
+                                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                cm.setPrimaryClip(ClipData.newPlainText("RTMP", "${b.ingestionAddress}/${b.streamKey}"))
+                                                Toast.makeText(context, "📋 RTMP URL & Key copied!", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy RTMP", tint = IplGold, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Button(
-                            onClick = { showInAppYouTubeStudio = !showInAppYouTubeStudio },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (showInAppYouTubeStudio) "Back to Camera" else "Start YouTube Live (In-App)", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        if (activeBroadcast?.success == true) {
+                            Button(
+                                onClick = {
+                                    viewModel.endDirectYouTubeBroadcast(activeBroadcast!!.broadcastId)
+                                    activeBroadcast = null
+                                    Toast.makeText(context, "⏹ YouTube Broadcast ended", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = UnsoldRed, contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("⏹ End YouTube Stream", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    if (!isYouTubeConnected) {
+                                        googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context))
+                                        return@Button
+                                    }
+                                    isCreatingBroadcast = true
+                                    errorMessage = null
+                                    viewModel.startDirectYouTubeBroadcast(streamTitle, streamDescription) { res ->
+                                        isCreatingBroadcast = false
+                                        if (res.success) {
+                                            activeBroadcast = res
+                                            streamUrlInput = res.watchUrl
+                                            onSaveStreamUrl(res.watchUrl)
+                                            Toast.makeText(context, "🔴 YouTube Live Broadcast Started!", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            errorMessage = res.errorMessage
+                                        }
+                                    }
+                                },
+                                enabled = !isCreatingBroadcast,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isCreatingBroadcast) "Starting Stream..." else "🔴 Start Direct YouTube Live",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
 
                         Button(
@@ -1658,14 +1878,14 @@ fun CameraLiveBroadcastOverlayDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = BidGreen, contentColor = Color.White),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Publish Overlay", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text("Save & Close", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         }
                     }
 
                     OutlinedTextField(
                         value = streamUrlInput,
                         onValueChange = { streamUrlInput = it },
-                        placeholder = { Text("Paste YouTube Live URL for Spectators...", color = Color.LightGray, fontSize = 11.sp) },
+                        placeholder = { Text("YouTube Live URL (auto-filled or paste manual)...", color = Color.LightGray, fontSize = 11.sp) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -1679,4 +1899,60 @@ fun CameraLiveBroadcastOverlayDialog(
             }
         }
     }
+}
+
+@Composable
+fun CameraLiveBroadcastOverlayDialog(
+    viewModel: AuctionViewModel,
+    match: Match,
+    teams: List<Team>,
+    currentInningsBalls: List<BallRecord>,
+    striker: Player?,
+    nonStriker: Player?,
+    bowler: Player?,
+    initialStreamUrl: String,
+    onSaveStreamUrl: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val teamA = teams.find { it.id == match.teamAId }
+    val teamB = teams.find { it.id == match.teamBId }
+    val currentInnings = match.currentInnings
+    val activeTeam = if (currentInnings == 1) teamA else teamB
+    val activeRuns = if (currentInnings == 1) match.teamARuns else match.teamBRuns
+    val activeWkts = if (currentInnings == 1) match.teamAWickets else match.teamBWickets
+    val activeLegal = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+    val activeOvStr = "${activeLegal / 6}.${activeLegal % 6}"
+    val overIdx = activeLegal / 6
+    val thisOverBalls = currentInningsBalls.filter { it.overNumber == overIdx }
+    val target = match.teamARuns + 1
+    val need = (target - match.teamBRuns).coerceAtLeast(0)
+    val ballsRem = (match.totalOvers * 6 - activeLegal).coerceAtLeast(0)
+
+    PrismYouTubeLiveStreamerDialog(
+        viewModel = viewModel,
+        streamTitle = "Live Cricket: ${teamA?.shortCode ?: "Team A"} vs ${teamB?.shortCode ?: "Team B"}",
+        streamDescription = "Live cricket match broadcast with real-time score overlay from Cricket Hub.",
+        initialStreamUrl = initialStreamUrl,
+        overlayContent = {
+            BroadcastScoreOverlayBar(
+                battingTeamShort = activeTeam?.shortCode ?: "TEAM",
+                runs = activeRuns,
+                wickets = activeWkts,
+                oversStr = activeOvStr,
+                totalOvers = match.totalOvers,
+                currentInnings = currentInnings,
+                targetRuns = target,
+                needRuns = need,
+                ballsRemaining = ballsRem,
+                striker = striker,
+                nonStriker = nonStriker,
+                bowler = bowler,
+                currentInningsBalls = currentInningsBalls,
+                thisOverBalls = thisOverBalls,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        onSaveStreamUrl = onSaveStreamUrl,
+        onDismiss = onDismiss
+    )
 }

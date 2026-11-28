@@ -959,6 +959,13 @@ class LocalCricketRepository(context: Context) {
         persistAsync()
     }
 
+    fun updateTournamentAuctionStreamUrl(tournamentId: String, liveStreamUrl: String) {
+        _tournaments.value = _tournaments.value.map { t ->
+            if (t.id == tournamentId) t.copy(auctionLiveStreamUrl = liveStreamUrl.trim()) else t
+        }
+        persistAsync()
+    }
+
     fun getEqualSquadTargetPerTeam(tournamentId: String): Int {
         val tourney = _tournaments.value.find { it.id == tournamentId } ?: return 0
         if (!tourney.enforceEqualSquadsAcrossTeams) return 0

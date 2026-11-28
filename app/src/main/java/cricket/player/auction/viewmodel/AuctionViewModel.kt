@@ -1,9 +1,14 @@
 package cricket.player.auction.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cricket.player.auction.data.local.LocalCricketRepository
+import cricket.player.auction.data.remote.GoogleAuthManager
+import cricket.player.auction.data.remote.YouTubeBroadcastResult
+import cricket.player.auction.data.remote.YouTubeLiveStreamManager
 import cricket.player.auction.model.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -13,6 +18,68 @@ import kotlinx.coroutines.launch
 class AuctionViewModel(application: Application) : AndroidViewModel(application) {
 
     val localRepository = LocalCricketRepository(application)
+    val googleAuthManager = GoogleAuthManager(application)
+
+    val isYouTubeConnected: StateFlow<Boolean> = googleAuthManager.isYouTubeConnected
+    val connectedGoogleEmail: StateFlow<String?> = googleAuthManager.connectedGoogleEmail
+
+    fun getYouTubeSignInIntent(activityContext: Context): Intent {
+        return googleAuthManager.getYouTubeSignInIntent(activityContext)
+    }
+
+    fun handleGoogleYouTubeSignInResult(data: Intent?, onComplete: (Boolean, String) -> Unit) {
+        googleAuthManager.handleSignInResult(
+            data = data,
+            onSuccess = { profile ->
+                viewModelScope.launch {
+                    val token = googleAuthManager.fetchYouTubeAccessToken()
+                    if (token != null) {
+                        onComplete(true, "Connected as ${profile.email}")
+                    } else {
+                        onComplete(true, "Signed in as ${profile.email}")
+                    }
+                }
+            },
+            onError = { msg -> onComplete(false, msg) }
+        )
+    }
+
+    fun startDirectYouTubeBroadcast(
+        title: String,
+        description: String,
+        onResult: (YouTubeBroadcastResult) -> Unit
+    ) {
+        viewModelScope.launch {
+            val token = googleAuthManager.fetchYouTubeAccessToken()
+            if (token.isNullOrBlank()) {
+                onResult(
+                    YouTubeBroadcastResult(
+                        success = false,
+                        errorMessage = "Please tap 'Sign in with Google' first to connect your YouTube channel."
+                    )
+                )
+                return@launch
+            }
+            val result = YouTubeLiveStreamManager.createAndBindLiveBroadcast(
+                accessToken = token,
+                title = title,
+                description = description
+            )
+            onResult(result)
+        }
+    }
+
+    fun endDirectYouTubeBroadcast(broadcastId: String) {
+        if (broadcastId.isBlank()) return
+        viewModelScope.launch {
+            val token = googleAuthManager.fetchYouTubeAccessToken() ?: return@launch
+            YouTubeLiveStreamManager.transitionBroadcast(token, broadcastId, "complete")
+        }
+    }
+
+    fun updateTournamentAuctionStreamUrl(tournamentId: String, liveStreamUrl: String) {
+        localRepository.updateTournamentAuctionStreamUrl(tournamentId, liveStreamUrl)
+    }
 
     // Scoped only to tournaments this device created or joined!
     val tournaments: StateFlow<List<Tournament>> = localRepository.userTournaments
