@@ -14,8 +14,8 @@ android {
         applicationId = "cricket.player.auction"
         minSdk = 29
         targetSdk = 36
-        versionCode = 35
-        versionName = "2.27"
+        versionCode = 36
+        versionName = "2.28"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

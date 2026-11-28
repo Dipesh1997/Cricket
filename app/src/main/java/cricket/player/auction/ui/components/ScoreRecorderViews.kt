@@ -1625,6 +1625,7 @@ fun BackgroundCameraPreviewLayer(
     var cameraDeviceRef by remember { mutableStateOf<CameraDevice?>(null) }
     var captureSessionRef by remember { mutableStateOf<CameraCaptureSession?>(null) }
     var cameraError by remember { mutableStateOf<String?>(null) }
+    var retryNonce by remember { mutableStateOf(0) }
 
     fun closeCamera() {
         try {
@@ -1640,7 +1641,7 @@ fun BackgroundCameraPreviewLayer(
     }
 
     Box(modifier = modifier) {
-        key(useFrontCamera) {
+        key(useFrontCamera, retryNonce) {
             AndroidView(
                 factory = { ctx ->
                     TextureView(ctx).apply {
@@ -1654,28 +1655,47 @@ fun BackgroundCameraPreviewLayer(
                                     closeCamera()
                                     val manager = ctx.getSystemService(Context.CAMERA_SERVICE) as CameraManager
                                     val desiredFacing = if (useFrontCamera) CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
-                                    val camId = manager.cameraIdList.firstOrNull { id ->
-                                        manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) == desiredFacing
-                                    } ?: manager.cameraIdList.firstOrNull()
-
-                                    if (camId == null) {
-                                        cameraError = "No camera found on device"
-                                        return
-                                    }
-                                    surfaceTexture.setDefaultBufferSize(1280, 720)
-                                    val chars = manager.getCameraCharacteristics(camId)
-                                    val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-                                    val supported = map?.getOutputSizes(SurfaceTexture::class.java)
-                                    val chosenSize = supported?.firstOrNull { it.width <= 1280 && it.height <= 720 }
-                                        ?: supported?.minByOrNull { it.width * it.height }
-                                    if (chosenSize != null) {
-                                        surfaceTexture.setDefaultBufferSize(chosenSize.width, chosenSize.height)
-                                    }
-                                    val previewSurface = Surface(surfaceTexture)
                                     val mainHandler = Handler(Looper.getMainLooper())
 
                                     fun openWithRetry(attempt: Int) {
                                         try {
+                                            val ids = manager.cameraIdList
+                                            val camId = ids.firstOrNull { id ->
+                                                runCatching {
+                                                    manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) == desiredFacing
+                                                }.getOrDefault(false)
+                                            } ?: ids.firstOrNull()
+
+                                            if (camId == null) {
+                                                if (attempt < 2) {
+                                                    mainHandler.postDelayed({ openWithRetry(attempt + 1) }, 1600L)
+                                                } else {
+                                                    cameraError = "Camera unavailable (restarting). Tap Retry or reboot device."
+                                                }
+                                                return
+                                            }
+
+                                            val chars = runCatching { manager.getCameraCharacteristics(camId) }.getOrNull()
+                                            if (chars == null) {
+                                                if (attempt < 2) {
+                                                    mainHandler.postDelayed({ openWithRetry(attempt + 1) }, 1600L)
+                                                } else {
+                                                    cameraError = "Camera $camId characteristics unavailable. Tap Retry or reboot device."
+                                                }
+                                                return
+                                            }
+
+                                            val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                                            val supported = map?.getOutputSizes(SurfaceTexture::class.java)
+                                            val chosenSize = supported?.firstOrNull { it.width <= 1280 && it.height <= 720 }
+                                                ?: supported?.minByOrNull { it.width * it.height }
+                                            if (chosenSize != null) {
+                                                surfaceTexture.setDefaultBufferSize(chosenSize.width, chosenSize.height)
+                                            } else {
+                                                surfaceTexture.setDefaultBufferSize(1280, 720)
+                                            }
+                                            val previewSurface = Surface(surfaceTexture)
+
                                             manager.openCamera(camId, object : CameraDevice.StateCallback() {
                                                 override fun onOpened(camera: CameraDevice) {
                                                     cameraDeviceRef = camera
@@ -1711,14 +1731,22 @@ fun BackgroundCameraPreviewLayer(
                                                     camera.close()
                                                     cameraDeviceRef = null
                                                     if (attempt < 2) {
-                                                        mainHandler.postDelayed({ openWithRetry(attempt + 1) }, 350L)
+                                                        mainHandler.postDelayed({ openWithRetry(attempt + 1) }, 1600L)
                                                     } else {
-                                                        cameraError = "Camera error ($error)"
+                                                        cameraError = if (error == CameraDevice.StateCallback.ERROR_CAMERA_DEVICE) {
+                                                            "Camera hardware error (4). Please reboot phone if camera service crashed."
+                                                        } else {
+                                                            "Camera error ($error)"
+                                                        }
                                                     }
                                                 }
                                             }, mainHandler)
                                         } catch (e: Exception) {
-                                            cameraError = e.localizedMessage
+                                            if (attempt < 2) {
+                                                mainHandler.postDelayed({ openWithRetry(attempt + 1) }, 1600L)
+                                            } else {
+                                                cameraError = e.localizedMessage ?: "Camera open failed"
+                                            }
                                         }
                                     }
                                     mainHandler.postDelayed({ openWithRetry(0) }, 150L)
@@ -1741,15 +1769,30 @@ fun BackgroundCameraPreviewLayer(
 
         if (!cameraError.isNullOrBlank()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "📷 $cameraError",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "📷 $cameraError",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Button(
+                        onClick = {
+                            cameraError = null
+                            retryNonce++
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0EA5E9))
+                    ) {
+                        Text("Retry Camera", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
