@@ -884,6 +884,26 @@ function renderAuctionReadinessCard() {
 function renderAuctionArena() {
   renderAuctionReadinessCard();
 
+  const activeTourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+  const aucStreamEl = document.getElementById("auctionLiveStreamContainer");
+  if (aucStreamEl) {
+    const aUrl = activeTourney?.auctionLiveStreamUrl || "";
+    if (aUrl) {
+      const vidId = extractYouTubeVideoId(aUrl);
+      aucStreamEl.style.display = "block";
+      aucStreamEl.innerHTML = `
+        <div style="background: var(--bg-card); border: 1px solid rgba(255,0,0,0.4); border-radius: 12px; padding: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="color: #FFF; font-size: 0.85rem;">🔴 AUCTION YOUTUBE LIVE</strong>
+            <button class="btn btn-sm btn-secondary" onclick="window.open('${vidId ? 'https://www.youtube.com/watch?v=' + vidId : aUrl}', '_blank')">Watch on YouTube ↗</button>
+          </div>
+          ${vidId ? `<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;"><iframe style="position: absolute; top:0; left: 0; width: 100%; height: 100%; border: 0;" src="https://www.youtube-nocookie.com/embed/${vidId}?autoplay=1&playsinline=1" allowfullscreen></iframe></div>` : `<a href="${aUrl}" target="_blank" style="color: var(--color-gold); font-size: 0.8rem;">${aUrl}</a>`}
+        </div>`;
+    } else {
+      aucStreamEl.style.display = "none";
+    }
+  }
+
   const player = state.players.find(p => p.id === state.activePlayerId);
   if (!player) {
     const nameEl = document.getElementById("stagePlayerName");
@@ -2684,4 +2704,637 @@ if (typeof window !== 'undefined') {
   window.deleteTeam = deleteTeam;
   window.editPlayer = editPlayer;
   window.deletePlayer = deletePlayer;
+}
+
+// ============================================================
+// CRICKET HUB WEB: DIRECT YOUTUBE STREAM STUDIO (LAPTOP & MOBILE)
+// + MISSING ANDROID FEATURES (EXTRAS, TOSS, SWAP STRIKE, BG CAM, SHARE)
+// ============================================================
+
+const YT_WEB_CLIENT_ID = "5995891908-2sh5vspudnp5ot5k8n5ve063kph6ub5s.apps.googleusercontent.com";
+const YT_SCOPE = "https://www.googleapis.com/auth/youtube";
+
+const webStreamState = {
+  mode: "MATCH", // "MATCH" or "AUCTION"
+  accessToken: localStorage.getItem("yt_web_token") || "",
+  userEmail: localStorage.getItem("yt_web_email") || "",
+  facingMode: "environment", // "environment" (rear mobile) or "user" (laptop / selfie)
+  mediaStream: null,
+  bgMediaStream: null,
+  bgCamActive: false,
+  showOverlay: true,
+  animFrameId: null,
+  mediaRecorder: null,
+  recordedChunks: [],
+  activeBroadcast: null // { broadcastId, streamId, watchUrl, ingestionAddress, streamKey }
+};
+
+function getWebCreaseMap() {
+  if (!state._creaseMap) state._creaseMap = {};
+  return state._creaseMap;
+}
+
+function getCurrentCreasePlayers(match) {
+  if (!match) return { striker: { id: "p1", name: "Striker" }, nonStriker: { id: "p2", name: "Non-Striker" }, bowler: { id: "b1", name: "Bowler" }, battingSquad: [], bowlingSquad: [] };
+  const currentInnings = match.currentInnings || 1;
+  const battingTeamId = currentInnings === 1 ? match.teamAId : match.teamBId;
+  const bowlingTeamId = currentInnings === 1 ? match.teamBId : match.teamAId;
+  const battingSquad = getMatchSquad(match, battingTeamId);
+  const bowlingSquad = getMatchSquad(match, bowlingTeamId);
+  const map = getWebCreaseMap();
+  const saved = map[match.id] || {};
+  const striker = battingSquad.find(p => p.id === saved.strikerId) || battingSquad[0] || { id: "p1", name: "Striker" };
+  const nonStriker = battingSquad.find(p => p.id === saved.nonStrikerId && p.id !== striker.id) || battingSquad.find(p => p.id !== striker.id) || battingSquad[1] || { id: "p2", name: "Non-Striker" };
+  const bowler = bowlingSquad.find(p => p.id === saved.bowlerId) || bowlingSquad[0] || { id: "b1", name: "Bowler" };
+  return { striker, nonStriker, bowler, battingSquad, bowlingSquad };
+}
+
+function syncScorerSelectors() {
+  const matchSel = document.getElementById("scorerMatchSelect");
+  if (matchSel) {
+    const tourneyMatches = (state.matches || []).filter(m => !state.activeTournamentId || m.tournamentId === state.activeTournamentId);
+    const list = tourneyMatches.length ? tourneyMatches : (state.matches || []);
+    matchSel.innerHTML = list.map(m => {
+      const tA = state.teams.find(t => t.id === m.teamAId)?.shortCode || "TMA";
+      const tB = state.teams.find(t => t.id === m.teamBId)?.shortCode || "TMB";
+      const sel = m.id === state.activeMatchId ? "selected" : "";
+      return `<option value="${m.id}" ${sel}>${tA} vs ${tB} (${m.teamARuns || 0}/${m.teamAWickets || 0})</option>`;
+    }).join("");
+  }
+
+  const activeMatch = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!activeMatch) return;
+  const { striker, nonStriker, bowler, battingSquad, bowlingSquad } = getCurrentCreasePlayers(activeMatch);
+  const sEl = document.getElementById("strikerSelect");
+  const nsEl = document.getElementById("nonStrikerSelect");
+  const bEl = document.getElementById("bowlerSelect");
+  if (sEl) {
+    sEl.innerHTML = (battingSquad.length ? battingSquad : [striker]).map(p => `<option value="${p.id}" ${p.id === striker.id ? "selected" : ""}>🏏 ${p.name}*</option>`).join("");
+  }
+  if (nsEl) {
+    nsEl.innerHTML = (battingSquad.length ? battingSquad : [nonStriker]).map(p => `<option value="${p.id}" ${p.id === nonStriker.id ? "selected" : ""}>🏏 ${p.name}</option>`).join("");
+  }
+  if (bEl) {
+    bEl.innerHTML = (bowlingSquad.length ? bowlingSquad : [bowler]).map(p => `<option value="${p.id}" ${p.id === bowler.id ? "selected" : ""}>⚾ ${p.name}</option>`).join("");
+  }
+}
+
+function switchActiveMatch(matchId) {
+  state.activeMatchId = matchId;
+  saveToFirebase();
+  renderLiveScorer();
+}
+
+function setActiveCreasePlayers() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+  const map = getWebCreaseMap();
+  map[match.id] = {
+    strikerId: document.getElementById("strikerSelect")?.value,
+    nonStrikerId: document.getElementById("nonStrikerSelect")?.value,
+    bowlerId: document.getElementById("bowlerSelect")?.value
+  };
+  renderLiveScorer();
+}
+
+function swapStrike() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+  const { striker, nonStriker, bowler } = getCurrentCreasePlayers(match);
+  const map = getWebCreaseMap();
+  map[match.id] = { strikerId: nonStriker.id, nonStrikerId: striker.id, bowlerId: bowler.id };
+  renderLiveScorer();
+  showToast(`⇄ Strike swapped: ${nonStriker.name}*`);
+}
+
+function recordBallExtra(extraType, extraRunsInput = 1) {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+  const currentInnings = match.currentInnings || 1;
+  const { striker, nonStriker, bowler } = getCurrentCreasePlayers(match);
+  const totalAdd = extraRunsInput;
+  const consumesBall = (extraType === "BYE" || extraType === "LEG_BYE");
+
+  if (currentInnings === 1) {
+    match.teamARuns = (match.teamARuns || 0) + totalAdd;
+    if (consumesBall) {
+      match.teamAOversBatted = parseFloat((((match.teamAOversBatted || 0) * 10 + 1) / 10).toFixed(1));
+      if (match.teamAOversBatted % 1 >= 0.6) match.teamAOversBatted = Math.floor(match.teamAOversBatted) + 1.0;
+    }
+  } else {
+    match.teamBRuns = (match.teamBRuns || 0) + totalAdd;
+    if (consumesBall) {
+      match.teamBOversBatted = parseFloat((((match.teamBOversBatted || 0) * 10 + 1) / 10).toFixed(1));
+      if (match.teamBOversBatted % 1 >= 0.6) match.teamBOversBatted = Math.floor(match.teamBOversBatted) + 1.0;
+    }
+  }
+
+  if (!Array.isArray(state.ballRecords)) state.ballRecords = [];
+  const oversNow = currentInnings === 1 ? (match.teamAOversBatted || 0) : (match.teamBOversBatted || 0);
+  state.ballRecords.push({
+    id: "ball_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+    matchId: match.id,
+    innings: currentInnings,
+    overNumber: Math.floor(oversNow),
+    ballNumber: Math.round((oversNow % 1) * 10),
+    strikerId: striker.id,
+    nonStrikerId: nonStriker.id,
+    bowlerId: bowler.id,
+    runsScored: extraRunsInput,
+    isExtra: true,
+    extraType,
+    extraRuns: extraRunsInput,
+    isWicket: false,
+    timestamp: Date.now()
+  });
+
+  saveToFirebase();
+  renderLiveScorer();
+  showToast(`Recorded ${extraType} (+${extraRunsInput})`);
+}
+
+function shareMatchScorecard() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+  const tA = state.teams.find(t => t.id === match.teamAId)?.shortCode || "Team A";
+  const tB = state.teams.find(t => t.id === match.teamBId)?.shortCode || "Team B";
+  const text = `🏏 ${tA} ${match.teamARuns || 0}/${match.teamAWickets || 0} (${match.teamAOversBatted || 0} ov) vs ${tB} ${match.teamBRuns || 0}/${match.teamBWickets || 0} (${match.teamBOversBatted || 0} ov)\n${match.resultSummary || "Live on Cricket Hub"}`;
+  if (navigator.share) {
+    navigator.share({ title: `${tA} vs ${tB} Live Score`, text }).catch(() => copyText(text, "Scorecard"));
+  } else {
+    copyText(text, "Scorecard");
+  }
+}
+
+// --- COIN TOSS ARENA ---
+let webTossCall = "HEADS";
+let webTossWinnerTeamId = null;
+
+function openCoinTossModal() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return showToast("Create a match first!");
+  const tA = state.teams.find(t => t.id === match.teamAId)?.name || "Team A";
+  const tB = state.teams.find(t => t.id === match.teamBId)?.name || "Team B";
+  document.getElementById("coinTossMatchTitle").innerText = `${tA} vs ${tB}`;
+  document.getElementById("tossResultBox").style.display = "none";
+  selectTossCall("HEADS");
+  openModal("coinTossModal");
+}
+
+function selectTossCall(call) {
+  webTossCall = call;
+  document.getElementById("coinVisualBadge").innerText = call;
+  document.getElementById("tossCallHeadsBtn").className = call === "HEADS" ? "btn btn-sm" : "btn btn-sm btn-secondary";
+  document.getElementById("tossCallTailsBtn").className = call === "TAILS" ? "btn btn-sm" : "btn btn-sm btn-secondary";
+}
+
+function flipWebCoin() {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return;
+  const result = Math.random() < 0.5 ? "HEADS" : "TAILS";
+  document.getElementById("coinVisualBadge").innerText = result;
+  const teamAWon = result === webTossCall;
+  webTossWinnerTeamId = teamAWon ? match.teamAId : match.teamBId;
+  const winnerName = state.teams.find(t => t.id === webTossWinnerTeamId)?.name || "Winner";
+  document.getElementById("tossWinnerLabel").innerText = `🎉 ${winnerName} won the toss (${result})!`;
+  document.getElementById("tossResultBox").style.display = "block";
+}
+
+function applyCoinTossDecision(choice) {
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match || !webTossWinnerTeamId) return;
+  const otherId = webTossWinnerTeamId === match.teamAId ? match.teamBId : match.teamAId;
+  if (choice === "BAT") {
+    match.teamAId = webTossWinnerTeamId;
+    match.teamBId = otherId;
+  } else {
+    match.teamAId = otherId;
+    match.teamBId = webTossWinnerTeamId;
+  }
+  const winnerName = state.teams.find(t => t.id === webTossWinnerTeamId)?.shortCode || "Team";
+  match.tossSummary = `${winnerName} won toss & elected to ${choice.toLowerCase()}`;
+  saveToFirebase();
+  closeModal("coinTossModal");
+  renderLiveScorer();
+  showToast(`🪙 ${match.tossSummary}`);
+}
+
+// --- BACKGROUND CAMERA MODE (LAPTOP & MOBILE) ---
+async function toggleWebBackgroundCamera() {
+  const videoEl = document.getElementById("bgCameraVideoLayer");
+  const btn = document.getElementById("bgCamToggleBtn");
+  const retBtn = document.getElementById("returnStudioBtn");
+  if (!videoEl) return;
+
+  if (webStreamState.bgCamActive) {
+    webStreamState.bgCamActive = false;
+    videoEl.style.display = "none";
+    if (webStreamState.bgMediaStream) {
+      webStreamState.bgMediaStream.getTracks().forEach(t => t.stop());
+      webStreamState.bgMediaStream = null;
+    }
+    if (btn) { btn.innerText = "📹 BG Cam"; btn.style.background = ""; btn.style.color = ""; }
+    if (retBtn && !webStreamState.activeBroadcast) retBtn.style.display = "none";
+    return;
+  }
+
+  try {
+    const stream = webStreamState.mediaStream || await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: webStreamState.facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    webStreamState.bgMediaStream = stream;
+    videoEl.srcObject = stream;
+    videoEl.style.display = "block";
+    webStreamState.bgCamActive = true;
+    if (btn) { btn.innerText = "📹 BG ON"; btn.style.background = "#FF0000"; btn.style.color = "#FFF"; }
+    if (retBtn) retBtn.style.display = "inline-flex";
+  } catch (err) {
+    showToast("⚠️ Camera permission denied or unavailable: " + err.message);
+  }
+}
+
+function enableWebBgScoreMode() {
+  closeYouTubeStudio(true);
+  if (!webStreamState.bgCamActive) {
+    toggleWebBackgroundCamera();
+  }
+  const retBtn = document.getElementById("returnStudioBtn");
+  if (retBtn) retBtn.style.display = "inline-flex";
+  showToast("📹 BG Score Mode active — live camera & score overlay continuing!");
+}
+
+// --- DIRECT YOUTUBE STUDIO (LAPTOP & MOBILE CAMERA + CANVAS OVERLAY) ---
+async function openYouTubeStudio(mode = "MATCH") {
+  webStreamState.mode = mode;
+  openModal("youtubeStudioModal");
+  renderWebGoogleAuthBar();
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  const tourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+  const manualEl = document.getElementById("ytManualUrlInput");
+  if (manualEl) {
+    manualEl.value = mode === "AUCTION" ? (tourney?.auctionLiveStreamUrl || "") : (match?.liveStreamUrl || "");
+  }
+  await startWebStudioCamera();
+  startWebCanvasLoop();
+}
+
+function closeYouTubeStudio(keepBgStream = false) {
+  closeModal("youtubeStudioModal");
+  if (webStreamState.animFrameId) {
+    cancelAnimationFrame(webStreamState.animFrameId);
+    webStreamState.animFrameId = null;
+  }
+  if (!keepBgStream && !webStreamState.bgCamActive && webStreamState.mediaStream) {
+    webStreamState.mediaStream.getTracks().forEach(t => t.stop());
+    webStreamState.mediaStream = null;
+  }
+}
+
+async function startWebStudioCamera() {
+  const video = document.getElementById("ytStudioHiddenVideo");
+  if (!video) return;
+  try {
+    if (webStreamState.mediaStream) {
+      webStreamState.mediaStream.getTracks().forEach(t => t.stop());
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: webStreamState.facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true
+    });
+    webStreamState.mediaStream = stream;
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+  } catch (err) {
+    showToast("⚠️ Camera/Mic access needed: " + err.message);
+  }
+}
+
+async function switchWebStudioCamera() {
+  webStreamState.facingMode = webStreamState.facingMode === "environment" ? "user" : "environment";
+  await startWebStudioCamera();
+}
+
+function toggleWebStreamOverlay() {
+  webStreamState.showOverlay = !webStreamState.showOverlay;
+  const btn = document.getElementById("ytOverlayToggleBtn");
+  if (btn) btn.innerText = webStreamState.showOverlay ? "Overlay ON" : "Overlay OFF";
+}
+
+function getWebOverlayLines() {
+  if (webStreamState.mode === "AUCTION") {
+    const tourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+    const p = state.players.find(pl => pl.id === state.activePlayerId);
+    const t = p ? state.teams.find(tm => tm.id === p.highestBidderTeamId) : null;
+    return [
+      `AUCTION • ${tourney?.name || "Cricket Hub"}`,
+      `${p ? p.name : "Waiting for Player"} • Bid: ₹${(p?.currentBid || p?.basePrice || 0).toFixed(2)} Cr (${t ? t.shortCode : "Open"})`,
+      `Timer: ${document.getElementById("timerVal")?.innerText || "15"}s`
+    ];
+  }
+  const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+  if (!match) return ["CRICKET HUB LIVE"];
+  const inn = match.currentInnings || 1;
+  const batTeam = state.teams.find(t => t.id === (inn === 1 ? match.teamAId : match.teamBId))?.shortCode || "TEAM";
+  const runs = inn === 1 ? (match.teamARuns || 0) : (match.teamBRuns || 0);
+  const wkts = inn === 1 ? (match.teamAWickets || 0) : (match.teamBWickets || 0);
+  const ov = inn === 1 ? (match.teamAOversBatted || 0) : (match.teamBOversBatted || 0);
+  const { striker, nonStriker, bowler } = getCurrentCreasePlayers(match);
+  const line2 = inn === 2
+    ? `Target ${(match.teamARuns || 0) + 1} • Need ${Math.max(0, (match.teamARuns || 0) + 1 - (match.teamBRuns || 0))} runs`
+    : `${striker.name}* | ${nonStriker.name}`;
+  return [
+    `${batTeam} ${runs}/${wkts} (${ov}/${match.totalOvers || 20} ov)`,
+    line2,
+    `Bowl: ${bowler.name}`
+  ];
+}
+
+function startWebCanvasLoop() {
+  const canvas = document.getElementById("ytStudioCanvas");
+  const video = document.getElementById("ytStudioHiddenVideo");
+  if (!canvas || !video) return;
+  const ctx = canvas.getContext("2d");
+
+  const drawFrame = () => {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (video.readyState >= 2) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 28px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("📷 Waiting for Laptop / Mobile Camera...", canvas.width / 2, canvas.height / 2);
+      ctx.textAlign = "left";
+    }
+
+    if (webStreamState.showOverlay) {
+      const lines = getWebOverlayLines();
+      const bx = 44, by = canvas.height - 170, bw = canvas.width - 88, bh = 140;
+      ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#dc2626";
+      ctx.beginPath();
+      ctx.roundRect(bx + 18, by + 16, 86, 36, 8);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 20px sans-serif";
+      ctx.fillText("LIVE", bx + 38, by + 41);
+
+      ctx.font = "bold 30px sans-serif";
+      ctx.fillText(lines[0] || "", bx + 120, by + 44);
+      ctx.fillStyle = "#facc15";
+      ctx.font = "bold 24px sans-serif";
+      ctx.fillText(lines[1] || "", bx + 20, by + 88);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "bold 20px sans-serif";
+      ctx.fillText(lines[2] || "", bx + 20, by + 122);
+    }
+    webStreamState.animFrameId = requestAnimationFrame(drawFrame);
+  };
+  if (webStreamState.animFrameId) cancelAnimationFrame(webStreamState.animFrameId);
+  drawFrame();
+}
+
+function renderWebGoogleAuthBar() {
+  const bar = document.getElementById("ytGoogleAuthBar");
+  if (!bar) return;
+  if (!webStreamState.accessToken) {
+    bar.innerHTML = `<button class="btn" style="width: 100%; background: #FFF; color: #1F2937; font-weight: 800;" onclick="signInGoogleForYouTubeWeb()">G &nbsp; Sign in with Google (Direct YouTube Live)</button>`;
+  } else {
+    bar.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(16,185,129,0.12); border: 1px solid var(--color-green); border-radius: 8px; padding: 6px 10px;">
+        <span style="color: var(--color-green); font-weight: 700; font-size: 0.82rem;">✅ YouTube: ${webStreamState.userEmail || "Connected"}</span>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn btn-sm btn-secondary" onclick="signInGoogleForYouTubeWeb(true)">Switch</button>
+          <button class="btn btn-sm btn-danger" onclick="logoutGoogleYouTubeWeb()">Logout</button>
+        </div>
+      </div>`;
+  }
+}
+
+function signInGoogleForYouTubeWeb(forcePrompt = false) {
+  if (typeof google === "undefined" || !google.accounts?.oauth2) {
+    return showToast("Google Sign-In library still loading, please retry in a moment.");
+  }
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: YT_WEB_CLIENT_ID,
+    scope: `${YT_SCOPE} https://www.googleapis.com/auth/userinfo.email`,
+    prompt: forcePrompt ? "select_account" : "",
+    callback: async (resp) => {
+      if (resp.error || !resp.access_token) {
+        return showToast("Google Sign-In cancelled or blocked.");
+      }
+      webStreamState.accessToken = resp.access_token;
+      localStorage.setItem("yt_web_token", resp.access_token);
+      try {
+        const uResp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${resp.access_token}` }
+        });
+        const uJson = await uResp.json();
+        webStreamState.userEmail = uJson.email || "Connected";
+        localStorage.setItem("yt_web_email", webStreamState.userEmail);
+      } catch (_) {}
+      renderWebGoogleAuthBar();
+      showToast("✅ Connected to YouTube!");
+    }
+  });
+  client.requestAccessToken();
+}
+
+function logoutGoogleYouTubeWeb() {
+  if (webStreamState.accessToken && typeof google !== "undefined" && google.accounts?.oauth2) {
+    google.accounts.oauth2.revoke(webStreamState.accessToken, () => {});
+  }
+  webStreamState.accessToken = "";
+  webStreamState.userEmail = "";
+  localStorage.removeItem("yt_web_token");
+  localStorage.removeItem("yt_web_email");
+  renderWebGoogleAuthBar();
+  showToast("👋 Signed out of Google");
+}
+
+async function startWebYouTubeBroadcast() {
+  if (!webStreamState.accessToken) return signInGoogleForYouTubeWeb();
+  const btn = document.getElementById("ytStartLiveBtn");
+  if (btn) { btn.disabled = true; btn.innerText = "Creating YouTube Broadcast..."; }
+
+  try {
+    const match = state.matches.find(m => m.id === state.activeMatchId) || state.matches[0];
+    const tourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+    const title = webStreamState.mode === "AUCTION"
+      ? `Live Auction: ${tourney?.name || "Cricket Hub"}`
+      : `Live Cricket: ${state.teams.find(t => t.id === match?.teamAId)?.shortCode || "Team A"} vs ${state.teams.find(t => t.id === match?.teamBId)?.shortCode || "Team B"}`;
+
+    const headers = { Authorization: `Bearer ${webStreamState.accessToken}`, "Content-Type": "application/json" };
+    const startIso = new Date(Date.now() + 5000).toISOString().replace(/\.\d{3}Z$/, "Z");
+
+    const r1 = await fetch("https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status,contentDetails", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        snippet: { title, description: "Live cricket broadcast with score overlay from Cricket Hub Web.", scheduledStartTime: startIso },
+        status: { privacyStatus: "public", selfDeclaredMadeForKids: false },
+        contentDetails: { enableAutoStart: true, enableAutoStop: true, latencyPreference: "ultraLow" }
+      })
+    });
+    const j1 = await r1.json();
+    if (!r1.ok) throw new Error(j1?.error?.message || "Broadcast create failed");
+
+    const r2 = await fetch("https://www.googleapis.com/youtube/v3/liveStreams?part=snippet,cdn", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        snippet: { title: `${title} - Web Stream` },
+        cdn: { frameRate: "30fps", resolution: "720p", ingestionType: "rtmp" }
+      })
+    });
+    const j2 = await r2.json();
+    if (!r2.ok) throw new Error(j2?.error?.message || "Stream create failed");
+
+    const r3 = await fetch(`https://www.googleapis.com/youtube/v3/liveBroadcasts/bind?id=${j1.id}&part=id,contentDetails&streamId=${j2.id}`, {
+      method: "POST",
+      headers
+    });
+    if (!r3.ok) {
+      const j3 = await r3.json();
+      throw new Error(j3?.error?.message || "Bind failed");
+    }
+
+    const watchUrl = `https://www.youtube.com/watch?v=${j1.id}`;
+    const ingestion = j2?.cdn?.ingestionInfo?.ingestionAddress || "";
+    const streamKey = j2?.cdn?.ingestionInfo?.streamName || "";
+    webStreamState.activeBroadcast = { broadcastId: j1.id, streamId: j2.id, watchUrl, ingestionAddress: ingestion, streamKey };
+
+    document.getElementById("ytManualUrlInput").value = watchUrl;
+    saveWebStreamUrl(watchUrl);
+
+    const details = document.getElementById("ytBroadcastDetailsBox");
+    if (details) {
+      details.style.display = "block";
+      details.innerHTML = `
+        <div style="color: var(--color-green); font-weight: 800; margin-bottom: 4px;">🔴 YouTube Broadcast Created & Linked!</div>
+        <div style="color: #FFF;">Watch URL: <a href="${watchUrl}" target="_blank" style="color: var(--color-gold);">${watchUrl}</a></div>
+        <div style="color: var(--color-gold); margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
+          <span>RTMP: ${ingestion}/${streamKey.slice(0, 12)}...</span>
+          <button class="btn btn-sm btn-secondary" onclick="copyText('${ingestion}/${streamKey}', 'RTMP URL & Key')">📋 Copy RTMP</button>
+        </div>`;
+    }
+    document.getElementById("ytStartLiveBtn").style.display = "none";
+    document.getElementById("ytEndLiveBtn").style.display = "inline-flex";
+    document.getElementById("ytStudioStatusTitle").innerText = "ON AIR • YOUTUBE BROADCAST READY";
+    document.getElementById("ytStudioDot").style.background = "#FF0000";
+    showToast("🔴 YouTube Broadcast created & linked!");
+  } catch (err) {
+    showToast("❌ " + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerText = "🔴 Start Direct YouTube Live"; }
+  }
+}
+
+async function endWebYouTubeBroadcast() {
+  if (webStreamState.activeBroadcast && webStreamState.accessToken) {
+    try {
+      await fetch(`https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=${webStreamState.activeBroadcast.broadcastId}&part=status`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${webStreamState.accessToken}` }
+      });
+    } catch (_) {}
+  }
+  webStreamState.activeBroadcast = null;
+  document.getElementById("ytManualUrlInput").value = "";
+  document.getElementById("ytBroadcastDetailsBox").style.display = "none";
+  document.getElementById("ytStartLiveBtn").style.display = "inline-flex";
+  document.getElementById("ytEndLiveBtn").style.display = "none";
+  document.getElementById("ytStudioStatusTitle").innerText = "DIRECT STREAM STUDIO (WEB)";
+  document.getElementById("ytStudioDot").style.background = "var(--color-gold)";
+  saveWebStreamUrl("");
+  showToast("⏹ YouTube Broadcast ended");
+}
+
+function toggleWebBroadcastRecording() {
+  const btn = document.getElementById("ytRecordToggleBtn");
+  if (webStreamState.mediaRecorder && webStreamState.mediaRecorder.state === "recording") {
+    webStreamState.mediaRecorder.stop();
+    if (btn) { btn.innerText = "⏺ Record Video"; btn.style.background = "#0ea5e9"; }
+    return;
+  }
+  const canvas = document.getElementById("ytStudioCanvas");
+  if (!canvas) return;
+  const canvasStream = canvas.captureStream(30);
+  if (webStreamState.mediaStream) {
+    webStreamState.mediaStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+  }
+  webStreamState.recordedChunks = [];
+  const recorder = new MediaRecorder(canvasStream, { mimeType: "video/webm" });
+  recorder.ondataavailable = (e) => { if (e.data.size > 0) webStreamState.recordedChunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(webStreamState.recordedChunks, { type: "video/webm" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `cricket-live-${Date.now()}.webm`;
+    a.click();
+    showToast("💾 Broadcast recording downloaded!");
+  };
+  recorder.start(1000);
+  webStreamState.mediaRecorder = recorder;
+  if (btn) { btn.innerText = "⏹ Stop & Save Video"; btn.style.background = "#dc2626"; btn.style.color = "#FFF"; }
+  showToast("⏺ Recording camera + score overlay...");
+}
+
+function saveWebStreamUrl(url) {
+  if (webStreamState.mode === "AUCTION") {
+    const tourney = state.tournaments.find(t => t.id === state.activeTournamentId) || state.tournaments[0];
+    if (tourney) {
+      tourney.auctionLiveStreamUrl = (url || "").trim();
+      saveToFirebase();
+      renderAuctionArena();
+    }
+  } else {
+    updateMatchLiveStreamUrl(url);
+  }
+}
+
+function saveWebStreamUrlFromStudio() {
+  const val = document.getElementById("ytManualUrlInput")?.value || "";
+  saveWebStreamUrl(val);
+  closeYouTubeStudio(webStreamState.bgCamActive);
+}
+
+// Enhance renderLiveScorer to always sync match/striker/bowler selectors
+const _origRenderLiveScorer = renderLiveScorer;
+renderLiveScorer = function() {
+  _origRenderLiveScorer();
+  syncScorerSelectors();
+};
+
+if (typeof window !== "undefined") {
+  window.openYouTubeStudio = openYouTubeStudio;
+  window.closeYouTubeStudio = closeYouTubeStudio;
+  window.switchWebStudioCamera = switchWebStudioCamera;
+  window.toggleWebStreamOverlay = toggleWebStreamOverlay;
+  window.signInGoogleForYouTubeWeb = signInGoogleForYouTubeWeb;
+  window.logoutGoogleYouTubeWeb = logoutGoogleYouTubeWeb;
+  window.startWebYouTubeBroadcast = startWebYouTubeBroadcast;
+  window.endWebYouTubeBroadcast = endWebYouTubeBroadcast;
+  window.toggleWebBroadcastRecording = toggleWebBroadcastRecording;
+  window.enableWebBgScoreMode = enableWebBgScoreMode;
+  window.saveWebStreamUrlFromStudio = saveWebStreamUrlFromStudio;
+  window.toggleWebBackgroundCamera = toggleWebBackgroundCamera;
+  window.openCoinTossModal = openCoinTossModal;
+  window.selectTossCall = selectTossCall;
+  window.flipWebCoin = flipWebCoin;
+  window.applyCoinTossDecision = applyCoinTossDecision;
+  window.recordBallExtra = recordBallExtra;
+  window.swapStrike = swapStrike;
+  window.setActiveCreasePlayers = setActiveCreasePlayers;
+  window.switchActiveMatch = switchActiveMatch;
+  window.shareMatchScorecard = shareMatchScorecard;
 }

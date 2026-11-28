@@ -87,7 +87,8 @@
           <span class="pulse-dot"></span>
           <span>LIVE IPL AUCTION ARENA</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-sm" style="background-color: rgba(255,0,0,0.2); border: 1px solid #FF0000; color: #FFF;" onclick="openYouTubeStudio('AUCTION')">📺 Auction Live</button>
           <button class="btn btn-secondary btn-sm" id="fullscreenToggleBtn" onclick="toggleFullscreenStage()">
             <span>⛶ Fullscreen Stage</span>
           </button>
@@ -96,6 +97,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Optional Auction YouTube Live Stream Container -->
+      <div id="auctionLiveStreamContainer" style="display: none; margin-bottom: 14px;"></div>
 
       <!-- CAPTAINS READINESS CHECK BANNER -->
       <div id="auctionReadinessCard" style="margin-bottom: 16px;"></div>
@@ -150,6 +154,8 @@
             <button class="btn" onclick="sellAtBasePrice()">🏷️ SELL BASE PRICE</button>
             <button class="btn btn-danger" onclick="markUnsold()">❌ MARK UNSOLD</button>
             <button class="btn btn-blue" onclick="openModal('spinWheelModal')">🎰 SPIN WHEEL</button>
+            <button class="btn btn-secondary btn-sm" onclick="undoLastBid()">↩️ UNDO BID</button>
+            <button class="btn btn-secondary btn-sm" onclick="undoLastSoldPlayer()">↩️ UNDO SOLD</button>
           </div>
         </div>
       </div>
@@ -235,16 +241,26 @@
     </section>
 
     <!-- 4. LIVE SCORER TAB -->
-    <section id="tab-scorer" class="tab-pane">
-      <div class="arena-header">
-        <div>
-          <h3 style="color: var(--color-gold); font-size: 1.1rem;">LIVE MATCH SCORER & SCORECARD</h3>
-          <p style="color: var(--color-text-sub); font-size: 0.75rem;">Ball-by-ball commentary & Direct End Match with NRR</p>
+    <section id="tab-scorer" class="tab-pane" style="position: relative;">
+      <!-- Background Camera Layer for BG Score Mode -->
+      <video id="bgCameraVideoLayer" autoplay muted playsinline style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 0; opacity: 0.45; pointer-events: none;"></video>
+      <div style="position: relative; z-index: 1;">
+      <div class="arena-header" style="flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <div>
+            <h3 style="color: var(--color-gold); font-size: 1.1rem;">LIVE MATCH SCORER & SCORECARD</h3>
+            <p style="color: var(--color-text-sub); font-size: 0.75rem;">Ball-by-ball commentary & Direct End Match with NRR</p>
+          </div>
+          <select id="scorerMatchSelect" class="form-control" style="width: auto; min-width: 170px; padding: 4px 8px; font-size: 0.8rem;" onchange="switchActiveMatch(this.value)"></select>
         </div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
           <button class="btn btn-sm" onclick="openModal('createMatchModal')">+ New Match</button>
+          <button class="btn btn-sm btn-secondary" onclick="openCoinTossModal()">🪙 Toss</button>
           <button class="btn btn-sm btn-secondary" onclick="openModal('scorecardModal')">Scorecard</button>
-          <button class="btn btn-sm" style="background-color: rgba(255,0,0,0.2); border: 1px solid #FF0000; color: #FFF;" onclick="promptSetLiveStream()">📺 YouTube Live</button>
+          <button class="btn btn-sm btn-secondary" onclick="shareMatchScorecard()">📤 Share</button>
+          <button class="btn btn-sm" style="background-color: rgba(255,0,0,0.2); border: 1px solid #FF0000; color: #FFF;" onclick="openYouTubeStudio('MATCH')">📺 YouTube Live</button>
+          <button class="btn btn-sm btn-secondary" id="bgCamToggleBtn" onclick="toggleWebBackgroundCamera()">📹 BG Cam</button>
+          <button class="btn btn-sm" id="returnStudioBtn" style="display: none; background-color: #0ea5e9; color: #FFF; font-weight: 700;" onclick="openYouTubeStudio('MATCH')">↩ Stream Studio</button>
           <button class="btn btn-sm" style="background-color: #d32f2f; color:#FFF; white-space: nowrap; font-weight: 700;" onclick="endCurrentInnings()">🏁 End Innings</button>
           <button class="btn btn-sm" id="headerUndoInningsBtn" style="background-color: rgba(0,210,255,0.2); border: 1px solid var(--color-blue); color: var(--color-blue); display: none;" onclick="undoEndInnings()">↩️ Undo Innings</button>
           <button class="btn btn-sm btn-danger" onclick="openModal('directEndMatchModal')">⚡ Direct End Match</button>
@@ -277,18 +293,31 @@
         <!-- Cricbuzz Live Batter & Bowler Stats Table -->
         <div id="cricbuzzCreaseContainer" style="margin-top: 14px;"></div>
 
-        <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <!-- Batter / Bowler Selectors & Swap Strike -->
+        <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <select id="strikerSelect" class="form-control" style="width: auto; min-width: 130px; padding: 4px 8px; font-size: 0.78rem;" onchange="setActiveCreasePlayers()"></select>
+          <select id="nonStrikerSelect" class="form-control" style="width: auto; min-width: 130px; padding: 4px 8px; font-size: 0.78rem;" onchange="setActiveCreasePlayers()"></select>
+          <select id="bowlerSelect" class="form-control" style="width: auto; min-width: 130px; padding: 4px 8px; font-size: 0.78rem;" onchange="setActiveCreasePlayers()"></select>
+          <button class="btn btn-sm btn-secondary" onclick="swapStrike()">⇄ Swap Strike</button>
+        </div>
+
+        <div style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-sm" onclick="recordBallRun(0)">0</button>
           <button class="btn btn-sm" onclick="recordBallRun(1)">1</button>
           <button class="btn btn-sm" onclick="recordBallRun(2)">2</button>
           <button class="btn btn-sm" onclick="recordBallRun(3)">3</button>
           <button class="btn btn-sm" style="background-color: var(--color-gold); color:#000;" onclick="recordBallRun(4)">4</button>
           <button class="btn btn-sm" style="background-color: var(--color-gold); color:#000;" onclick="recordBallRun(6)">6</button>
+          <button class="btn btn-sm" style="background-color: #eab308; color:#000; font-weight:800;" onclick="recordBallExtra('WIDE')">WD</button>
+          <button class="btn btn-sm" style="background-color: #ec4899; color:#FFF; font-weight:800;" onclick="recordBallExtra('NO_BALL')">NB</button>
+          <button class="btn btn-sm" style="background-color: #10b981; color:#FFF; font-weight:800;" onclick="recordBallExtra('BYE')">BYE</button>
+          <button class="btn btn-sm" style="background-color: #8b5cf6; color:#FFF; font-weight:800;" onclick="recordBallExtra('LEG_BYE')">LB</button>
           <button class="btn btn-sm btn-danger" onclick="openRecordWicketModal()">WICKET!</button>
           <button class="btn btn-sm" style="background-color: #d32f2f; color:#FFF;" onclick="endCurrentInnings()">🏁 END INN</button>
           <button class="btn btn-sm" id="keypadUndoInningsBtn" style="background-color: rgba(0,210,255,0.2); border: 1px solid var(--color-blue); color: var(--color-blue); display: none;" onclick="undoEndInnings()">↩️ UNDO INN</button>
           <button class="btn btn-sm btn-secondary" onclick="undoLastBall()">UNDO BALL</button>
         </div>
+      </div>
       </div>
     </section>
 
@@ -551,7 +580,79 @@
     <button class="mobile-nav-btn" data-tab="tab-scorer"><span>📊</span><small>Scorer</small></button>
   </nav>
 
+  <!-- MODAL: DIRECT STREAM STUDIO (LAPTOP & MOBILE CAMERA + YOUTUBE LIVE) -->
+  <div class="modal-backdrop" id="youtubeStudioModal" onclick="closeYouTubeStudio()">
+    <div class="modal-content" style="max-width: 760px; width: 96%; background: #0b1120; border: 1px solid #334155;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="ytStudioDot" style="width: 10px; height: 10px; border-radius: 50%; background: var(--color-gold); display: inline-block;"></span>
+          <h3 class="modal-title" id="ytStudioStatusTitle" style="font-size: 1rem;">DIRECT STREAM STUDIO (WEB)</h3>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="btn btn-sm btn-secondary" id="ytOverlayToggleBtn" onclick="toggleWebStreamOverlay()">Overlay ON</button>
+          <button class="btn btn-sm btn-secondary" onclick="switchWebStudioCamera()" title="Switch Laptop/Mobile Camera">🔄 Camera</button>
+          <button class="close-btn" onclick="closeYouTubeStudio()">&times;</button>
+        </div>
+      </div>
+
+      <!-- Composite Camera + Scorebug Canvas -->
+      <div style="position: relative; width: 100%; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 10px; aspect-ratio: 16/9;">
+        <video id="ytStudioHiddenVideo" autoplay muted playsinline style="display: none;"></video>
+        <canvas id="ytStudioCanvas" width="1280" height="720" style="width: 100%; height: 100%; display: block; object-fit: contain;"></canvas>
+      </div>
+
+      <!-- Google Account Sign-In / Switch / Logout -->
+      <div id="ytGoogleAuthBar" style="margin-bottom: 10px;"></div>
+
+      <!-- Active Broadcast Details (RTMP Ingestion + Watch URL) -->
+      <div id="ytBroadcastDetailsBox" style="display: none; background: #142238; border: 1px solid var(--color-green); border-radius: 10px; padding: 10px; margin-bottom: 10px; font-size: 0.8rem;"></div>
+
+      <!-- Controls -->
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+        <button class="btn" id="ytStartLiveBtn" style="flex: 1; background: #FF0000; color: #FFF; font-weight: 800;" onclick="startWebYouTubeBroadcast()">🔴 Start Direct YouTube Live</button>
+        <button class="btn btn-danger" id="ytEndLiveBtn" style="display: none; flex: 1; font-weight: 800;" onclick="endWebYouTubeBroadcast()">⏹ End YouTube Stream</button>
+        <button class="btn" id="ytRecordToggleBtn" style="background: #0ea5e9; color: #000; font-weight: 800;" onclick="toggleWebBroadcastRecording()">⏺ Record Video</button>
+        <button class="btn" id="ytBgScoreBtn" style="background: #38bdf8; color: #000; font-weight: 800;" onclick="enableWebBgScoreMode()">📹 BG Score Mode</button>
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <input type="text" id="ytManualUrlInput" class="form-control" placeholder="YouTube Live Watch URL (auto-filled or paste manual)..." style="flex: 1;">
+        <button class="btn btn-success btn-sm" onclick="saveWebStreamUrlFromStudio()">Save & Close</button>
+      </div>
+      <p style="color: var(--color-text-sub); font-size: 0.72rem; margin-top: 8px; margin-bottom: 0;">
+        💡 Uses your Laptop Webcam or Mobile Camera with live score/auction overlay. Creates &amp; links your YouTube Broadcast directly; copy the RTMP Key into OBS/Streamlabs to push H.264/RTMP from laptop, or tap <strong>⏺ Record Video</strong> to save the composited broadcast.
+      </p>
+    </div>
+  </div>
+
+  <!-- MODAL: COIN TOSS ARENA -->
+  <div class="modal-backdrop" id="coinTossModal" onclick="closeModal('coinTossModal')">
+    <div class="modal-content" style="text-align: center; max-width: 420px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">🪙 COIN TOSS ARENA</h3>
+        <button class="close-btn" onclick="closeModal('coinTossModal')">&times;</button>
+      </div>
+      <p id="coinTossMatchTitle" style="font-weight: 800; color: #FFF; margin-bottom: 10px;"></p>
+      <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 14px;">
+        <button class="btn btn-sm" id="tossCallHeadsBtn" onclick="selectTossCall('HEADS')">HEADS</button>
+        <button class="btn btn-sm btn-secondary" id="tossCallTailsBtn" onclick="selectTossCall('TAILS')">TAILS</button>
+      </div>
+      <div id="coinVisualBadge" style="width: 90px; height: 90px; border-radius: 50%; border: 3px solid var(--color-gold); margin: 0 auto 14px auto; display: flex; align-items: center; justify-content: center; font-weight: 900; color: var(--color-gold); background: var(--bg-surface);">
+        HEADS
+      </div>
+      <button class="btn btn-gold" style="width: 100%; margin-bottom: 12px;" onclick="flipWebCoin()">FLIP COIN NOW 🪙</button>
+      <div id="tossResultBox" style="display: none; padding: 12px; border-radius: 10px; background: rgba(16,185,129,0.15); border: 1px solid var(--color-green);">
+        <div id="tossWinnerLabel" style="font-weight: 800; color: var(--color-green); margin-bottom: 10px;"></div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm" style="flex: 1;" onclick="applyCoinTossDecision('BAT')">🏏 Elect to BAT</button>
+          <button class="btn btn-sm btn-secondary" style="flex: 1;" onclick="applyCoinTossDecision('BOWL')">⚡ Elect to BOWL</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase Web SDK JS (v10 compat) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
