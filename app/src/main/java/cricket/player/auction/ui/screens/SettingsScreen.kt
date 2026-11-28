@@ -110,20 +110,48 @@ fun SettingsScreen(viewModel: AuctionViewModel) {
                     color = textSub,
                     fontSize = 11.sp
                 )
-                Button(
-                    onClick = { googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context)) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isYouTubeConnected) surfaceBg else Color.White,
-                        contentColor = if (isYouTubeConnected) textMain else Color(0xFF1F2937)
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = if (isYouTubeConnected) "G  Switch Google Account" else "G  Sign in with Google",
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 13.sp
-                    )
+                    Button(
+                        onClick = {
+                            if (isYouTubeConnected) {
+                                viewModel.signOutGoogleAccount {
+                                    googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context))
+                                }
+                            } else {
+                                googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context))
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isYouTubeConnected) surfaceBg else Color.White,
+                            contentColor = if (isYouTubeConnected) textMain else Color(0xFF1F2937)
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = if (isYouTubeConnected) "G  Switch Account" else "G  Sign in with Google",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    if (isYouTubeConnected || !connectedGoogleEmail.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.signOutGoogleAccount {
+                                    Toast.makeText(context, "👋 Signed out of Google account", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = UnsoldRed),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, UnsoldRed),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Logout", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }

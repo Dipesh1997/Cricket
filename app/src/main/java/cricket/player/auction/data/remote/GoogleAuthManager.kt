@@ -283,6 +283,27 @@ class GoogleAuthManager(private val context: Context) {
         _currentUser.value = current.copy(role = UserRole.TEAM_CAPTAIN, assignedTeamId = teamId)
     }
 
+    fun signOutGoogleAndYouTube(onComplete: () -> Unit = {}) {
+        try {
+            GoogleSignIn.getClient(context, getGoogleSignInOptions()).signOut()
+            val ytGso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestEmail()
+                .requestScopes(Scope(youtubeScope))
+                .build()
+            GoogleSignIn.getClient(context, ytGso).signOut().addOnCompleteListener {
+                onComplete()
+            }
+        } catch (_: Exception) {
+            onComplete()
+        }
+        _idToken.value = null
+        _accessToken.value = null
+        _isYouTubeConnected.value = false
+        _connectedGoogleEmail.value = null
+        _isDrivePermissionGranted.value = false
+        _isSheetsPermissionGranted.value = false
+    }
+
     fun signOut() {
         try {
             val gso = getGoogleSignInOptions()
@@ -295,6 +316,8 @@ class GoogleAuthManager(private val context: Context) {
         _isSignedIn.value = false
         _idToken.value = null
         _accessToken.value = null
+        _isYouTubeConnected.value = false
+        _connectedGoogleEmail.value = null
         _isDrivePermissionGranted.value = false
         _isSheetsPermissionGranted.value = false
     }

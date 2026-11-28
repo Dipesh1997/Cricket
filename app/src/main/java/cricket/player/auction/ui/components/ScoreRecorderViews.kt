@@ -1755,10 +1755,24 @@ fun PrismYouTubeLiveStreamerDialog(
                                 modifier = Modifier.weight(1f)
                             )
                             TextButton(
-                                onClick = { googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context)) },
+                                onClick = {
+                                    viewModel.signOutGoogleAccount {
+                                        googleSignInLauncher.launch(viewModel.getYouTubeSignInIntent(context))
+                                    }
+                                },
                                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                             ) {
-                                Text("Switch Account", color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text("Switch", color = NeonBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                            TextButton(
+                                onClick = {
+                                    viewModel.signOutGoogleAccount {
+                                        Toast.makeText(context, "👋 Signed out of Google", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            ) {
+                                Text("Logout", color = UnsoldRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

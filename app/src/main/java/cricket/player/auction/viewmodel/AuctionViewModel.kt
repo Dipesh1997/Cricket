@@ -77,6 +77,10 @@ class AuctionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun signOutGoogleAccount(onComplete: () -> Unit = {}) {
+        googleAuthManager.signOutGoogleAndYouTube(onComplete)
+    }
+
     fun updateTournamentAuctionStreamUrl(tournamentId: String, liveStreamUrl: String) {
         localRepository.updateTournamentAuctionStreamUrl(tournamentId, liveStreamUrl)
     }
