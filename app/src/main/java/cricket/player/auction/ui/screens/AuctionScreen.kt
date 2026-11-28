@@ -1736,6 +1736,11 @@ fun AuctionScreen(viewModel: AuctionViewModel) {
             streamTitle = "Live Auction: ${tourney.name}",
             streamDescription = "Live cricket player auction broadcast from Cricket Hub.",
             initialStreamUrl = tourney.auctionLiveStreamUrl,
+            streamOverlayLines = listOf(
+                "AUCTION • ${tourney.name}",
+                "${activePlayer?.name ?: "Waiting for next player"} • Bid: ${highestBidderTeam?.shortCode ?: "None"}",
+                "Timer: ${timerSeconds}s"
+            ),
             overlayContent = {
                 AuctionBroadcastOverlayBar(
                     tournamentName = tourney.name,

@@ -6,7 +6,12 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.SurfaceTexture
+import android.graphics.Typeface
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
@@ -19,7 +24,9 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.TextureView
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.gl.render.filters.`object`.ImageObjectFilterRender
 import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.encoder.utils.gl.TranslateTo
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.view.OpenGlView
 import kotlinx.coroutines.Job
@@ -1804,6 +1811,66 @@ fun BackgroundCameraPreviewLayer(
     }
 }
 
+private fun buildBroadcastOverlayBitmap(lines: List<String>): Bitmap {
+    val width = 1080
+    val height = 190
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    if (lines.isEmpty()) return bmp
+
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.argb(232, 15, 23, 42)
+        style = Paint.Style.FILL
+    }
+    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(245, 158, 11)
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+    }
+    val rect = RectF(6f, 6f, width - 6f, height - 6f)
+    canvas.drawRoundRect(rect, 22f, 22f, bgPaint)
+    canvas.drawRoundRect(rect, 22f, 22f, borderPaint)
+
+    val liveBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(220, 38, 38)
+        style = Paint.Style.FILL
+    }
+    canvas.drawRoundRect(RectF(24f, 22f, 128f, 68f), 12f, 12f, liveBg)
+
+    val liveText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 26f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText("LIVE", 76f, 54f, liveText)
+
+    val line1Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 38f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    val line2Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(250, 204, 21)
+        textSize = 28f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    val line3Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.rgb(148, 163, 184)
+        textSize = 24f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+
+    canvas.drawText(lines.getOrNull(0).orEmpty().take(58), 148f, 58f, line1Paint)
+    if (lines.size > 1) {
+        canvas.drawText(lines[1].take(72), 28f, 114f, line2Paint)
+    }
+    if (lines.size > 2) {
+        canvas.drawText(lines[2].take(80), 28f, 158f, line3Paint)
+    }
+    return bmp
+}
+
 @Suppress("DEPRECATION")
 @Composable
 fun PrismYouTubeLiveStreamerDialog(
@@ -1811,6 +1878,7 @@ fun PrismYouTubeLiveStreamerDialog(
     streamTitle: String,
     streamDescription: String,
     initialStreamUrl: String,
+    streamOverlayLines: List<String> = emptyList(),
     overlayContent: @Composable () -> Unit,
     onSaveStreamUrl: (String) -> Unit,
     onEnableBackgroundCamera: (() -> Unit)? = null,
@@ -1831,7 +1899,21 @@ fun PrismYouTubeLiveStreamerDialog(
     var streamStatusText by remember { mutableStateOf("DIRECT STREAM STUDIO") }
     var monitorJob by remember { mutableStateOf<Job?>(null) }
     var rtmpCameraRef by remember { mutableStateOf<RtmpCamera2?>(null) }
+    val streamOverlayFilter = remember { ImageObjectFilterRender() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+
+    LaunchedEffect(streamOverlayLines, showOverlayOnCamera, isRtmpStreaming) {
+        runCatching {
+            val bmp = if (showOverlayOnCamera && streamOverlayLines.isNotEmpty()) {
+                buildBroadcastOverlayBitmap(streamOverlayLines)
+            } else {
+                Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            }
+            streamOverlayFilter.setImage(bmp)
+            streamOverlayFilter.setScale(92f, 17f)
+            streamOverlayFilter.setPosition(TranslateTo.BOTTOM)
+        }
+    }
 
     val startRtmpAndMonitor: (YouTubeBroadcastResult) -> Unit = { res ->
         val cam = rtmpCameraRef
@@ -1974,6 +2056,15 @@ fun PrismYouTubeLiveStreamerDialog(
                                                     720
                                                 )
                                             }
+                                            rtmpCamera.glInterface.setFilter(streamOverlayFilter)
+                                            val bmp = if (showOverlayOnCamera && streamOverlayLines.isNotEmpty()) {
+                                                buildBroadcastOverlayBitmap(streamOverlayLines)
+                                            } else {
+                                                Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                                            }
+                                            streamOverlayFilter.setImage(bmp)
+                                            streamOverlayFilter.setScale(92f, 17f)
+                                            streamOverlayFilter.setPosition(TranslateTo.BOTTOM)
                                         }.onFailure { err ->
                                             errorMessage = err.localizedMessage ?: "Camera preview failed"
                                         }
@@ -2320,11 +2411,34 @@ fun CameraLiveBroadcastOverlayDialog(
     val need = (target - match.teamBRuns).coerceAtLeast(0)
     val ballsRem = (match.totalOvers * 6 - activeLegal).coerceAtLeast(0)
 
+    val crr = if (activeLegal > 0) String.format("%.2f", activeRuns * 6.0 / activeLegal) else "0.00"
+    val line1 = "${activeTeam?.shortCode ?: "TEAM"} $activeRuns/$activeWkts ($activeOvStr/${match.totalOvers}) • CRR $crr"
+    val line2 = if (currentInnings == 2) {
+        "Target $target • Need $need in $ballsRem balls"
+    } else {
+        "${striker?.name ?: "Striker"}* | ${nonStriker?.name ?: "Non-Striker"}"
+    }
+    val line3 = buildString {
+        if (bowler != null) append("Bowl: ${bowler.name}  •  ")
+        append("This Over: ")
+        if (thisOverBalls.isEmpty()) append("-") else append(thisOverBalls.joinToString(" ") { b ->
+            when {
+                b.isWicket -> "W"
+                b.extraType == ExtraType.WIDE -> "${b.runsScored}WD"
+                b.extraType == ExtraType.NO_BALL -> "${b.runsScored}NB"
+                b.extraType == ExtraType.BYE -> "${b.runsScored}B"
+                b.extraType == ExtraType.LEG_BYE -> "${b.runsScored}LB"
+                else -> "${b.runsScored}"
+            }
+        })
+    }
+
     PrismYouTubeLiveStreamerDialog(
         viewModel = viewModel,
         streamTitle = "Live Cricket: ${teamA?.shortCode ?: "Team A"} vs ${teamB?.shortCode ?: "Team B"}",
         streamDescription = "Live cricket match broadcast with real-time score overlay from Cricket Hub.",
         initialStreamUrl = initialStreamUrl,
+        streamOverlayLines = listOf(line1, line2, line3),
         overlayContent = {
             BroadcastScoreOverlayBar(
                 battingTeamShort = activeTeam?.shortCode ?: "TEAM",
