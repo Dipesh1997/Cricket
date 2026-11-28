@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cricket.player.auction.data.remote.LiveStreamSessionManager
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.components.*
 import cricket.player.auction.ui.theme.*
@@ -306,6 +307,24 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
         }
     }
 
+    val isRtmpStreaming by LiveStreamSessionManager.isRtmpStreaming.collectAsState()
+
+    LaunchedEffect(activeMatch, currentInningsBalls, striker, nonStriker, bowler, isRtmpStreaming) {
+        val m = activeMatch
+        if (m != null && isRtmpStreaming) {
+            LiveStreamSessionManager.updateOverlay(
+                buildMatchOverlayLines(
+                    match = m,
+                    teams = teams,
+                    currentInningsBalls = currentInningsBalls,
+                    striker = striker,
+                    nonStriker = nonStriker,
+                    bowler = bowler
+                )
+            )
+        }
+    }
+
     Scaffold(
         containerColor = screenBg
     ) { innerPadding ->
@@ -315,7 +334,11 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                 .padding(innerPadding)
         ) {
             if (isBackgroundCameraOn && !showCameraStreamPreview && isViewingLiveMatch && activeMatch != null) {
-                BackgroundCameraPreviewLayer(modifier = Modifier.fillMaxSize())
+                if (isRtmpStreaming) {
+                    RtmpBackgroundPreviewLayer(modifier = Modifier.fillMaxSize())
+                } else {
+                    BackgroundCameraPreviewLayer(modifier = Modifier.fillMaxSize())
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

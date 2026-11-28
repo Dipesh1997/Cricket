@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import cricket.player.auction.data.remote.LiveStreamSessionManager
 import cricket.player.auction.data.remote.YouTubeBroadcastResult
 import cricket.player.auction.model.*
 import cricket.player.auction.ui.theme.*
@@ -1871,6 +1872,82 @@ private fun buildBroadcastOverlayBitmap(lines: List<String>): Bitmap {
     return bmp
 }
 
+@Composable
+fun RtmpBackgroundPreviewLayer(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            LiveStreamSessionManager.detachOpenGlView(context)
+        }
+    }
+
+    AndroidView(
+        factory = { ctx ->
+            OpenGlView(ctx).apply {
+                holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) {
+                        mainHandler.postDelayed({
+                            LiveStreamSessionManager.attachOpenGlView(this@apply, ctx)
+                        }, 100L)
+                    }
+                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+                    override fun surfaceDestroyed(holder: SurfaceHolder) {
+                        LiveStreamSessionManager.detachOpenGlView(ctx)
+                    }
+                })
+            }
+        },
+        modifier = modifier
+    )
+}
+
+fun buildMatchOverlayLines(
+    match: Match,
+    teams: List<Team>,
+    currentInningsBalls: List<BallRecord>,
+    striker: Player?,
+    nonStriker: Player?,
+    bowler: Player?
+): List<String> {
+    val teamA = teams.find { it.id == match.teamAId }
+    val teamB = teams.find { it.id == match.teamBId }
+    val currentInnings = match.currentInnings
+    val activeTeam = if (currentInnings == 1) teamA else teamB
+    val activeRuns = if (currentInnings == 1) match.teamARuns else match.teamBRuns
+    val activeWkts = if (currentInnings == 1) match.teamAWickets else match.teamBWickets
+    val activeLegal = currentInningsBalls.count { it.extraType != ExtraType.WIDE && it.extraType != ExtraType.NO_BALL }
+    val activeOvStr = "${activeLegal / 6}.${activeLegal % 6}"
+    val overIdx = activeLegal / 6
+    val thisOverBalls = currentInningsBalls.filter { it.overNumber == overIdx }
+    val target = match.teamARuns + 1
+    val need = (target - match.teamBRuns).coerceAtLeast(0)
+    val ballsRem = (match.totalOvers * 6 - activeLegal).coerceAtLeast(0)
+    val crr = if (activeLegal > 0) String.format("%.2f", activeRuns * 6.0 / activeLegal) else "0.00"
+    val line1 = "${activeTeam?.shortCode ?: "TEAM"} $activeRuns/$activeWkts ($activeOvStr/${match.totalOvers}) • CRR $crr"
+    val line2 = if (currentInnings == 2) {
+        "Target $target • Need $need in $ballsRem balls"
+    } else {
+        "${striker?.name ?: "Striker"}* | ${nonStriker?.name ?: "Non-Striker"}"
+    }
+    val line3 = buildString {
+        if (bowler != null) append("Bowl: ${bowler.name}  •  ")
+        append("This Over: ")
+        if (thisOverBalls.isEmpty()) append("-") else append(thisOverBalls.joinToString(" ") { b ->
+            when {
+                b.isWicket -> "W"
+                b.extraType == ExtraType.WIDE -> "${b.runsScored}WD"
+                b.extraType == ExtraType.NO_BALL -> "${b.runsScored}NB"
+                b.extraType == ExtraType.BYE -> "${b.runsScored}B"
+                b.extraType == ExtraType.LEG_BYE -> "${b.runsScored}LB"
+                else -> "${b.runsScored}"
+            }
+        })
+    }
+    return listOf(line1, line2, line3)
+}
+
 @Suppress("DEPRECATION")
 @Composable
 fun PrismYouTubeLiveStreamerDialog(
@@ -1888,68 +1965,24 @@ fun PrismYouTubeLiveStreamerDialog(
     val isYouTubeConnected by viewModel.isYouTubeConnected.collectAsState()
     val connectedEmail by viewModel.connectedGoogleEmail.collectAsState()
 
-    var streamUrlInput by remember(initialStreamUrl) { mutableStateOf(initialStreamUrl) }
-    var useFrontCamera by remember { mutableStateOf(false) }
-    var isCreatingBroadcast by remember { mutableStateOf(false) }
-    var activeBroadcast by remember { mutableStateOf<YouTubeBroadcastResult?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var showOverlayOnCamera by remember { mutableStateOf(true) }
-    var isRtmpStreaming by remember { mutableStateOf(false) }
-    var isYouTubeLive by remember { mutableStateOf(false) }
-    var streamStatusText by remember { mutableStateOf("DIRECT STREAM STUDIO") }
-    var monitorJob by remember { mutableStateOf<Job?>(null) }
-    var rtmpCameraRef by remember { mutableStateOf<RtmpCamera2?>(null) }
-    val streamOverlayFilter = remember { ImageObjectFilterRender() }
-    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val activeBroadcast by LiveStreamSessionManager.activeBroadcast.collectAsState()
+    val isRtmpStreaming by LiveStreamSessionManager.isRtmpStreaming.collectAsState()
+    val isYouTubeLive by LiveStreamSessionManager.isYouTubeLive.collectAsState()
+    val streamStatusText by LiveStreamSessionManager.streamStatusText.collectAsState()
+    val errorMessage by LiveStreamSessionManager.errorMessage.collectAsState()
 
-    LaunchedEffect(streamOverlayLines, showOverlayOnCamera, isRtmpStreaming) {
-        runCatching {
-            val bmp = if (showOverlayOnCamera && streamOverlayLines.isNotEmpty()) {
-                buildBroadcastOverlayBitmap(streamOverlayLines)
-            } else {
-                Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-            }
-            streamOverlayFilter.setImage(bmp)
-            streamOverlayFilter.setScale(92f, 17f)
-            streamOverlayFilter.setPosition(TranslateTo.BOTTOM)
-        }
+    var streamUrlInput by remember(initialStreamUrl) {
+        mutableStateOf(
+            activeBroadcast?.watchUrl?.takeIf { it.isNotBlank() } ?: initialStreamUrl
+        )
     }
+    var isCreatingBroadcast by remember { mutableStateOf(false) }
+    var showOverlayOnCamera by remember { mutableStateOf(true) }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var attachedViewRef by remember { mutableStateOf<OpenGlView?>(null) }
 
-    val startRtmpAndMonitor: (YouTubeBroadcastResult) -> Unit = { res ->
-        val cam = rtmpCameraRef
-        if (cam != null && res.ingestionAddress.isNotBlank() && res.streamKey.isNotBlank()) {
-            try {
-                val hasAudio = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                if (hasAudio) {
-                    runCatching {
-                        if (!cam.prepareAudio(128 * 1000, 44100, true)) {
-                            cam.prepareAudio()
-                        }
-                    }
-                }
-                val rotation = runCatching { CameraHelper.getCameraOrientation(context) }.getOrDefault(0)
-                val videoOk = cam.prepareVideo(1280, 720, 30, 2500 * 1000, rotation) ||
-                    cam.prepareVideo(640, 480, 30, 1200 * 1000, rotation)
-                if (videoOk) {
-                    val base = res.ingestionAddress.trimEnd('/')
-                    val rtmpUrl = "$base/${res.streamKey}"
-                    cam.startStream(rtmpUrl)
-                    isRtmpStreaming = true
-                    streamStatusText = "Connecting RTMP to YouTube..."
-                    monitorJob?.cancel()
-                    monitorJob = viewModel.monitorAndGoLive(res.broadcastId, res.streamId) { live, status ->
-                        isYouTubeLive = live
-                        streamStatusText = status
-                    }
-                } else {
-                    errorMessage = "Could not initialize camera video encoder for RTMP stream."
-                }
-            } catch (e: Exception) {
-                errorMessage = "RTMP start error: ${e.localizedMessage}"
-            }
-        } else {
-            errorMessage = "Camera or RTMP ingestion info not ready."
-        }
+    LaunchedEffect(streamOverlayLines, showOverlayOnCamera) {
+        LiveStreamSessionManager.updateOverlay(streamOverlayLines, showOverlayOnCamera)
     }
 
     val mediaPermissionLauncher = rememberLauncherForActivityResult(
@@ -1958,26 +1991,13 @@ fun PrismYouTubeLiveStreamerDialog(
         val camGranted = perms[Manifest.permission.CAMERA] == true ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         if (camGranted) {
-            runCatching {
-                val cam = rtmpCameraRef
-                if (cam != null && !cam.isOnPreview) {
-                    cam.startPreview(
-                        if (useFrontCamera) CameraHelper.Facing.FRONT else CameraHelper.Facing.BACK,
-                        1280,
-                        720
-                    )
-                }
-            }
+            attachedViewRef?.let { LiveStreamSessionManager.attachOpenGlView(it, context) }
         }
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            monitorJob?.cancel()
-            runCatching {
-                if (rtmpCameraRef?.isStreaming == true) rtmpCameraRef?.stopStream()
-                if (rtmpCameraRef?.isOnPreview == true) rtmpCameraRef?.stopPreview()
-            }
+            LiveStreamSessionManager.detachOpenGlView(context)
         }
     }
 
@@ -1986,9 +2006,9 @@ fun PrismYouTubeLiveStreamerDialog(
     ) { result ->
         viewModel.handleGoogleYouTubeSignInResult(result.data) { ok, msg ->
             if (!ok) {
-                errorMessage = msg
+                LiveStreamSessionManager.setError(msg)
             } else {
-                errorMessage = null
+                LiveStreamSessionManager.clearError()
                 Toast.makeText(context, "✅ $msg", Toast.LENGTH_SHORT).show()
             }
         }
@@ -2003,43 +2023,11 @@ fun PrismYouTubeLiveStreamerDialog(
             modifier = Modifier.fillMaxSize()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Live Camera Preview + RTMP Encoder via RootEncoder OpenGlView
+                // Live Camera Preview + RTMP Encoder via shared LiveStreamSessionManager
                 AndroidView(
                     factory = { ctx ->
                         OpenGlView(ctx).apply {
-                            val connectChecker = object : ConnectChecker {
-                                override fun onConnectionStarted(url: String) {
-                                    mainHandler.post { streamStatusText = "Connecting RTMP to YouTube..." }
-                                }
-                                override fun onConnectionSuccess() {
-                                    mainHandler.post {
-                                        isRtmpStreaming = true
-                                        errorMessage = null
-                                        streamStatusText = "RTMP Connected • Going LIVE on YouTube..."
-                                    }
-                                }
-                                override fun onConnectionFailed(reason: String) {
-                                    mainHandler.post {
-                                        isRtmpStreaming = false
-                                        errorMessage = "RTMP failed: $reason"
-                                        streamStatusText = "RTMP Connection Failed"
-                                        runCatching { rtmpCameraRef?.stopStream() }
-                                    }
-                                }
-                                override fun onNewBitrate(bitrate: Long) {}
-                                override fun onDisconnect() {
-                                    mainHandler.post {
-                                        isRtmpStreaming = false
-                                        isYouTubeLive = false
-                                    }
-                                }
-                                override fun onAuthError() {
-                                    mainHandler.post { errorMessage = "YouTube RTMP Auth Error" }
-                                }
-                                override fun onAuthSuccess() {}
-                            }
-                            val rtmpCamera = RtmpCamera2(this, connectChecker)
-                            rtmpCameraRef = rtmpCamera
+                            attachedViewRef = this
                             holder.addCallback(object : SurfaceHolder.Callback {
                                 override fun surfaceCreated(holder: SurfaceHolder) {
                                     val camOk = ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
@@ -2048,34 +2036,13 @@ fun PrismYouTubeLiveStreamerDialog(
                                         return
                                     }
                                     mainHandler.postDelayed({
-                                        runCatching {
-                                            if (!rtmpCamera.isOnPreview) {
-                                                rtmpCamera.startPreview(
-                                                    if (useFrontCamera) CameraHelper.Facing.FRONT else CameraHelper.Facing.BACK,
-                                                    1280,
-                                                    720
-                                                )
-                                            }
-                                            rtmpCamera.glInterface.setFilter(streamOverlayFilter)
-                                            val bmp = if (showOverlayOnCamera && streamOverlayLines.isNotEmpty()) {
-                                                buildBroadcastOverlayBitmap(streamOverlayLines)
-                                            } else {
-                                                Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-                                            }
-                                            streamOverlayFilter.setImage(bmp)
-                                            streamOverlayFilter.setScale(92f, 17f)
-                                            streamOverlayFilter.setPosition(TranslateTo.BOTTOM)
-                                        }.onFailure { err ->
-                                            errorMessage = err.localizedMessage ?: "Camera preview failed"
-                                        }
-                                    }, 150L)
+                                        LiveStreamSessionManager.attachOpenGlView(this@apply, ctx)
+                                        LiveStreamSessionManager.updateOverlay(streamOverlayLines, showOverlayOnCamera)
+                                    }, 120L)
                                 }
                                 override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
                                 override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                    runCatching {
-                                        if (rtmpCamera.isStreaming) rtmpCamera.stopStream()
-                                        if (rtmpCamera.isOnPreview) rtmpCamera.stopPreview()
-                                    }
+                                    LiveStreamSessionManager.detachOpenGlView(ctx)
                                 }
                             })
                         }
@@ -2129,8 +2096,7 @@ fun PrismYouTubeLiveStreamerDialog(
                             )
                         }
                         IconButton(onClick = {
-                            useFrontCamera = !useFrontCamera
-                            runCatching { rtmpCameraRef?.switchCamera() }
+                            LiveStreamSessionManager.switchCamera()
                         }) {
                             Icon(Icons.Default.Cameraswitch, contentDescription = "Switch Camera", tint = Color.White)
                         }
@@ -2261,19 +2227,13 @@ fun PrismYouTubeLiveStreamerDialog(
                     }
 
                     // Full-width Start / End YouTube Stream Button (never wraps vertically)
-                    if (activeBroadcast?.success == true || streamUrlInput.isNotBlank()) {
+                    if (activeBroadcast?.success == true || isRtmpStreaming || streamUrlInput.isNotBlank()) {
                         Button(
                             onClick = {
-                                monitorJob?.cancel()
-                                runCatching {
-                                    if (rtmpCameraRef?.isStreaming == true) rtmpCameraRef?.stopStream()
-                                }
-                                isRtmpStreaming = false
-                                isYouTubeLive = false
-                                streamStatusText = "DIRECT STREAM STUDIO"
-                                if (activeBroadcast?.success == true) {
-                                    viewModel.endDirectYouTubeBroadcast(activeBroadcast!!.broadcastId)
-                                    activeBroadcast = null
+                                val bid = activeBroadcast?.broadcastId.orEmpty()
+                                LiveStreamSessionManager.stopStreamAndRelease(stopPreviewIfIdle = false)
+                                if (bid.isNotBlank()) {
+                                    viewModel.endDirectYouTubeBroadcast(bid)
                                 }
                                 streamUrlInput = ""
                                 onSaveStreamUrl("")
@@ -2298,19 +2258,25 @@ fun PrismYouTubeLiveStreamerDialog(
                                     mediaPermissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
                                 }
                                 isCreatingBroadcast = true
-                                errorMessage = null
-                                streamStatusText = "Creating YouTube Live Broadcast..."
+                                LiveStreamSessionManager.clearError()
+                                LiveStreamSessionManager.setStatusText("Creating YouTube Live Broadcast...")
                                 viewModel.startDirectYouTubeBroadcast(streamTitle, streamDescription) { res ->
                                     isCreatingBroadcast = false
                                     if (res.success) {
-                                        activeBroadcast = res
                                         streamUrlInput = res.watchUrl
                                         onSaveStreamUrl(res.watchUrl)
-                                        startRtmpAndMonitor(res)
-                                        Toast.makeText(context, "📡 Streaming RTMP to YouTube...", Toast.LENGTH_LONG).show()
+                                        val started = LiveStreamSessionManager.startRtmpStream(context, res, micGranted)
+                                        if (started) {
+                                            LiveStreamSessionManager.updateOverlay(streamOverlayLines, showOverlayOnCamera)
+                                            val job = viewModel.monitorAndGoLive(res.broadcastId, res.streamId) { live, status ->
+                                                LiveStreamSessionManager.updateLiveState(live, status)
+                                            }
+                                            LiveStreamSessionManager.setMonitorJob(job)
+                                            Toast.makeText(context, "📡 Streaming RTMP to YouTube...", Toast.LENGTH_LONG).show()
+                                        }
                                     } else {
-                                        streamStatusText = "DIRECT STREAM STUDIO"
-                                        errorMessage = res.errorMessage
+                                        LiveStreamSessionManager.setStatusText("DIRECT STREAM STUDIO")
+                                        LiveStreamSessionManager.setError(res.errorMessage)
                                     }
                                 }
                             },
