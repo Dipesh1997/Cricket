@@ -910,6 +910,24 @@ fun ScoreRecorderScreen(viewModel: AuctionViewModel) {
                             )
                         }
 
+                        if (isBackgroundCameraOn || isRtmpStreaming) {
+                            Surface(
+                                onClick = { showCameraStreamPreview = true },
+                                color = Color(0xFF0EA5E9),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "↩ Stream Studio",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+
                         val modeOptions = listOf(
                             "CLASSIC" to "Classic",
                             "MODERN" to "Modern",

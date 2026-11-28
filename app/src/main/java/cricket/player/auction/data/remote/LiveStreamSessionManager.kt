@@ -128,7 +128,9 @@ object LiveStreamSessionManager {
                         720
                     )
                 }
+                overlayFilter = null
                 applyOverlayToCamera(existing)
+                mainHandler.postDelayed({ applyOverlayToCamera(existing) }, 200L)
             }.onFailure { err ->
                 _errorMessage.value = err.localizedMessage ?: "Failed to attach camera preview"
             }
@@ -145,7 +147,9 @@ object LiveStreamSessionManager {
                     720
                 )
             }
+            overlayFilter = null
             applyOverlayToCamera(cam)
+            mainHandler.postDelayed({ applyOverlayToCamera(cam) }, 200L)
         }.onFailure { err ->
             _errorMessage.value = err.localizedMessage ?: "Camera preview failed"
         }
@@ -155,7 +159,12 @@ object LiveStreamSessionManager {
         val cam = rtmpCamera ?: return
         if (cam.isStreaming) {
             // Keep RTMP stream + OpenGL score overlay running offscreen in background!
-            runCatching { cam.replaceView(context.applicationContext) }
+            runCatching {
+                cam.replaceView(context.applicationContext)
+                overlayFilter = null
+                applyOverlayToCamera(cam)
+                mainHandler.postDelayed({ applyOverlayToCamera(cam) }, 200L)
+            }
         } else {
             runCatching {
                 if (cam.isOnPreview) cam.stopPreview()
